@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Train Runner</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      background: #1a1a2e;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
+      font-family: 'Courier New', monospace;
+      color: #e0e0e0;
+      overflow: hidden;
+    }
+    #header {
+      text-align: center;
+      margin-bottom: 16px;
+    }
+    h1 {
+      font-size: 28px;
+      color: #f5a623;
+      text-shadow: 0 0 10px rgba(245, 166, 35, 0.5);
+    }
+    #score-bar {
+      display: flex;
+      gap: 32px;
+      font-size: 16px;
+      margin-top: 8px;
+    }
+    #score-bar span { color: #aaa; }
+    #score-bar strong { color: #fff; }
+    canvas {
+      border: 2px solid #333;
+      border-radius: 8px;
+      background: #0f3460;
+      cursor: pointer;
+    }
+    #instructions {
+      margin-top: 16px;
+      font-size: 14px;
+      color: #888;
+    }
+    #game-over {
+      display: none;
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,0,0,0.85);
+      padding: 40px 60px;
+      border-radius: 16px;
+      text-align: center;
+      border: 2px solid #f5a623;
+    }
+    #game-over h2 { font-size: 36px; color: #f5a623; margin-bottom: 12px; }
+    #game-over p { font-size: 18px; margin-bottom: 20px; }
+    #game-over button {
+      padding: 12px 32px;
+      font-size: 18px;
+      background: #f5a623;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      font-family: inherit;
+      font-weight: bold;
+    }
+    #game-over button:hover { background: #e09520; }
+  </style>
+</head>
+<body>
+  <div id="header">
+    <h1>Train Runner</h1>
+    <div id="score-bar">
+      <div><span>Score: </span><strong id="score">0</strong></div>
+      <div><span>Speed: </span><strong id="speed">1</strong></div>
+      <div><span>Best: </span><strong id="best">0</strong></div>
+    </div>
+  </div>
+  <canvas id="game" width="800" height="400"></canvas>
+  <p id="instructions">UP / SPACE to switch track &middot; Avoid obstacles &middot; Collect coins</p>
+
+  <div id="game-over">
+    <h2>Game Over</h2>
+    <p>Score: <strong id="final-score">0</strong></p>
+    <button onclick="startGame()">Play Again</button>
+  </div>
+
+  <script src="game.js"></script>
+</body>
+</html>
