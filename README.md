@@ -1,18 +1,29 @@
-# Train Runner
+# Train Defense
 
-A browser-based train game. Switch between two tracks to dodge obstacles and collect coins.
+A top-down train defense game. Deliver cargo across a hostile world filled with swarms of monsters. Man your weapons, aim your firing cones, and protect your train.
 
 ## How to play
 
-- **UP / SPACE / Click** — Switch track
-- Avoid rocks and barriers
-- Collect coins for bonus points
-- Speed increases as your score grows
+1. **Setup phase**: Drag your 3 crew members onto weapon mounts or the driver seat
+2. Click weapon mounts to rotate their firing direction
+3. Hit **DEPART** to start the run
+4. During the run, weapons auto-fire at enemies in their cone
+5. Drag crew between positions mid-run to respond to threats
+6. Driver in the locomotive = +50% weapon damage buff
+
+## Train layout
+
+Locomotive → Front Weapons → Cargo → Rear Weapons
+
+- 8 weapon mounts (4 per weapon car), each with a directional firing cone
+- Driver seat in locomotive buffs all weapons when manned
 
 ## Run locally
 
-Open `index.html` in a browser. No build step needed.
+Open `index.html` in a browser (requires a local server for ES modules):
 
-## Play online
+```
+cd train-game && python3 -m http.server 8080
+```
 
-Visit the GitHub Pages deployment (enable Pages in repo settings → source: main branch).
+Then open http://localhost:8080
