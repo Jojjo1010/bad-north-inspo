@@ -11,7 +11,7 @@ import { InputManager } from './input.js';
 import { Spawner } from './enemies.js';
 import { CombatSystem } from './combat.js';
 import { CoinSystem } from './coins.js';
-import { BanditSystem } from './bandits.js';
+import { BanditSystem, BANDIT_STATES } from './bandits.js';
 import { Zone, STATION_TYPES } from './zone.js';
 import { playLevelUp, playPowerup, playVictory, playDefeat, startMusic, stopMusic, getMusicVolume, getSfxVolume, setMusicVolume, setSfxVolume } from './audio.js';
 
@@ -394,8 +394,7 @@ function updateRun(dt) {
   };
   spawner.update(dt, train.distance, carBounds, train.combatDifficulty || 1);
   for (const e of spawner.pool) e.update(dt);
-  combat._selectedCrew = selectedCrew;
-  combat.update(dt, train, spawner.pool);
+  combat.update(dt, train, spawner.pool, selectedCrew);
 
   // Bandits
   banditSystem.update(dt, train, train.combatDifficulty || 1);
@@ -443,8 +442,11 @@ function renderRun() {
   renderer.drawHUD(train);
   renderer.drawAutoWeaponHUD(train);
   // Bandit alert banner
-  const banditsOnTrain = banditSystem.pool.filter(b => b.active && (b.state === 2 || b.state === 3));
-  if (banditsOnTrain.length > 0) {
+  let banditCount = 0;
+  for (const b of banditSystem.pool) {
+    if (b.active && (b.state === BANDIT_STATES.ON_TRAIN || b.state === BANDIT_STATES.FIGHTING)) banditCount++;
+  }
+  if (banditCount > 0) {
     const dctx2 = renderer.ctx;
     const pulse = 0.6 + Math.sin(performance.now() * 0.006) * 0.4;
     dctx2.fillStyle = `rgba(192, 57, 43, ${0.7 * pulse})`;
@@ -452,7 +454,7 @@ function renderRun() {
     dctx2.fillStyle = '#fff';
     dctx2.font = 'bold 13px monospace';
     dctx2.textAlign = 'center';
-    const msg = banditsOnTrain.length === 1 ? 'BANDIT ON BOARD! Move crew to fight!' : `${banditsOnTrain.length} BANDITS ON BOARD! Move crew!`;
+    const msg = banditCount === 1 ? 'BANDIT ON BOARD! Move crew to fight!' : `${banditCount} BANDITS ON BOARD! Move crew!`;
     dctx2.fillText(msg, CANVAS_WIDTH / 2, 67);
   }
   if (selectedCrew) renderer.drawSelectedIndicator(selectedCrew);
@@ -781,8 +783,7 @@ function renderGameOver() {
   renderer.drawTrain(train);
   renderer.drawWeaponMounts(train, null);
   renderer.drawMovingCrew(train.crew);
-  input._totalGold = save.gold; // pass total gold for world complete screen
-  renderer.drawGameOver(won, train, goldEarned, gameOverBtns, input, gameOverType);
+  renderer.drawGameOver(won, train, goldEarned, gameOverBtns, input, gameOverType, save.gold);
   renderer.updateAndDrawConfetti(0.016);
   renderer.flush();
 }
@@ -1176,9 +1177,7 @@ function updateStationArrival(dt) {
     switch (s.type) {
       case STATION_TYPES.COMBAT: {
         combatDifficulty = 1 + (zoneNumber - 1) * ZONE_DIFFICULTY_SCALE;
-        // Last station before exit is harder
-        const isPreBoss = s.connections.some(id => zone.stations[id].type === STATION_TYPES.EXIT);
-        if (isPreBoss) combatDifficulty *= 1.6;
+        if (stationArrival?.isPreBoss) combatDifficulty *= 1.6;
         prepareForCombat();
         break;
       }

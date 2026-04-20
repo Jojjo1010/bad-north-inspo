@@ -176,10 +176,6 @@ export class BanditSystem {
     this.spawnTimer = 8; // initial delay before first bandit
   }
 
-  get activeBandits() {
-    return this.pool.filter(b => b.active);
-  }
-
   update(dt, train, difficulty) {
     // Update existing bandits
     for (const b of this.pool) {

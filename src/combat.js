@@ -155,7 +155,17 @@ export class CombatSystem {
     if (d) d.spawn(x, y, damage);
   }
 
-  update(dt, train, enemies) {
+  leadAngle(mount, target) {
+    const dx = target.x - mount.worldX;
+    const dy = target.y - mount.worldY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    const t = dist / PROJECTILE_SPEED;
+    const lx = target.x + (target.vx || 0) * t;
+    const ly = target.y + (target.vy || 0) * t;
+    return Math.atan2(ly - mount.worldY, lx - mount.worldX);
+  }
+
+  update(dt, train, enemies, selectedCrew = null) {
     // Update existing projectiles
     for (const p of this.projectiles) p.update(dt);
     // Update damage numbers
@@ -170,37 +180,17 @@ export class CombatSystem {
       mount.cooldownTimer -= dt;
       if (mount.cooldownTimer > 0) continue;
 
-      const isSelected = mount.crew === this._selectedCrew;
+      const isSelected = mount.crew === selectedCrew;
       let angle = mount.coneDirection;
 
       if (isSelected) {
-        // Selected crew: aim in cone direction, auto-aim at enemies in cone
         const target = this.findTarget(mount, enemies, areaMult);
-        if (target) {
-          const dx = target.x - mount.worldX;
-          const dy = target.y - mount.worldY;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          const t = dist / PROJECTILE_SPEED;
-          const lx = target.x + (target.vx || 0) * t;
-          const ly = target.y + (target.vy || 0) * t;
-          angle = Math.atan2(ly - mount.worldY, lx - mount.worldX);
-        }
+        if (target) angle = this.leadAngle(mount, target);
       } else {
-        // Unselected crew: auto-target nearest enemy in full 360°
         const target = this.findClosestEnemy(mount, enemies, areaMult);
-        if (target) {
-          const dx = target.x - mount.worldX;
-          const dy = target.y - mount.worldY;
-          const dist = Math.sqrt(dx * dx + dy * dy);
-          const t = dist / PROJECTILE_SPEED;
-          const lx = target.x + (target.vx || 0) * t;
-          const ly = target.y + (target.vy || 0) * t;
-          angle = Math.atan2(ly - mount.worldY, lx - mount.worldX);
-          // Rotate to face target
-          mount.coneDirection = angle;
-        } else {
-          continue; // no target, don't waste ammo
-        }
+        if (!target) continue;
+        angle = this.leadAngle(mount, target);
+        mount.coneDirection = angle;
       }
 
       let damage = mount.damage * train.totalDamageMultiplier;
@@ -320,80 +310,79 @@ export class CombatSystem {
     if (train.hasAutoWeapon('turret')) {
       const w = train.autoWeapons.turret;
       const m = w.mount;
-      if (m._bandit) { w.cooldownTimer = 0.5; } else {
-      const mx = m.worldX, my = m.worldY;
-      const stats = train.getAutoWeaponStats('turret');
-      w.cooldownTimer -= dt;
-      if (w.cooldownTimer <= 0) {
-        let closest = null;
-        const range = stats.range * areaMult;
-        let closestDist = range * range;
-        for (const e of enemies) {
-          if (!e.active) continue;
-          const dx = e.x - mx, dy = e.y - my;
-          const d = dx * dx + dy * dy;
-          if (d < closestDist) { closest = e; closestDist = d; }
-        }
-        if (closest) {
-          const dmg = stats.damage * dmgMult;
-          for (let s = 0; s < stats.shotsPerBurst; s++) {
-            const dist = Math.sqrt(closestDist);
-            const t = dist / PROJECTILE_SPEED;
-            const lx = closest.x + (closest.vx || 0) * t;
-            const ly = closest.y + (closest.vy || 0) * t;
-            const angle = Math.atan2(ly - my, lx - mx) + (s - (stats.shotsPerBurst - 1) / 2) * 0.08;
-            this.fireProjectile(mx, my, angle, dmg, 'auto');
+      if (!m._bandit) {
+        const mx = m.worldX, my = m.worldY;
+        const stats = train.getAutoWeaponStats('turret');
+        w.cooldownTimer -= dt;
+        if (w.cooldownTimer <= 0) {
+          let closest = null;
+          const range = stats.range * areaMult;
+          let closestDist = range * range;
+          for (const e of enemies) {
+            if (!e.active) continue;
+            const dx = e.x - mx, dy = e.y - my;
+            const d = dx * dx + dy * dy;
+            if (d < closestDist) { closest = e; closestDist = d; }
           }
-          // Update mount cone direction to face target
-          m.coneDirection = Math.atan2(closest.y - my, closest.x - mx);
-          playShoot();
-          w.cooldownTimer = stats.fireInterval * cdMult;
+          if (closest) {
+            const dmg = stats.damage * dmgMult;
+            for (let s = 0; s < stats.shotsPerBurst; s++) {
+              const dist = Math.sqrt(closestDist);
+              const t = dist / PROJECTILE_SPEED;
+              const lx = closest.x + (closest.vx || 0) * t;
+              const ly = closest.y + (closest.vy || 0) * t;
+              const angle = Math.atan2(ly - my, lx - mx) + (s - (stats.shotsPerBurst - 1) / 2) * 0.08;
+              this.fireProjectile(mx, my, angle, dmg, 'auto');
+            }
+            m.coneDirection = Math.atan2(closest.y - my, closest.x - mx);
+            playShoot();
+            w.cooldownTimer = stats.fireInterval * cdMult;
+          }
         }
       }
-      } // end bandit check
     }
 
     // --- STEAM BLAST ---
     if (train.hasAutoWeapon('steamBlast')) {
       const w = train.autoWeapons.steamBlast;
       const m = w.mount;
-      if (m._bandit) { w.tickTimer = 0.5; } else {
-      const mx = m.worldX, my = m.worldY;
-      const stats = train.getAutoWeaponStats('steamBlast');
-      w.tickTimer -= dt;
-      if (w.tickTimer <= 0) {
-        w.tickTimer = stats.tickRate * cdMult;
-        const r = stats.radius * areaMult;
-        const r2 = r * r;
-        const dmg = stats.damage * dmgMult;
-        for (const e of enemies) {
-          if (!e.active) continue;
-          const dx = e.x - mx, dy = e.y - my;
-          if (dx * dx + dy * dy <= r2) {
-            this.spawnDamageNumber(e.x, e.y, dmg);
-            e.takeDamage(dmg);
-            this.handleEnemyDamageResult(e, train);
+      if (!m._bandit) {
+        const mx = m.worldX, my = m.worldY;
+        const stats = train.getAutoWeaponStats('steamBlast');
+        w.tickTimer -= dt;
+        if (w.tickTimer <= 0) {
+          w.tickTimer = stats.tickRate * cdMult;
+          const r = stats.radius * areaMult;
+          const r2 = r * r;
+          const dmg = stats.damage * dmgMult;
+          for (const e of enemies) {
+            if (!e.active) continue;
+            const dx = e.x - mx, dy = e.y - my;
+            if (dx * dx + dy * dy <= r2) {
+              this.spawnDamageNumber(e.x, e.y, dmg);
+              e.takeDamage(dmg);
+              this.handleEnemyDamageResult(e, train);
+            }
           }
         }
       }
-      } // end bandit check
     }
 
     // --- RICOCHET SHOT ---
     if (train.hasAutoWeapon('ricochetShot')) {
       const w = train.autoWeapons.ricochetShot;
       const m = w.mount;
-      if (m._bandit) { w.cooldownTimer = 0.5; } else {
-      const mx = m.worldX, my = m.worldY;
-      const stats = train.getAutoWeaponStats('ricochetShot');
-      w.cooldownTimer -= dt;
-      if (w.cooldownTimer <= 0) {
-        w.cooldownTimer = stats.fireInterval * cdMult;
-        const angle = Math.random() * Math.PI * 2;
-        const bolt = this.ricochetBolts.find(b => !b.active);
-        if (bolt) bolt.spawn(mx, my, angle, stats.damage * dmgMult, stats.bounces, stats.speed);
+      if (!m._bandit) {
+        const mx = m.worldX, my = m.worldY;
+        const stats = train.getAutoWeaponStats('ricochetShot');
+        w.cooldownTimer -= dt;
+        if (w.cooldownTimer <= 0) {
+          w.cooldownTimer = stats.fireInterval * cdMult;
+          const angle = Math.random() * Math.PI * 2;
+          const bolt = this.ricochetBolts.find(b => !b.active);
+          if (bolt) bolt.spawn(mx, my, angle, stats.damage * dmgMult, stats.bounces, stats.speed);
+        }
       }
-      } // end bandit check
     }
 
     // Update ricochet bolts

@@ -1297,7 +1297,7 @@ export class Renderer3D {
   // =============================================
   // GAME OVER
   // =============================================
-  drawGameOver(won, train, goldEarned, buttons, input, gameOverType = 'death') {
+  drawGameOver(won, train, goldEarned, buttons, input, gameOverType = 'death', totalGold = 0) {
     const ctx = this.ctx;
     const cx = CANVAS_WIDTH / 2;
     const cy = CANVAS_HEIGHT / 2;
@@ -1386,7 +1386,7 @@ export class Renderer3D {
       // Total gold
       ctx.fillStyle = '#f5a623';
       ctx.font = 'bold 28px monospace';
-      ctx.fillText(`Treasury: ${input._totalGold ?? 0} Gold`, cx, cy + 65);
+      ctx.fillText(`Treasury: ${totalGold} Gold`, cx, cy + 65);
 
     } else if (gameOverType === 'zone') {
       // === ZONE WIN — delivered celebration ===
