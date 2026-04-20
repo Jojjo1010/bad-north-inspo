@@ -136,10 +136,25 @@ function prepareForCombat() {
   train.runGold = 0;
   train.damageFlash = 0;
   train.shakeTimer = 0;
+  selectedCrew = null;
   spawner.reset();
   combat.reset();
   coinSystem.reset();
   won = false;
+
+  // Apply any shop upgrades bought between combats
+  const u = save.upgrades;
+  const crewCount = 1 + u.crewSlots.level;
+  while (train.crew.length < crewCount) train.recruitCrew();
+  // Re-apply passive levels from shop (may have been upgraded)
+  train.passives.damage = u.damage.level;
+  train.passives.shield = u.shield.level;
+  train.passives.coolOff = u.coolOff.level;
+  train.passives.baseArea = u.baseArea.level;
+  train.passives.maxHp = u.maxHp.level;
+  train.maxHp = 100 + u.maxHp.level * ST.maxHp.perLevel;
+  train.hp = Math.min(train.hp, train.maxHp);
+  train.greedMultiplier = 1 + u.greed.level * (ST.greed.perLevel / 100);
 }
 
 function generateLevelUpCards(train) {
