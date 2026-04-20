@@ -43,12 +43,7 @@
 
     .content { max-width: 1440px; margin: 0 auto; padding: 24px; }
 
-    .preview-bar { margin-bottom: 24px; background: var(--bg-1); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
-    .preview-bar h3 { padding: 12px 16px 0; font-size: 13px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
-    .preview-canvas { width: 100%; height: 200px; display: block; }
-    .preview-labels { display: flex; gap: 24px; padding: 8px 16px 12px; font-size: 12px; color: var(--text-dim); font-family: var(--mono); }
-    .preview-labels span { display: flex; align-items: center; gap: 6px; }
-    .preview-labels .dot { width: 8px; height: 8px; border-radius: 50%; }
+    .card-preview { width: 80px; height: 80px; margin-left: auto; border-radius: 8px; overflow: hidden; flex-shrink: 0; background: var(--bg-0); }
 
     .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
     @media (max-width: 1100px) { .grid { grid-template-columns: repeat(2, 1fr); } }
@@ -107,15 +102,6 @@
   </div>
 
   <div class="content">
-    <div class="preview-bar">
-      <h3>3D Preview</h3>
-      <canvas class="preview-canvas" id="preview"></canvas>
-      <div class="preview-labels">
-        <span><span class="dot" style="background:#8e44ad"></span> Purple Enemy</span>
-        <span><span class="dot" style="background:#c0392b"></span> Red Enemy</span>
-        <span><span class="dot" style="background:#888"></span> Train</span>
-      </div>
-    </div>
     <div class="grid" id="sections"></div>
   </div>
 
@@ -123,48 +109,69 @@
     import * as THREE from 'three';
     import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 
-    // ======= 3D PREVIEW =======
-    const previewCanvas = document.getElementById('preview');
-    const previewRenderer = new THREE.WebGLRenderer({ canvas: previewCanvas, antialias: true });
-    previewRenderer.setPixelRatio(window.devicePixelRatio);
-    const scene = new THREE.Scene();
-    scene.background = new THREE.Color(0x18181b);
-    const camera = new THREE.PerspectiveCamera(35, 4, 0.1, 2000);
-    camera.position.set(200, 120, 200);
-    camera.lookAt(0, 10, 0);
-    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
-    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
-    dirLight.position.set(100, 150, 100);
-    scene.add(dirLight);
-    scene.add(new THREE.GridHelper(400, 40, 0x3f3f46, 0x27272a));
-
+    // ======= INLINE 3D PREVIEWS =======
     const loader = new FBXLoader();
-    loader.load('/assets/Train.fbx', obj => { obj.scale.setScalar(0.05); obj.position.set(60, 0, 0); scene.add(obj); });
-    loader.load('/assets/enemy.fbx', obj => {
-      const p = obj.clone(); p.scale.setScalar(0.045 * 1.5); p.position.set(-60, 0, 0); scene.add(p); window._pm = p;
-      const r = obj.clone(); r.scale.setScalar(0.045 * 5); r.position.set(-20, 0, 0);
-      r.traverse(c => { if (c.isMesh && c.material) { c.material = c.material.clone(); c.material.color.set(0xc0392b); } });
-      scene.add(r); window._rm = r;
-    });
+    const previews = []; // { renderer, scene, camera, canvas, model }
 
-    function resizePreview() {
-      const w = previewCanvas.parentElement.getBoundingClientRect().width;
-      previewRenderer.setSize(w, 200); camera.aspect = w / 200; camera.updateProjectionMatrix();
+    function createMiniPreview(canvas, modelPath, opts = {}) {
+      const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, alpha: true });
+      renderer.setPixelRatio(window.devicePixelRatio);
+      renderer.setSize(80, 80);
+      renderer.setClearColor(0x000000, 0);
+
+      const scene = new THREE.Scene();
+      const camera = new THREE.PerspectiveCamera(30, 1, 0.1, 2000);
+      camera.position.set(opts.camX ?? 40, opts.camY ?? 30, opts.camZ ?? 40);
+      camera.lookAt(0, opts.lookY ?? 5, 0);
+
+      scene.add(new THREE.AmbientLight(0xffffff, 0.7));
+      const dl = new THREE.DirectionalLight(0xffffff, 0.8);
+      dl.position.set(30, 50, 30);
+      scene.add(dl);
+
+      const entry = { renderer, scene, camera, canvas, model: null, opts };
+      previews.push(entry);
+
+      loader.load(modelPath, (obj) => {
+        obj.scale.setScalar(opts.scale ?? 0.05);
+        if (opts.color) {
+          obj.traverse(c => { if (c.isMesh && c.material) { c.material = c.material.clone(); c.material.color.set(opts.color); } });
+        }
+        scene.add(obj);
+        entry.model = obj;
+      });
+
+      return entry;
     }
-    window.addEventListener('resize', resizePreview); resizePreview();
 
+    // Animate all mini previews (slow rotation)
     let angle = 0;
     (function animate() {
-      angle += 0.003;
-      camera.position.set(Math.cos(angle) * 280, 120, Math.sin(angle) * 280);
-      camera.lookAt(0, 10, 0);
-      previewRenderer.render(scene, camera);
+      angle += 0.008;
+      for (const p of previews) {
+        if (!p.model) { p.renderer.render(p.scene, p.camera); continue; }
+        p.model.rotation.y = angle;
+        p.renderer.render(p.scene, p.camera);
+      }
       requestAnimationFrame(animate);
     })();
 
+    // Track preview entries by section for updates
+    const previewBySection = {};
+
     window.updatePreview = function(v) {
-      if (window._pm) window._pm.scale.setScalar(0.045 * (v.ENEMY_PURPLE_RADIUS_MULT || 1.5));
-      if (window._rm) window._rm.scale.setScalar(0.045 * (v.ENEMY_RED_RADIUS_MULT || 5));
+      if (previewBySection['Enemies']) {
+        const e = previewBySection['Enemies'];
+        if (e.model) e.model.scale.setScalar(0.045 * (v.ENEMY_PURPLE_RADIUS_MULT || 1.5));
+      }
+    };
+
+    // Section → model config
+    const SECTION_MODELS = {
+      'Your Train': { path: '/assets/Train.fbx', scale: 0.03, camX: 80, camY: 20, camZ: 80, lookY: 8 },
+      'Enemies': { path: '/assets/enemy.fbx', scale: 0.07, camX: 30, camY: 20, camZ: 30, lookY: 5 },
+      'Turret': { path: '/assets/AutoGun.fbx', scale: 0.1, camX: 20, camY: 15, camZ: 20, lookY: 3 },
+      'Laser': { path: '/assets/Laser.fbx', scale: 0.1, camX: 20, camY: 15, camZ: 20, lookY: 3 },
     };
 
     // ======= PARAMS — simplified with descriptions =======
@@ -282,9 +289,16 @@
           card.className = 'card';
           card.dataset.color = meta.color;
           const count = PARAMS.filter(pp => pp.section === p.section).length;
-          card.innerHTML = `<div class="card-header"><span class="icon">${meta.icon}</span><h2>${p.section}</h2><span class="count">${count}</span></div><div class="card-body"></div>`;
+          const hasModel = SECTION_MODELS[p.section];
+          card.innerHTML = `<div class="card-header"><span class="icon">${meta.icon}</span><h2>${p.section}</h2><span class="count">${count}</span>${hasModel ? '<canvas class="card-preview"></canvas>' : ''}</div><div class="card-body"></div>`;
           container.appendChild(card);
           sectionEls[p.section] = card.querySelector('.card-body');
+
+          if (hasModel) {
+            const canvas = card.querySelector('.card-preview');
+            const entry = createMiniPreview(canvas, hasModel.path, hasModel);
+            previewBySection[p.section] = entry;
+          }
         }
 
         const isFloat = p.step < 1;
