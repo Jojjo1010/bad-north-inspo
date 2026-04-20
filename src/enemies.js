@@ -80,8 +80,8 @@ export class Spawner {
 
   update(dt, distance, carBounds, stationDifficulty = 1) {
     // Difficulty scales with distance AND station depth
-    const distDiff = 1 + (distance / TARGET_DISTANCE) * 4;
-    const difficulty = distDiff * stationDifficulty;
+    const distDiff = 1 + (distance / TARGET_DISTANCE) * 2;
+    const difficulty = distDiff + (stationDifficulty - 1);
     const interval = Math.max(
       ENEMY_SPAWN_INTERVAL_MIN / stationDifficulty,
       ENEMY_SPAWN_INTERVAL_START / stationDifficulty - difficulty * 0.2
