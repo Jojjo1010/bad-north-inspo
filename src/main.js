@@ -231,7 +231,7 @@ function findSlotAtMouse() {
 }
 
 function updateCrewWalk(dt) {
-  const CREW_WALK_SPEED = 250;
+  const CREW_WALK_SPEED = 120;
   for (const c of train.crew) {
     if (!c.isMoving || c.moveScreenX === undefined) continue;
     const dx = c.moveTargetX - c.moveScreenX;
@@ -1109,7 +1109,7 @@ let stationArrival = null; // { type, timer } — brief overlay showing what you
 
 function enterStation(station) {
   const typeLabels = {
-    combat: '⚔ BANDITS AHEAD! ⚔',
+    combat: '⚔ ZOMBIES AHEAD! ⚔',
     empty: '— Quiet Stop —',
     start: '',
     exit: '★ ZONE COMPLETE! ★',

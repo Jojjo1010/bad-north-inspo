@@ -174,7 +174,7 @@
     // Section → model config
     const SECTION_MODELS = {
       'Your Train': { path: '/assets/Train.fbx', scale: 0.03, camX: 80, camY: 20, camZ: 80, lookY: 8 },
-      'Enemies': { path: '/assets/enemy.fbx', scale: 0.07, camX: 30, camY: 20, camZ: 30, lookY: 5 },
+      'Zombies': { path: '/assets/enemy.fbx', scale: 0.07, camX: 30, camY: 20, camZ: 30, lookY: 5 },
       'Turret': { path: '/assets/AutoGun.fbx', scale: 0.1, camX: 20, camY: 15, camZ: 20, lookY: 3 },
       'Laser': { path: '/assets/Laser.fbx', scale: 0.1, camX: 20, camY: 15, camZ: 20, lookY: 3 },
     };
@@ -190,17 +190,17 @@
       { section: 'Your Train', key: 'CARGO_MULTIPLIER_PER_BOX', label: 'Gold Mult/Box', desc: 'How much each cargo box adds to your gold multiplier', default: 0.25, min: 0.05, max: 1, step: 0.05 },
 
       // Enemies
-      { section: 'Enemies', color: 'red', group: 'Shared', key: 'ENEMY_BASE_HP', label: 'Base HP', desc: 'Starting health before tier multipliers', default: 20, min: 5, max: 200, step: 5 },
-      { section: 'Enemies', group: 'Shared', key: 'ENEMY_BASE_SPEED', label: 'Base Speed', desc: 'How fast all enemies move toward your train', default: 50, min: 10, max: 200, step: 5 },
-      { section: 'Enemies', group: 'Shared', key: 'ENEMY_RADIUS', label: 'Base Size', desc: 'Base collision radius before tier multipliers', default: 6, min: 2, max: 30, step: 1 },
-      { section: 'Enemies', group: 'Shared', key: 'ENEMY_CONTACT_DAMAGE', label: 'Contact Damage', desc: 'Damage when an enemy reaches your train', default: 6, min: 1, max: 30, step: 1 },
-      { section: 'Enemies', group: 'Spawning', key: 'ENEMY_SPAWN_INTERVAL_START', label: 'Spawn Rate (start)', desc: 'Seconds between spawns at start — lower = more', default: 1.5, min: 0.2, max: 5, step: 0.1 },
-      { section: 'Enemies', group: 'Spawning', key: 'ENEMY_SPAWN_INTERVAL_MIN', label: 'Spawn Rate (fastest)', desc: 'Minimum interval at max difficulty', default: 0.25, min: 0.05, max: 2, step: 0.05 },
-      { section: 'Enemies', group: 'Purple (easy)', key: 'ENEMY_PURPLE_RADIUS_MULT', label: 'Size Multiplier', desc: 'How big relative to base size', default: 1.5, min: 0.5, max: 5, step: 0.25 },
-      { section: 'Enemies', group: 'Purple (easy)', key: 'ENEMY_PURPLE_HP_MULT', label: 'HP Multiplier', desc: 'HP relative to base HP', default: 1, min: 0.5, max: 5, step: 0.5 },
-      { section: 'Enemies', group: 'Red — medium', key: 'ENEMY_RED_RADIUS_MULT', label: 'Size Multiplier', desc: 'How big relative to base size', default: 5, min: 1, max: 10, step: 0.5 },
-      { section: 'Enemies', group: 'Red — medium', key: 'ENEMY_RED1_HP_MULT', label: 'HP Multiplier', desc: 'HP relative to base HP', default: 4, min: 1, max: 15, step: 0.5 },
-      { section: 'Enemies', group: 'Red — hard', key: 'ENEMY_RED2_HP_MULT', label: 'HP Multiplier', desc: 'HP relative to base HP (same size as medium)', default: 6, min: 1, max: 20, step: 0.5 },
+      { section: 'Zombies', color: 'red', group: 'Shared', key: 'ENEMY_BASE_HP', label: 'Base HP', desc: 'Starting health before tier multipliers', default: 20, min: 5, max: 200, step: 5 },
+      { section: 'Zombies', group: 'Shared', key: 'ENEMY_BASE_SPEED', label: 'Base Speed', desc: 'How fast zombies move toward your train', default: 50, min: 10, max: 200, step: 5 },
+      { section: 'Zombies', group: 'Shared', key: 'ENEMY_RADIUS', label: 'Base Size', desc: 'Base collision radius before tier multipliers', default: 6, min: 2, max: 30, step: 1 },
+      { section: 'Zombies', group: 'Shared', key: 'ENEMY_CONTACT_DAMAGE', label: 'Contact Damage', desc: 'Damage when a zombie reaches your train', default: 6, min: 1, max: 30, step: 1 },
+      { section: 'Zombies', group: 'Spawning', key: 'ENEMY_SPAWN_INTERVAL_START', label: 'Spawn Rate (start)', desc: 'Seconds between spawns at start — lower = more', default: 1.5, min: 0.2, max: 5, step: 0.1 },
+      { section: 'Zombies', group: 'Spawning', key: 'ENEMY_SPAWN_INTERVAL_MIN', label: 'Spawn Rate (fastest)', desc: 'Minimum interval at max difficulty', default: 0.25, min: 0.05, max: 2, step: 0.05 },
+      { section: 'Zombies', group: 'Purple (easy)', key: 'ENEMY_PURPLE_RADIUS_MULT', label: 'Size Multiplier', desc: 'How big relative to base size', default: 1.5, min: 0.5, max: 5, step: 0.25 },
+      { section: 'Zombies', group: 'Purple (easy)', key: 'ENEMY_PURPLE_HP_MULT', label: 'HP Multiplier', desc: 'HP relative to base HP', default: 1, min: 0.5, max: 5, step: 0.5 },
+      { section: 'Zombies', group: 'Red — medium', key: 'ENEMY_RED_RADIUS_MULT', label: 'Size Multiplier', desc: 'How big relative to base size', default: 5, min: 1, max: 10, step: 0.5 },
+      { section: 'Zombies', group: 'Red — medium', key: 'ENEMY_RED1_HP_MULT', label: 'HP Multiplier', desc: 'HP relative to base HP', default: 4, min: 1, max: 15, step: 0.5 },
+      { section: 'Zombies', group: 'Red — hard', key: 'ENEMY_RED2_HP_MULT', label: 'HP Multiplier', desc: 'HP relative to base HP (same size as medium)', default: 6, min: 1, max: 20, step: 0.5 },
 
       // Crew Weapons
       { section: 'Crew Weapons', color: 'blue', key: 'WEAPON_DAMAGE', label: 'Damage', desc: 'Damage per shot from crew-manned weapons', default: 12, min: 1, max: 50, step: 1 },

@@ -1513,7 +1513,7 @@ export class Renderer3D {
     ctx.fillStyle = '#aaa';
     ctx.font = '14px monospace';
     const subtitles = {
-      combat: 'Prepare for battle...',
+      combat: 'Zombies incoming...',
       empty: 'Nothing here...',
       exit: 'Shop time!',
     };
