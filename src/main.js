@@ -2,7 +2,7 @@ import {
   CANVAS_WIDTH, CANVAS_HEIGHT, CAMERA_TRAIN_X,
   CAR_WIDTH, CAR_HEIGHT, CAR_GAP, TRAIN_SPEED,
   TARGET_DISTANCE, AUTO_WEAPONS, MAX_AUTO_WEAPON_LEVEL, MOUNT_RADIUS,
-  ZONES_PER_WORLD, GOLD_PER_STATION, COAL_PER_WIN
+  ZONES_PER_WORLD, GOLD_PER_STATION, COAL_PER_WIN, SHOP_TUNING
 } from './constants.js';
 import { Train } from './train.js';
 import { Renderer3D } from './renderer3d.js';
@@ -49,17 +49,18 @@ let levelUpChoices = [];
 let hoveredPowerup = -1;
 let pendingWeaponId = null; // weapon waiting to be placed on a mount
 
-// === PERSISTENT UPGRADES (shop, kept across worlds) ===
+// === PERSISTENT UPGRADES (shop, kept across worlds — costs/levels from tuner) ===
+const ST = SHOP_TUNING;
 const save = {
   gold: 0,
   upgrades: {
-    damage:    { level: 0, maxLevel: 5, cost: 40,  icon: '💥', color: '#ff5722', name: 'Damage',     desc: '+15% weapon damage' },
-    shield:    { level: 0, maxLevel: 5, cost: 35,  icon: '🛡', color: '#3498db', name: 'Shield',     desc: '-2 damage per hit' },
-    coolOff:   { level: 0, maxLevel: 5, cost: 45,  icon: '❄', color: '#00bcd4', name: 'Cool-off',   desc: '-10% cooldown' },
-    maxHp:     { level: 0, maxLevel: 5, cost: 30,  icon: '❤', color: '#e74c3c', name: 'Max Hull',   desc: '+15 max HP' },
-    baseArea:  { level: 0, maxLevel: 5, cost: 40,  icon: '🎯', color: '#9b59b6', name: 'Range',      desc: '+15% weapon range' },
-    greed:     { level: 0, maxLevel: 3, cost: 60,  icon: '💰', color: '#f5a623', name: 'Greed',      desc: '+20% gold from coins' },
-    crewSlots: { level: 0, maxLevel: 2, cost: 100, icon: '👤', color: '#2ecc71', name: 'Crew Slots', desc: 'Unlock crew member' },
+    damage:    { level: 0, maxLevel: ST.damage.maxLevel,   cost: ST.damage.cost,    icon: '💥', color: '#ff5722', name: 'Damage',     desc: `+${ST.damage.perLevel}% weapon damage` },
+    shield:    { level: 0, maxLevel: ST.shield.maxLevel,   cost: ST.shield.cost,    icon: '🛡', color: '#3498db', name: 'Shield',     desc: `-${ST.shield.perLevel} damage per hit` },
+    coolOff:   { level: 0, maxLevel: ST.coolOff.maxLevel,  cost: ST.coolOff.cost,   icon: '❄', color: '#00bcd4', name: 'Cool-off',   desc: `-${ST.coolOff.perLevel}% cooldown` },
+    maxHp:     { level: 0, maxLevel: ST.maxHp.maxLevel,    cost: ST.maxHp.cost,     icon: '❤', color: '#e74c3c', name: 'Max Hull',   desc: `+${ST.maxHp.perLevel} max HP` },
+    baseArea:  { level: 0, maxLevel: ST.baseArea.maxLevel,  cost: ST.baseArea.cost,  icon: '🎯', color: '#9b59b6', name: 'Range',      desc: `+${ST.baseArea.perLevel}% weapon range` },
+    greed:     { level: 0, maxLevel: ST.greed.maxLevel,    cost: ST.greed.cost,     icon: '💰', color: '#f5a623', name: 'Greed',      desc: `+${ST.greed.perLevel}% gold from coins` },
+    crewSlots: { level: 0, maxLevel: ST.crewSlots.maxLevel, cost: ST.crewSlots.cost, icon: '👤', color: '#2ecc71', name: 'Crew Slots', desc: 'Unlock crew member' },
   },
 };
 const UPGRADE_KEYS = Object.keys(save.upgrades);
@@ -116,15 +117,15 @@ function startNewWorld() {
   const u = save.upgrades;
   const crewCount = 1 + u.crewSlots.level;
   while (train.crew.length < crewCount) train.recruitCrew();
-  // Passives from shop (these are the only source now)
+  // Passives from shop (tuned per-level values)
   train.passives.damage = u.damage.level;
   train.passives.shield = u.shield.level;
   train.passives.coolOff = u.coolOff.level;
   train.passives.baseArea = u.baseArea.level;
   train.passives.maxHp = u.maxHp.level;
-  train.maxHp += u.maxHp.level * 15;
+  train.maxHp += u.maxHp.level * ST.maxHp.perLevel;
   train.hp = train.maxHp;
-  train.greedMultiplier = 1 + u.greed.level * 0.2;
+  train.greedMultiplier = 1 + u.greed.level * (ST.greed.perLevel / 100);
 }
 
 // Prepare for a combat station — keep train, reset enemies

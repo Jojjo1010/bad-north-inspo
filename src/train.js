@@ -3,7 +3,7 @@ import {
   MOUNT_RADIUS, WEAPON_CONE_HALF_ANGLE, WEAPON_RANGE,
   WEAPON_FIRE_RATE, WEAPON_DAMAGE, CREW_COLORS,
   XP_PER_LEVEL, CARGO_BOXES_START, CARGO_MULTIPLIER_PER_BOX,
-  AUTO_WEAPONS, MAX_AUTO_WEAPON_LEVEL
+  AUTO_WEAPONS, MAX_AUTO_WEAPON_LEVEL, SHOP_TUNING
 } from './constants.js';
 
 const CREW_MOVE_SPEED = 120; // px/sec
@@ -296,10 +296,10 @@ export class Train {
   get centerY() { return this.cars[1].worldY + CAR_HEIGHT / 2; }
 
   // Passive modifier multipliers (stack with shop upgrades)
-  get totalDamageMultiplier() { return 1 + this.passives.damage * 0.15; }
-  get totalCooldownMultiplier() { return 1 - this.passives.coolOff * 0.10; }
-  get totalAreaMultiplier() { return 1 + this.passives.baseArea * 0.15; }
-  get totalShieldReduction() { return this.armorReduction + this.passives.shield * 2; }
+  get totalDamageMultiplier() { return 1 + this.passives.damage * (SHOP_TUNING.damage.perLevel / 100); }
+  get totalCooldownMultiplier() { return 1 - this.passives.coolOff * (SHOP_TUNING.coolOff.perLevel / 100); }
+  get totalAreaMultiplier() { return 1 + this.passives.baseArea * (SHOP_TUNING.baseArea.perLevel / 100); }
+  get totalShieldReduction() { return this.armorReduction + this.passives.shield * SHOP_TUNING.shield.perLevel; }
 
   recruitCrew() {
     if (this.crew.length >= this.maxCrew) return;

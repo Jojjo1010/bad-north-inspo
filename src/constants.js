@@ -81,42 +81,49 @@ export const MAX_COINS = 30;
 export const MAX_FLYING_COINS = 30;
 export const COIN_FLY_SPEED = 400;
 
-// Auto-Weapons (VS-style, gained via level-up)
+// Auto-Weapons (VS-style, gained via level-up) — levels read from tuning
 export const MAX_AUTO_WEAPON_LEVEL = 5;
 export const AUTO_WEAPONS = {
   turret: {
     id: 'turret', name: 'Turret', icon: '\uD83D\uDD2B', color: '#ffb74d',
     desc: 'Auto-targets nearest enemy',
-    levels: [
-      { shotsPerBurst: 1, damage: 10, fireInterval: 1.2, range: 250 },
-      { shotsPerBurst: 2, damage: 12, fireInterval: 1.1, range: 270 },
-      { shotsPerBurst: 3, damage: 14, fireInterval: 1.0, range: 290 },
-      { shotsPerBurst: 4, damage: 16, fireInterval: 0.9, range: 310 },
-      { shotsPerBurst: 5, damage: 18, fireInterval: 0.8, range: 340 },
-    ],
+    levels: [1,2,3,4,5].map(lv => ({
+      shotsPerBurst: T(`TURRET_LV${lv}_SHOTS`, [1,2,3,4,5][lv-1]),
+      damage: T(`TURRET_LV${lv}_DAMAGE`, [10,12,14,16,18][lv-1]),
+      fireInterval: T(`TURRET_LV${lv}_FIRE_INTERVAL`, [1.2,1.1,1.0,0.9,0.8][lv-1]),
+      range: T(`TURRET_LV${lv}_RANGE`, [250,270,290,310,340][lv-1]),
+    })),
   },
   steamBlast: {
     id: 'steamBlast', name: 'Steam Blast', icon: '\uD83D\uDCA8', color: '#8ecae6',
     desc: 'Aura that damages nearby enemies',
-    levels: [
-      { radius: 80,  damage: 4,  tickRate: 0.5 },
-      { radius: 100, damage: 6,  tickRate: 0.45 },
-      { radius: 125, damage: 9,  tickRate: 0.4 },
-      { radius: 155, damage: 13, tickRate: 0.35 },
-      { radius: 190, damage: 18, tickRate: 0.3 },
-    ],
+    levels: [1,2,3,4,5].map(lv => ({
+      radius: T(`STEAM_LV${lv}_RADIUS`, [80,100,125,155,190][lv-1]),
+      damage: T(`STEAM_LV${lv}_DAMAGE`, [4,6,9,13,18][lv-1]),
+      tickRate: T(`STEAM_LV${lv}_TICK_RATE`, [0.5,0.45,0.4,0.35,0.3][lv-1]),
+    })),
   },
   ricochetShot: {
     id: 'ricochetShot', name: 'Laser', icon: '\u26A1', color: '#b388ff',
     desc: 'Laser that bounces between enemies',
-    levels: [
-      { bounces: 2, damage: 8,  fireInterval: 2.5, speed: 300 },
-      { bounces: 3, damage: 10, fireInterval: 2.2, speed: 320 },
-      { bounces: 4, damage: 13, fireInterval: 1.9, speed: 340 },
-      { bounces: 5, damage: 16, fireInterval: 1.6, speed: 360 },
-      { bounces: 7, damage: 20, fireInterval: 1.3, speed: 400 },
-    ],
+    levels: [1,2,3,4,5].map(lv => ({
+      bounces: T(`LASER_LV${lv}_BOUNCES`, [2,3,4,5,7][lv-1]),
+      damage: T(`LASER_LV${lv}_DAMAGE`, [8,10,13,16,20][lv-1]),
+      fireInterval: T(`LASER_LV${lv}_FIRE_INTERVAL`, [2.5,2.2,1.9,1.6,1.3][lv-1]),
+      speed: T(`LASER_LV${lv}_SPEED`, [300,320,340,360,400][lv-1]),
+    })),
   },
+};
+
+// Shop upgrade tuning
+export const SHOP_TUNING = {
+  damage:   { cost: T('SHOP_DAMAGE_COST', 40),   maxLevel: T('SHOP_DAMAGE_MAX_LEVEL', 5),   perLevel: T('SHOP_DAMAGE_PER_LEVEL', 15) },
+  shield:   { cost: T('SHOP_SHIELD_COST', 35),   maxLevel: T('SHOP_SHIELD_MAX_LEVEL', 5),   perLevel: T('SHOP_SHIELD_PER_LEVEL', 2) },
+  coolOff:  { cost: T('SHOP_COOLOFF_COST', 45),  maxLevel: T('SHOP_COOLOFF_MAX_LEVEL', 5),  perLevel: T('SHOP_COOLOFF_PER_LEVEL', 10) },
+  maxHp:    { cost: T('SHOP_MAXHP_COST', 30),    maxLevel: T('SHOP_MAXHP_MAX_LEVEL', 5),    perLevel: T('SHOP_MAXHP_PER_LEVEL', 15) },
+  baseArea: { cost: T('SHOP_RANGE_COST', 40),    maxLevel: T('SHOP_RANGE_MAX_LEVEL', 5),    perLevel: T('SHOP_RANGE_PER_LEVEL', 15) },
+  greed:    { cost: T('SHOP_GREED_COST', 60),    maxLevel: T('SHOP_GREED_MAX_LEVEL', 3),    perLevel: T('SHOP_GREED_PER_LEVEL', 20) },
+  crewSlots:{ cost: T('SHOP_CREW_COST', 100),    maxLevel: T('SHOP_CREW_MAX_LEVEL', 2) },
 };
 
 // Run

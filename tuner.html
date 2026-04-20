@@ -82,6 +82,66 @@
       // Coins
       { section: 'Coins', key: 'COIN_VALUE', label: 'Coin Value (gold)', default: 10, min: 1, max: 50, step: 1 },
       { section: 'Coins', key: 'COIN_SPAWN_INTERVAL', label: 'Coin Spawn Interval', default: 3, min: 0.5, max: 10, step: 0.5 },
+
+      // Turret weapon (per-level)
+      ...[1,2,3,4,5].flatMap((lv,i) => {
+        const d = [{s:1,d:10,f:1.2,r:250},{s:2,d:12,f:1.1,r:270},{s:3,d:14,f:1.0,r:290},{s:4,d:16,f:0.9,r:310},{s:5,d:18,f:0.8,r:340}][i];
+        return [
+          { section: 'Turret', key: `TURRET_LV${lv}_SHOTS`, label: `Lv${lv} Shots/Burst`, default: d.s, min: 1, max: 10, step: 1 },
+          { section: 'Turret', key: `TURRET_LV${lv}_DAMAGE`, label: `Lv${lv} Damage`, default: d.d, min: 1, max: 50, step: 1 },
+          { section: 'Turret', key: `TURRET_LV${lv}_FIRE_INTERVAL`, label: `Lv${lv} Fire Interval`, default: d.f, min: 0.2, max: 3, step: 0.05 },
+          { section: 'Turret', key: `TURRET_LV${lv}_RANGE`, label: `Lv${lv} Range`, default: d.r, min: 100, max: 600, step: 10 },
+        ];
+      }),
+
+      // Steam Blast (per-level)
+      ...[1,2,3,4,5].flatMap((lv,i) => {
+        const d = [{r:80,d:4,t:0.5},{r:100,d:6,t:0.45},{r:125,d:9,t:0.4},{r:155,d:13,t:0.35},{r:190,d:18,t:0.3}][i];
+        return [
+          { section: 'Steam Blast', key: `STEAM_LV${lv}_RADIUS`, label: `Lv${lv} Radius`, default: d.r, min: 20, max: 400, step: 5 },
+          { section: 'Steam Blast', key: `STEAM_LV${lv}_DAMAGE`, label: `Lv${lv} Damage`, default: d.d, min: 1, max: 50, step: 1 },
+          { section: 'Steam Blast', key: `STEAM_LV${lv}_TICK_RATE`, label: `Lv${lv} Tick Rate`, default: d.t, min: 0.1, max: 2, step: 0.05 },
+        ];
+      }),
+
+      // Laser (per-level)
+      ...[1,2,3,4,5].flatMap((lv,i) => {
+        const d = [{b:2,d:8,f:2.5,s:300},{b:3,d:10,f:2.2,s:320},{b:4,d:13,f:1.9,s:340},{b:5,d:16,f:1.6,s:360},{b:7,d:20,f:1.3,s:400}][i];
+        return [
+          { section: 'Laser', key: `LASER_LV${lv}_BOUNCES`, label: `Lv${lv} Bounces`, default: d.b, min: 1, max: 15, step: 1 },
+          { section: 'Laser', key: `LASER_LV${lv}_DAMAGE`, label: `Lv${lv} Damage`, default: d.d, min: 1, max: 50, step: 1 },
+          { section: 'Laser', key: `LASER_LV${lv}_FIRE_INTERVAL`, label: `Lv${lv} Fire Interval`, default: d.f, min: 0.3, max: 5, step: 0.1 },
+          { section: 'Laser', key: `LASER_LV${lv}_SPEED`, label: `Lv${lv} Speed`, default: d.s, min: 100, max: 800, step: 10 },
+        ];
+      }),
+
+      // Shop upgrades (costs and per-level values)
+      { section: 'Shop: Damage', key: 'SHOP_DAMAGE_COST', label: 'Base Cost', default: 40, min: 5, max: 200, step: 5 },
+      { section: 'Shop: Damage', key: 'SHOP_DAMAGE_PER_LEVEL', label: '% per Level', default: 15, min: 5, max: 50, step: 1 },
+      { section: 'Shop: Damage', key: 'SHOP_DAMAGE_MAX_LEVEL', label: 'Max Level', default: 5, min: 1, max: 10, step: 1 },
+
+      { section: 'Shop: Shield', key: 'SHOP_SHIELD_COST', label: 'Base Cost', default: 35, min: 5, max: 200, step: 5 },
+      { section: 'Shop: Shield', key: 'SHOP_SHIELD_PER_LEVEL', label: 'Reduction per Level', default: 2, min: 1, max: 10, step: 1 },
+      { section: 'Shop: Shield', key: 'SHOP_SHIELD_MAX_LEVEL', label: 'Max Level', default: 5, min: 1, max: 10, step: 1 },
+
+      { section: 'Shop: Cool-off', key: 'SHOP_COOLOFF_COST', label: 'Base Cost', default: 45, min: 5, max: 200, step: 5 },
+      { section: 'Shop: Cool-off', key: 'SHOP_COOLOFF_PER_LEVEL', label: '% per Level', default: 10, min: 2, max: 30, step: 1 },
+      { section: 'Shop: Cool-off', key: 'SHOP_COOLOFF_MAX_LEVEL', label: 'Max Level', default: 5, min: 1, max: 10, step: 1 },
+
+      { section: 'Shop: Max Hull', key: 'SHOP_MAXHP_COST', label: 'Base Cost', default: 30, min: 5, max: 200, step: 5 },
+      { section: 'Shop: Max Hull', key: 'SHOP_MAXHP_PER_LEVEL', label: 'HP per Level', default: 15, min: 5, max: 50, step: 5 },
+      { section: 'Shop: Max Hull', key: 'SHOP_MAXHP_MAX_LEVEL', label: 'Max Level', default: 5, min: 1, max: 10, step: 1 },
+
+      { section: 'Shop: Range', key: 'SHOP_RANGE_COST', label: 'Base Cost', default: 40, min: 5, max: 200, step: 5 },
+      { section: 'Shop: Range', key: 'SHOP_RANGE_PER_LEVEL', label: '% per Level', default: 15, min: 5, max: 50, step: 1 },
+      { section: 'Shop: Range', key: 'SHOP_RANGE_MAX_LEVEL', label: 'Max Level', default: 5, min: 1, max: 10, step: 1 },
+
+      { section: 'Shop: Greed', key: 'SHOP_GREED_COST', label: 'Base Cost', default: 60, min: 10, max: 300, step: 5 },
+      { section: 'Shop: Greed', key: 'SHOP_GREED_PER_LEVEL', label: '% per Level', default: 20, min: 5, max: 50, step: 5 },
+      { section: 'Shop: Greed', key: 'SHOP_GREED_MAX_LEVEL', label: 'Max Level', default: 3, min: 1, max: 10, step: 1 },
+
+      { section: 'Shop: Crew', key: 'SHOP_CREW_COST', label: 'Base Cost', default: 100, min: 20, max: 500, step: 10 },
+      { section: 'Shop: Crew', key: 'SHOP_CREW_MAX_LEVEL', label: 'Max Slots', default: 2, min: 1, max: 5, step: 1 },
     ];
 
     let values = {};
