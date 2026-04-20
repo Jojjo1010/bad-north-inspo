@@ -6,12 +6,21 @@ export class InputManager {
     this.mouseX = 0;
     this.mouseY = 0;
 
+    // Left click
+    this._leftClickThisFrame = false;
+    this._isLeftDown = false;
+
+    // Right click
+    this._rightClickThisFrame = false;
+    this._isRightDown = false;
+
+    // Legacy aliases
     this._clickThisFrame = false;
     this._isMouseDown = false;
 
     // Keyboard
     this.keysDown = new Set();
-    this._keysPressed = new Set(); // pressed this frame
+    this._keysPressed = new Set();
 
     canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
@@ -25,20 +34,32 @@ export class InputManager {
       const pos = this.getCanvasPos(e);
       this.mouseX = pos.x;
       this.mouseY = pos.y;
+      if (e.button === 0) {
+        this._leftClickThisFrame = true;
+        this._isLeftDown = true;
+      } else if (e.button === 2) {
+        this._rightClickThisFrame = true;
+        this._isRightDown = true;
+      }
+      // Legacy
       this._clickThisFrame = true;
       this._isMouseDown = true;
     });
 
-    canvas.addEventListener('mouseup', () => {
-      this._isMouseDown = false;
+    canvas.addEventListener('mouseup', (e) => {
+      if (e.button === 0) this._isLeftDown = false;
+      else if (e.button === 2) this._isRightDown = false;
+      if (!this._isLeftDown && !this._isRightDown) this._isMouseDown = false;
     });
 
-    // Touch
+    // Touch = left click
     canvas.addEventListener('touchstart', (e) => {
       e.preventDefault();
       const pos = this.getCanvasPos(e.touches[0]);
       this.mouseX = pos.x;
       this.mouseY = pos.y;
+      this._leftClickThisFrame = true;
+      this._isLeftDown = true;
       this._clickThisFrame = true;
       this._isMouseDown = true;
     });
@@ -52,6 +73,7 @@ export class InputManager {
 
     canvas.addEventListener('touchend', (e) => {
       e.preventDefault();
+      this._isLeftDown = false;
       this._isMouseDown = false;
     });
 
@@ -80,11 +102,20 @@ export class InputManager {
 
   endFrame() {
     this._clickThisFrame = false;
+    this._leftClickThisFrame = false;
+    this._rightClickThisFrame = false;
     this._keysPressed.clear();
   }
 
+  // Legacy (used by UI buttons, zone map, shop, etc.)
   get clicked() { return this._clickThisFrame; }
   get mouseDown() { return this._isMouseDown; }
+
+  // Separate buttons
+  get leftClicked() { return this._leftClickThisFrame; }
+  get rightClicked() { return this._rightClickThisFrame; }
+  get leftDown() { return this._isLeftDown; }
+  get rightDown() { return this._isRightDown; }
 
   keyPressed(code) { return this._keysPressed.has(code); }
   keyDown(code) { return this.keysDown.has(code); }
@@ -103,7 +134,6 @@ export class InputManager {
   findSlotAtMouse(train) {
     for (const slot of train.allSlots) {
       const r = slot.isDriverSeat ? CREW_RADIUS + 4 : MOUNT_RADIUS + 6;
-      // Use projected screen coords if available (3D mode), otherwise pixel coords (2D mode)
       const sx = slot.screenX !== undefined ? slot.screenX : slot.worldX;
       const sy = slot.screenY !== undefined ? slot.screenY : slot.worldY;
       if (this.hitCircle(sx, sy, r)) return slot;

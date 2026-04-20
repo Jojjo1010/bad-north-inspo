@@ -258,8 +258,8 @@ function updateSetup(dt) {
   train.updateCrewMovement(dt);
   handleKeyboardRotation(dt);
 
-  if (input.clicked) {
-    // Depart button — only if at least one crew is placed on a weapon
+  // Left click: select crew or UI buttons
+  if (input.leftClicked) {
     const crewPlaced = train.crew.some(c => c.assignment && !c.assignment.isDriverSeat);
     if (crewPlaced && input.hitRect(departBtn.x, departBtn.y, departBtn.w, departBtn.h)) {
       state = STATES.RUNNING;
@@ -268,45 +268,35 @@ function updateSetup(dt) {
       return;
     }
 
-    // If crew is selected, try to move them to clicked slot first
-    if (selectedCrew) {
-      const slot = findSlotAtMouse();
-      if (slot) {
-        if (slot.autoWeaponId) return;
-        if (slot.crew === selectedCrew) {
-          // Clicked own slot: deselect
-          selectedCrew = null;
-          return;
-        }
-        const fromSlot = selectedCrew.assignment;
-        if (fromSlot) {
-          const fromX = fromSlot.worldX;
-          const fromY = fromSlot.worldY;
-          const fromCar = train.findCarForSlot(fromSlot);
-          train.unassignCrew(selectedCrew);
-          selectedCrew.moveScreenX = undefined;
-          train.startCrewMove(selectedCrew, fromX, fromY, fromCar, slot);
-        } else {
-          train.assignCrew(selectedCrew, slot);
-        }
-        selectedCrew = null;
-        return;
-      }
-      // Clicked empty space: deselect
-      selectedCrew = null;
+    const clickedCrew = findCrewAtMouse();
+    if (clickedCrew) {
+      selectedCrew = clickedCrew === selectedCrew ? null : clickedCrew;
       return;
     }
 
-    // No crew selected: check if clicking on a crew member to select
-    const clickedCrew = findCrewAtMouse();
-    if (clickedCrew) {
-      selectedCrew = clickedCrew;
-      return;
+    selectedCrew = null;
+  }
+
+  // Right click: move selected crew to slot
+  if (input.rightClicked && selectedCrew && !selectedCrew.isMoving) {
+    const slot = findSlotAtMouse();
+    if (slot && !slot.autoWeaponId) {
+      const fromSlot = selectedCrew.assignment;
+      if (fromSlot) {
+        const fromX = fromSlot.worldX;
+        const fromY = fromSlot.worldY;
+        const fromCar = train.findCarForSlot(fromSlot);
+        train.unassignCrew(selectedCrew);
+        selectedCrew.moveScreenX = undefined;
+        train.startCrewMove(selectedCrew, fromX, fromY, fromCar, slot);
+      } else {
+        train.assignCrew(selectedCrew, slot);
+      }
     }
   }
 
-  // Mouse aim: if crew is selected and on a mount, holding mouse rotates toward cursor
-  if (selectedCrew && input.mouseDown && !input.clicked) {
+  // Hold right click: aim selected crew's weapon
+  if (selectedCrew && input.rightDown && !input.rightClicked) {
     const mount = getSelectedMount();
     if (mount) {
       mount.coneDirection = Math.atan2(
@@ -352,44 +342,36 @@ function updateRun(dt) {
   updateCrewWalk(dt);
   handleKeyboardRotation(dt);
 
-  if (input.clicked) {
-    // If crew selected, try to move them to clicked slot first
-    if (selectedCrew && !selectedCrew.isMoving) {
-      const slot = findSlotAtMouse();
-      if (slot) {
-        if (slot.autoWeaponId) return;
-        if (slot.crew === selectedCrew) {
-          selectedCrew = null;
-          return;
-        }
-        const fromSlot = selectedCrew.assignment;
-        if (fromSlot) {
-          const fromX = fromSlot.worldX;
-          const fromY = fromSlot.worldY;
-          const fromCar = train.findCarForSlot(fromSlot);
-          train.unassignCrew(selectedCrew);
-          selectedCrew.moveScreenX = undefined;
-          train.startCrewMove(selectedCrew, fromX, fromY, fromCar, slot);
-        } else {
-          train.assignCrew(selectedCrew, slot);
-        }
-        selectedCrew = null;
-        return;
-      }
-      selectedCrew = null;
-      return;
-    }
-
-    // No crew selected (or crew is moving): click crew to select
+  // Left click: select crew
+  if (input.leftClicked) {
     const clickedCrew = findCrewAtMouse();
     if (clickedCrew) {
       selectedCrew = clickedCrew === selectedCrew ? null : clickedCrew;
       return;
     }
+    selectedCrew = null;
   }
 
-  // Mouse aim: hold mouse to rotate selected crew's weapon
-  if (selectedCrew && input.mouseDown && !input.clicked) {
+  // Right click: move selected crew to slot
+  if (input.rightClicked && selectedCrew && !selectedCrew.isMoving) {
+    const slot = findSlotAtMouse();
+    if (slot && !slot.autoWeaponId) {
+      const fromSlot = selectedCrew.assignment;
+      if (fromSlot) {
+        const fromX = fromSlot.worldX;
+        const fromY = fromSlot.worldY;
+        const fromCar = train.findCarForSlot(fromSlot);
+        train.unassignCrew(selectedCrew);
+        selectedCrew.moveScreenX = undefined;
+        train.startCrewMove(selectedCrew, fromX, fromY, fromCar, slot);
+      } else {
+        train.assignCrew(selectedCrew, slot);
+      }
+    }
+  }
+
+  // Hold right click: aim selected crew's weapon
+  if (selectedCrew && input.rightDown && !input.rightClicked) {
     const mount = getSelectedMount();
     if (mount) {
       mount.coneDirection = Math.atan2(
