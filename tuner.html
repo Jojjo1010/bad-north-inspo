@@ -251,19 +251,19 @@
       { section: 'World', key: 'COIN_SPAWN_INTERVAL', label: 'Coin Spawn Rate', desc: 'Seconds between coin spawns — lower = more coins', default: 3, min: 0.5, max: 10, step: 0.5 },
 
       // Shop upgrades
-      { section: 'Shop Upgrades', color: 'purple', key: 'SHOP_DAMAGE_COST', label: 'Damage Cost', desc: 'Base gold cost for weapon damage upgrade', default: 40, min: 5, max: 200, step: 5 },
-      { section: 'Shop Upgrades', key: 'SHOP_DAMAGE_PER_LEVEL', label: 'Damage %/Lv', desc: 'Percentage damage increase per shop level', default: 15, min: 5, max: 50, step: 1 },
-      { section: 'Shop Upgrades', key: 'SHOP_SHIELD_COST', label: 'Shield Cost', desc: 'Base gold cost for shield upgrade', default: 35, min: 5, max: 200, step: 5 },
-      { section: 'Shop Upgrades', key: 'SHOP_SHIELD_PER_LEVEL', label: 'Shield Reduction/Lv', desc: 'Damage reduced per hit per shop level', default: 2, min: 1, max: 10, step: 1 },
-      { section: 'Shop Upgrades', key: 'SHOP_COOLOFF_COST', label: 'Cool-off Cost', desc: 'Base gold cost for cooldown upgrade', default: 45, min: 5, max: 200, step: 5 },
-      { section: 'Shop Upgrades', key: 'SHOP_COOLOFF_PER_LEVEL', label: 'Cool-off %/Lv', desc: 'Cooldown reduction per shop level', default: 10, min: 2, max: 30, step: 1 },
-      { section: 'Shop Upgrades', key: 'SHOP_MAXHP_COST', label: 'Hull Cost', desc: 'Base gold cost for max HP upgrade', default: 30, min: 5, max: 200, step: 5 },
-      { section: 'Shop Upgrades', key: 'SHOP_MAXHP_PER_LEVEL', label: 'HP/Level', desc: 'Extra max HP per shop level', default: 15, min: 5, max: 50, step: 5 },
-      { section: 'Shop Upgrades', key: 'SHOP_RANGE_COST', label: 'Range Cost', desc: 'Base gold cost for range upgrade', default: 40, min: 5, max: 200, step: 5 },
-      { section: 'Shop Upgrades', key: 'SHOP_RANGE_PER_LEVEL', label: 'Range %/Lv', desc: 'Range increase per shop level', default: 15, min: 5, max: 50, step: 1 },
-      { section: 'Shop Upgrades', key: 'SHOP_GREED_COST', label: 'Greed Cost', desc: 'Base gold cost for greed upgrade', default: 60, min: 10, max: 300, step: 5 },
-      { section: 'Shop Upgrades', key: 'SHOP_GREED_PER_LEVEL', label: 'Greed %/Lv', desc: 'Extra gold from coins per shop level', default: 20, min: 5, max: 50, step: 5 },
-      { section: 'Shop Upgrades', key: 'SHOP_CREW_COST', label: 'Crew Slot Cost', desc: 'Gold to unlock an additional crew member', default: 100, min: 20, max: 500, step: 10 },
+      { section: 'Shop Upgrades', color: 'purple', group: 'Damage', key: 'SHOP_DAMAGE_COST', label: 'Cost', desc: 'Base gold cost per level', default: 40, min: 5, max: 200, step: 5 },
+      { section: 'Shop Upgrades', group: 'Damage', key: 'SHOP_DAMAGE_PER_LEVEL', label: '% per Level', desc: 'Weapon damage increase per level', default: 15, min: 5, max: 50, step: 1 },
+      { section: 'Shop Upgrades', group: 'Shield', key: 'SHOP_SHIELD_COST', label: 'Cost', desc: 'Base gold cost per level', default: 35, min: 5, max: 200, step: 5 },
+      { section: 'Shop Upgrades', group: 'Shield', key: 'SHOP_SHIELD_PER_LEVEL', label: 'Reduction/Lv', desc: 'Damage reduced per hit per level', default: 2, min: 1, max: 10, step: 1 },
+      { section: 'Shop Upgrades', group: 'Cool-off', key: 'SHOP_COOLOFF_COST', label: 'Cost', desc: 'Base gold cost per level', default: 45, min: 5, max: 200, step: 5 },
+      { section: 'Shop Upgrades', group: 'Cool-off', key: 'SHOP_COOLOFF_PER_LEVEL', label: '% per Level', desc: 'Cooldown reduction per level', default: 10, min: 2, max: 30, step: 1 },
+      { section: 'Shop Upgrades', group: 'Max Hull', key: 'SHOP_MAXHP_COST', label: 'Cost', desc: 'Base gold cost per level', default: 30, min: 5, max: 200, step: 5 },
+      { section: 'Shop Upgrades', group: 'Max Hull', key: 'SHOP_MAXHP_PER_LEVEL', label: 'HP per Level', desc: 'Extra max HP per level', default: 15, min: 5, max: 50, step: 5 },
+      { section: 'Shop Upgrades', group: 'Range', key: 'SHOP_RANGE_COST', label: 'Cost', desc: 'Base gold cost per level', default: 40, min: 5, max: 200, step: 5 },
+      { section: 'Shop Upgrades', group: 'Range', key: 'SHOP_RANGE_PER_LEVEL', label: '% per Level', desc: 'Weapon range increase per level', default: 15, min: 5, max: 50, step: 1 },
+      { section: 'Shop Upgrades', group: 'Greed', key: 'SHOP_GREED_COST', label: 'Cost', desc: 'Base gold cost per level', default: 60, min: 10, max: 300, step: 5 },
+      { section: 'Shop Upgrades', group: 'Greed', key: 'SHOP_GREED_PER_LEVEL', label: '% per Level', desc: 'Extra gold from coins per level', default: 20, min: 5, max: 50, step: 5 },
+      { section: 'Shop Upgrades', group: 'Crew Slots', key: 'SHOP_CREW_COST', label: 'Cost', desc: 'Gold to unlock an additional crew member', default: 100, min: 20, max: 500, step: 10 },
     ];
 
     const sectionMeta = {};
