@@ -230,8 +230,31 @@ function findSlotAtMouse() {
   return input.findSlotAtMouse(train);
 }
 
+function updateCrewWalk(dt) {
+  const CREW_WALK_SPEED = 250;
+  for (const c of train.crew) {
+    if (!c.isMoving || c.moveScreenX === undefined) continue;
+    const dx = c.moveTargetX - c.moveScreenX;
+    const dy = c.moveTargetY - c.moveScreenY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 3) {
+      c.isMoving = false;
+      if (c.moveTargetSlot) {
+        train.assignCrew(c, c.moveTargetSlot);
+        c.moveTargetSlot = null;
+      }
+      c.moveScreenX = undefined;
+    } else {
+      const step = CREW_WALK_SPEED * dt;
+      c.moveScreenX += (dx / dist) * Math.min(step, dist);
+      c.moveScreenY += (dy / dist) * Math.min(step, dist);
+    }
+  }
+}
+
 // --- SETUP PHASE ---
 function updateSetup(dt) {
+  updateCrewWalk(dt);
   handleKeyboardRotation(dt);
 
   if (input.clicked) {
@@ -262,7 +285,23 @@ function updateSetup(dt) {
       const slot = findSlotAtMouse();
       if (slot) {
         if (slot.autoWeaponId) return;
-        train.assignCrew(selectedCrew, slot);
+        const fromSlot = selectedCrew.assignment;
+        if (fromSlot) {
+          // Walk from current slot to target
+          const fromSX = slotScreenX(fromSlot);
+          const fromSY = slotScreenY(fromSlot);
+          const toSX = slotScreenX(slot);
+          const toSY = slotScreenY(slot);
+          train.unassignCrew(selectedCrew);
+          selectedCrew.isMoving = true;
+          selectedCrew.moveScreenX = fromSX;
+          selectedCrew.moveScreenY = fromSY;
+          selectedCrew.moveTargetX = toSX;
+          selectedCrew.moveTargetY = toSY;
+          selectedCrew.moveTargetSlot = slot;
+        } else {
+          train.assignCrew(selectedCrew, slot);
+        }
         return;
       }
       selectedCrew = null;
@@ -287,6 +326,7 @@ function renderSetup() {
   renderer.drawTerrain(0);
   renderer.drawTrain(train);
   renderer.drawWeaponMounts(train, getSelectedMount(), true);
+  renderer.drawMovingCrew(train.crew);
   renderer.drawCrewPanel(train.crew, crewPanelY);
   renderer.drawSetupOverlay();
   const crewReady = train.crew.some(c => c.assignment && !c.assignment.isDriverSeat);
@@ -313,27 +353,7 @@ function updateRun(dt) {
 
   train.updateCrewMovement(dt);
 
-  // Screen-space crew walk animation (3D mode)
-  const CREW_WALK_SPEED = 250; // pixels/sec in screen space
-  for (const c of train.crew) {
-    if (!c.isMoving || c.moveScreenX === undefined) continue;
-    const dx = c.moveTargetX - c.moveScreenX;
-    const dy = c.moveTargetY - c.moveScreenY;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist < 3) {
-      // Arrived
-      c.isMoving = false;
-      if (c.moveTargetSlot) {
-        train.assignCrew(c, c.moveTargetSlot);
-        c.moveTargetSlot = null;
-      }
-      c.moveScreenX = undefined;
-    } else {
-      const step = CREW_WALK_SPEED * dt;
-      c.moveScreenX += (dx / dist) * Math.min(step, dist);
-      c.moveScreenY += (dy / dist) * Math.min(step, dist);
-    }
-  }
+  updateCrewWalk(dt);
   handleKeyboardRotation(dt);
 
   if (input.clicked) {
