@@ -2,6 +2,7 @@ import {
   CANVAS_WIDTH, CANVAS_HEIGHT, MAX_ENEMIES,
   ENEMY_BASE_HP, ENEMY_BASE_SPEED, ENEMY_RADIUS,
   ENEMY_CONTACT_DAMAGE, ENEMY_SPAWN_INTERVAL_START, ENEMY_SPAWN_INTERVAL_MIN,
+  ENEMY_RADIUS_MULT, ENEMY_HP_MULT,
   TARGET_DISTANCE
 } from './constants.js';
 
@@ -96,8 +97,6 @@ export class Spawner {
   }
 
   static COLORS = ['#8e44ad', '#c0392b', '#e74c3c'];
-  static RADIUS_MULT = [1.5, 5, 5];
-  static HP_MULT = [1, 4, 6];
 
   spawnEnemy(difficulty, carBounds) {
     const enemy = this.pool.find(e => !e.active);
@@ -132,8 +131,8 @@ export class Spawner {
     // Color, size and HP based on difficulty
     const colorIdx = Math.min(Math.floor(difficulty / 2), 2);
     enemy.color = Spawner.COLORS[colorIdx];
-    enemy.radius = ENEMY_RADIUS * Spawner.RADIUS_MULT[colorIdx];
-    enemy.hp = hp * Spawner.HP_MULT[colorIdx];
+    enemy.radius = ENEMY_RADIUS * ENEMY_RADIUS_MULT[colorIdx];
+    enemy.hp = hp * ENEMY_HP_MULT[colorIdx];
     enemy.maxHp = enemy.hp;
 
     // Pick target: 70% cargo, 15% rear weapon, 15% front weapon

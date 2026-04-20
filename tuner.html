@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Train Defense — Game Tuner</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #1a1a2e; color: #e0e0e0; padding: 20px; }
+    h1 { color: #f5a623; margin-bottom: 8px; font-size: 24px; }
+    .subtitle { color: #888; margin-bottom: 24px; font-size: 13px; }
+    .actions { display: flex; gap: 10px; margin-bottom: 24px; position: sticky; top: 0; background: #1a1a2e; padding: 12px 0; z-index: 10; border-bottom: 1px solid #333; }
+    button { padding: 10px 20px; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.15s; }
+    .btn-save { background: #2ecc71; color: #000; }
+    .btn-save:hover { background: #27ae60; }
+    .btn-save.saved { background: #555; color: #aaa; cursor: default; }
+    .btn-reset { background: #555; color: #ddd; }
+    .btn-reset:hover { background: #666; }
+    .status { align-self: center; font-size: 13px; color: #888; margin-left: auto; }
+    .section { margin-bottom: 28px; }
+    .section h2 { color: #c8a96e; font-size: 16px; margin-bottom: 12px; padding-bottom: 4px; border-bottom: 1px solid #333; }
+    .row { display: flex; align-items: center; gap: 12px; margin-bottom: 8px; padding: 6px 8px; border-radius: 4px; }
+    .row:hover { background: rgba(255,255,255,0.03); }
+    .row label { width: 200px; font-size: 13px; color: #bbb; flex-shrink: 0; }
+    .row input[type=range] { flex: 1; accent-color: #f5a623; height: 6px; }
+    .row .value { width: 70px; text-align: right; font-family: monospace; font-size: 14px; color: #f5a623; flex-shrink: 0; }
+    .row .default { width: 80px; text-align: right; font-size: 11px; color: #555; flex-shrink: 0; }
+  </style>
+</head>
+<body>
+  <h1>Game Tuner</h1>
+  <p class="subtitle">Adjust values and save. The game reads these on world start.</p>
+  <div class="actions">
+    <button class="btn-save" id="saveBtn" onclick="save()">Save</button>
+    <button class="btn-reset" onclick="resetAll()">Reset to Defaults</button>
+    <span class="status" id="status"></span>
+  </div>
+  <div id="sections"></div>
+
+  <script>
+    const TUNING_KEY = 'gameTuning';
+
+    const PARAMS = [
+      // Train
+      { section: 'Train', key: 'TRAIN_MAX_HP', label: 'Max HP', default: 100, min: 20, max: 500, step: 10 },
+      { section: 'Train', key: 'TRAIN_SPEED', label: 'Speed (px/sec)', default: 167, min: 50, max: 400, step: 1 },
+      { section: 'Train', key: 'CAR_WIDTH', label: 'Car Width (hitbox)', default: 32, min: 10, max: 100, step: 1 },
+      { section: 'Train', key: 'CAR_HEIGHT', label: 'Car Height (hitbox)', default: 14, min: 5, max: 60, step: 1 },
+      { section: 'Train', key: 'CAR_GAP', label: 'Car Gap', default: 6, min: 0, max: 20, step: 1 },
+
+      // Enemies
+      { section: 'Enemies', key: 'ENEMY_BASE_HP', label: 'Base HP', default: 20, min: 5, max: 200, step: 5 },
+      { section: 'Enemies', key: 'ENEMY_BASE_SPEED', label: 'Base Speed', default: 50, min: 10, max: 200, step: 5 },
+      { section: 'Enemies', key: 'ENEMY_RADIUS', label: 'Base Radius', default: 6, min: 2, max: 30, step: 1 },
+      { section: 'Enemies', key: 'ENEMY_CONTACT_DAMAGE', label: 'Contact Damage', default: 6, min: 1, max: 30, step: 1 },
+      { section: 'Enemies', key: 'ENEMY_SPAWN_INTERVAL_START', label: 'Spawn Interval (start)', default: 1.5, min: 0.2, max: 5, step: 0.1 },
+      { section: 'Enemies', key: 'ENEMY_SPAWN_INTERVAL_MIN', label: 'Spawn Interval (min)', default: 0.25, min: 0.05, max: 2, step: 0.05 },
+      { section: 'Enemies', key: 'ENEMY_PURPLE_RADIUS_MULT', label: 'Purple Radius Mult', default: 1.5, min: 0.5, max: 5, step: 0.25 },
+      { section: 'Enemies', key: 'ENEMY_RED_RADIUS_MULT', label: 'Red Radius Mult', default: 5, min: 1, max: 10, step: 0.5 },
+      { section: 'Enemies', key: 'ENEMY_PURPLE_HP_MULT', label: 'Purple HP Mult', default: 1, min: 0.5, max: 5, step: 0.5 },
+      { section: 'Enemies', key: 'ENEMY_RED1_HP_MULT', label: 'Red (mid) HP Mult', default: 4, min: 1, max: 15, step: 0.5 },
+      { section: 'Enemies', key: 'ENEMY_RED2_HP_MULT', label: 'Red (hard) HP Mult', default: 6, min: 1, max: 20, step: 0.5 },
+
+      // Weapons
+      { section: 'Weapons', key: 'WEAPON_DAMAGE', label: 'Crew Weapon Damage', default: 12, min: 1, max: 50, step: 1 },
+      { section: 'Weapons', key: 'WEAPON_FIRE_RATE', label: 'Crew Fire Rate', default: 5, min: 1, max: 20, step: 0.5 },
+      { section: 'Weapons', key: 'WEAPON_RANGE', label: 'Crew Weapon Range', default: 220, min: 50, max: 500, step: 10 },
+      { section: 'Weapons', key: 'PROJECTILE_SPEED', label: 'Projectile Speed', default: 350, min: 100, max: 800, step: 10 },
+      { section: 'Weapons', key: 'DRIVER_DAMAGE_BUFF', label: 'Driver Damage Buff', default: 1.5, min: 1, max: 3, step: 0.1 },
+
+      // Progression
+      { section: 'Progression', key: 'XP_PER_KILL', label: 'XP per Kill', default: 12, min: 1, max: 50, step: 1 },
+      { section: 'Progression', key: 'XP_PER_LEVEL', label: 'XP per Level', default: 80, min: 10, max: 300, step: 5 },
+      { section: 'Progression', key: 'TARGET_DISTANCE', label: 'Run Distance', default: 10000, min: 2000, max: 30000, step: 500 },
+
+      // World
+      { section: 'World', key: 'ZONES_PER_WORLD', label: 'Zones per World', default: 3, min: 1, max: 10, step: 1 },
+      { section: 'World', key: 'GOLD_PER_STATION', label: 'Gold per Station (exit)', default: 25, min: 5, max: 100, step: 5 },
+      { section: 'World', key: 'COAL_PER_WIN', label: 'Coal per Win', default: 2, min: 0, max: 5, step: 1 },
+
+      // Coins
+      { section: 'Coins', key: 'COIN_VALUE', label: 'Coin Value (gold)', default: 10, min: 1, max: 50, step: 1 },
+      { section: 'Coins', key: 'COIN_SPAWN_INTERVAL', label: 'Coin Spawn Interval', default: 3, min: 0.5, max: 10, step: 0.5 },
+    ];
+
+    let values = {};
+    let dirty = false;
+
+    function load() {
+      const saved = JSON.parse(localStorage.getItem(TUNING_KEY) || '{}');
+      values = {};
+      for (const p of PARAMS) {
+        values[p.key] = saved[p.key] ?? p.default;
+      }
+    }
+
+    function render() {
+      const container = document.getElementById('sections');
+      container.innerHTML = '';
+      const sections = {};
+
+      for (const p of PARAMS) {
+        if (!sections[p.section]) {
+          sections[p.section] = document.createElement('div');
+          sections[p.section].className = 'section';
+          sections[p.section].innerHTML = `<h2>${p.section}</h2>`;
+          container.appendChild(sections[p.section]);
+        }
+
+        const row = document.createElement('div');
+        row.className = 'row';
+        const isFloat = p.step < 1;
+        row.innerHTML = `
+          <label>${p.label}</label>
+          <input type="range" min="${p.min}" max="${p.max}" step="${p.step}" value="${values[p.key]}" data-key="${p.key}">
+          <span class="value" id="val-${p.key}">${isFloat ? values[p.key].toFixed(2) : values[p.key]}</span>
+          <span class="default">(def: ${isFloat ? p.default.toFixed(2) : p.default})</span>
+        `;
+        sections[p.section].appendChild(row);
+
+        const slider = row.querySelector('input');
+        slider.addEventListener('input', () => {
+          const v = parseFloat(slider.value);
+          values[p.key] = v;
+          document.getElementById(`val-${p.key}`).textContent = isFloat ? v.toFixed(2) : v;
+          setDirty(true);
+        });
+      }
+    }
+
+    function setDirty(d) {
+      dirty = d;
+      const btn = document.getElementById('saveBtn');
+      if (d) {
+        btn.classList.remove('saved');
+        btn.textContent = 'Save';
+        document.getElementById('status').textContent = 'Unsaved changes';
+      } else {
+        btn.classList.add('saved');
+        btn.textContent = 'Saved';
+        document.getElementById('status').textContent = '';
+      }
+    }
+
+    function save() {
+      localStorage.setItem(TUNING_KEY, JSON.stringify(values));
+      setDirty(false);
+      document.getElementById('status').textContent = 'Saved! Game will use these values on next world start.';
+      setTimeout(() => {
+        if (!dirty) document.getElementById('status').textContent = '';
+      }, 3000);
+    }
+
+    function resetAll() {
+      if (!confirm('Reset all values to defaults?')) return;
+      for (const p of PARAMS) values[p.key] = p.default;
+      localStorage.setItem(TUNING_KEY, JSON.stringify(values));
+      render();
+      setDirty(false);
+      document.getElementById('status').textContent = 'Reset to defaults and saved.';
+    }
+
+    load();
+    render();
+    setDirty(false);
+
+    // Show saved status on load
+    const hasSaved = localStorage.getItem(TUNING_KEY);
+    if (hasSaved) {
+      document.getElementById('status').textContent = 'Loaded saved values.';
+      setTimeout(() => document.getElementById('status').textContent = '', 2000);
+    }
+  </script>
+</body>
+</html>
