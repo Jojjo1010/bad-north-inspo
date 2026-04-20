@@ -254,6 +254,7 @@ function updateCrewWalk(dt) {
 
 // --- SETUP PHASE ---
 function updateSetup(dt) {
+  train.updateWorldPositions(trainScreenX, trainScreenY);
   train.updateCrewMovement(dt);
   handleKeyboardRotation(dt);
 

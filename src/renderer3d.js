@@ -666,33 +666,37 @@ export class Renderer3D {
     const ctx = this.ctx;
     for (let i = 0; i < crew.length; i++) {
       const c = crew[i];
-      if (i >= this.crewMoveMeshes.length) break;
-      const mesh = this.crewMoveMeshes[i];
-      if (!c.isMoving) {
-        mesh.visible = false;
-        continue;
+      if (i < this.crewMoveMeshes.length) this.crewMoveMeshes[i].visible = false;
+      if (!c.isMoving) continue;
+
+      // Get screen position: project moveX/moveY through 3D camera
+      const x = c.moveScreenX !== undefined ? c.moveScreenX : undefined;
+      const y = c.moveScreenY !== undefined ? c.moveScreenY : undefined;
+      let sx, sy;
+      if (x !== undefined) {
+        sx = x; sy = y;
+      } else {
+        const projected = this._project(c.moveX - CANVAS_WIDTH / 2, c.moveY - CANVAS_HEIGHT / 2, 16);
+        sx = projected.x; sy = projected.y;
       }
 
-      // Screen-space walk (3D mode uses moveScreenX/Y)
-      if (c.moveScreenX !== undefined) {
-        mesh.visible = false; // don't show 3D sphere, draw on overlay instead
-        const pulse = 0.7 + Math.sin(performance.now() * 0.008) * 0.15;
-        ctx.globalAlpha = pulse;
-        ctx.beginPath();
-        ctx.arc(c.moveScreenX, c.moveScreenY, CREW_RADIUS - 2, 0, Math.PI * 2);
-        ctx.fillStyle = c.color;
-        ctx.fill();
-        ctx.strokeStyle = '#fff';
-        ctx.lineWidth = 1.5;
-        ctx.stroke();
-        ctx.globalAlpha = 1;
-      } else {
-        // Fallback: old 2D pixel walk
-        const w = toWorld(c.moveX, c.moveY);
-        mesh.position.x = w.x;
-        mesh.position.z = w.z;
-        mesh.visible = true;
-      }
+      // Draw on 2D overlay — large visible circle
+      const pulse = 0.8 + Math.sin(performance.now() * 0.008) * 0.2;
+      ctx.globalAlpha = pulse;
+      ctx.beginPath();
+      ctx.arc(sx, sy, 12, 0, Math.PI * 2);
+      ctx.fillStyle = c.color;
+      ctx.fill();
+      ctx.strokeStyle = '#fff';
+      ctx.lineWidth = 2;
+      ctx.stroke();
+
+      // Label
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 9px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('CREW', sx, sy - 16);
+      ctx.globalAlpha = 1;
     }
   }
 
