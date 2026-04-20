@@ -429,7 +429,7 @@ function renderRun() {
   renderer.drawProjectiles(combat.projectiles);
   renderer.drawRicochetBolts(combat.ricochetBolts);
   renderer.drawTrain(train);
-  renderer.drawWeaponMounts(train, getSelectedMount());
+  renderer.drawWeaponMounts(train, getSelectedMount(), selectedCrew !== null);
   renderer.drawMovingCrew(train.crew);
   renderer.drawFlyingCoins(coinSystem.flyingCoins);
   renderer.drawDamageFlash(train);
