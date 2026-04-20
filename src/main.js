@@ -286,6 +286,7 @@ function updateSetup(dt) {
           train.unassignCrew(selectedCrew);
           selectedCrew.moveScreenX = undefined;
           train.startCrewMove(selectedCrew, fromX, fromY, fromCar, slot);
+          document.title = `WALK: moving=${selectedCrew.isMoving} path=${selectedCrew.movePath.length} from=${Math.round(fromX)},${Math.round(fromY)} to=${Math.round(slot.worldX)},${Math.round(slot.worldY)}`;
         } else {
           train.assignCrew(selectedCrew, slot);
         }
