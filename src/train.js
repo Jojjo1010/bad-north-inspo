@@ -204,9 +204,7 @@ export class Train {
     this.damageFlash = 0;
     this.shakeTimer = 0;
     this.armorReduction = 0;
-    this.mightMultiplier = 1;
     this.greedMultiplier = 1;
-    this.shopFireRateMult = 1;
 
     // Auto-weapons (VS-style)
     this.autoWeapons = {};

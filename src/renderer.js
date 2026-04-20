@@ -1401,7 +1401,6 @@ export class Renderer {
     // Label
     const colors = {
       combat: '#e74c3c',
-      trade: '#3498db',
       empty: '#888',
       exit: '#2ecc71',
     };
@@ -1415,9 +1414,8 @@ export class Renderer {
     ctx.font = '14px monospace';
     const subtitles = {
       combat: 'Prepare for battle...',
-      trade: 'Opening shop...',
       empty: 'Nothing here...',
-      exit: 'Moving to next zone...',
+      exit: 'Shop time!',
     };
     ctx.fillText(subtitles[arrival.type] || '', W / 2, H / 2 + 30);
   }

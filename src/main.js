@@ -2,7 +2,8 @@ import {
   CANVAS_WIDTH, CANVAS_HEIGHT, CAMERA_TRAIN_X,
   CAR_WIDTH, CAR_HEIGHT, CAR_GAP, TRAIN_SPEED,
   TARGET_DISTANCE, AUTO_WEAPONS, MAX_AUTO_WEAPON_LEVEL, MOUNT_RADIUS,
-  ZONES_PER_WORLD, ZONE_DIFFICULTY_SCALE, GOLD_PER_STATION, COAL_PER_WIN, SHOP_TUNING
+  ZONES_PER_WORLD, ZONE_DIFFICULTY_SCALE, GOLD_PER_STATION, COAL_PER_WIN, SHOP_TUNING,
+  TRAIN_MAX_HP
 } from './constants.js';
 import { Train } from './train.js';
 import { Renderer3D } from './renderer3d.js';
@@ -105,30 +106,28 @@ function leaveShop() {
   }
 }
 
-// Full world reset — new train with shop upgrades applied
+function applyShopUpgrades() {
+  const u = save.upgrades;
+  while (train.crew.length < 1 + u.crewSlots.level) train.recruitCrew();
+  train.passives.damage = u.damage.level;
+  train.passives.shield = u.shield.level;
+  train.passives.coolOff = u.coolOff.level;
+  train.passives.baseArea = u.baseArea.level;
+  train.passives.maxHp = u.maxHp.level;
+  train.maxHp = TRAIN_MAX_HP + u.maxHp.level * ST.maxHp.perLevel;
+  train.greedMultiplier = 1 + u.greed.level * (ST.greed.perLevel / 100);
+}
+
 function startNewWorld() {
   zoneNumber = 1;
   zone = new Zone(zoneNumber);
   combatDifficulty = 1;
   train = new Train();
   selectedCrew = null;
-
-  // Apply persistent shop upgrades to fresh train
-  const u = save.upgrades;
-  const crewCount = 1 + u.crewSlots.level;
-  while (train.crew.length < crewCount) train.recruitCrew();
-  // Passives from shop (tuned per-level values)
-  train.passives.damage = u.damage.level;
-  train.passives.shield = u.shield.level;
-  train.passives.coolOff = u.coolOff.level;
-  train.passives.baseArea = u.baseArea.level;
-  train.passives.maxHp = u.maxHp.level;
-  train.maxHp += u.maxHp.level * ST.maxHp.perLevel;
+  applyShopUpgrades();
   train.hp = train.maxHp;
-  train.greedMultiplier = 1 + u.greed.level * (ST.greed.perLevel / 100);
 }
 
-// Prepare for a combat station — keep train, reset enemies
 function prepareForCombat() {
   state = STATES.SETUP;
   train.combatDifficulty = combatDifficulty;
@@ -141,26 +140,14 @@ function prepareForCombat() {
   combat.reset();
   coinSystem.reset();
   won = false;
-
-  // Apply any shop upgrades bought between combats
-  const u = save.upgrades;
-  const crewCount = 1 + u.crewSlots.level;
-  while (train.crew.length < crewCount) train.recruitCrew();
-  // Re-apply passive levels from shop (may have been upgraded)
-  train.passives.damage = u.damage.level;
-  train.passives.shield = u.shield.level;
-  train.passives.coolOff = u.coolOff.level;
-  train.passives.baseArea = u.baseArea.level;
-  train.passives.maxHp = u.maxHp.level;
-  train.maxHp = 100 + u.maxHp.level * ST.maxHp.perLevel;
+  applyShopUpgrades();
   train.hp = Math.min(train.hp, train.maxHp);
-  train.greedMultiplier = 1 + u.greed.level * (ST.greed.perLevel / 100);
 }
 
 function generateLevelUpCards(train) {
   const cards = [];
 
-  // Weapon cards: new or upgrade (only in-run upgrades now)
+  // Weapon cards
   for (const [id, def] of Object.entries(AUTO_WEAPONS)) {
     if (!train.hasAutoWeapon(id) && train.hasEmptyMount) {
       const wid = id;
