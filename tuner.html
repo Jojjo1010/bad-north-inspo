@@ -57,6 +57,10 @@
     .card-header .count { margin-left: auto; font-size: 11px; color: var(--text-dim); font-family: var(--mono); background: var(--bg-2); padding: 2px 8px; border-radius: 10px; }
     .card-body { padding: 8px 0; }
 
+    .subgroup { margin: 8px 12px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+    .subgroup-header { padding: 6px 12px; background: rgba(255,255,255,0.03); font-size: 11px; font-weight: 600; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border); }
+    .subgroup .param { padding: 0 12px; }
+
     .param { padding: 0 16px; margin-bottom: 2px; }
     .param:last-child { margin-bottom: 8px; }
     .slider-row { display: flex; align-items: center; gap: 10px; padding: 8px 0 2px; transition: background 0.1s; border-radius: 6px; }
@@ -281,6 +285,7 @@
       const container = document.getElementById('sections');
       container.innerHTML = '';
       const sectionEls = {};
+      const groupEls = {};
 
       for (const p of PARAMS) {
         const meta = sectionMeta[p.section] || { color: 'cyan' };
@@ -317,7 +322,19 @@
           </div>
           <div class="param-desc">${p.desc}</div>
         `;
-        sectionEls[p.section].appendChild(wrapper);
+        let parent = sectionEls[p.section];
+        if (p.group) {
+          const gk = `${p.section}::${p.group}`;
+          if (!groupEls[gk]) {
+            const sub = document.createElement('div');
+            sub.className = 'subgroup';
+            sub.innerHTML = `<div class="subgroup-header">${p.group}</div>`;
+            sectionEls[p.section].appendChild(sub);
+            groupEls[gk] = sub;
+          }
+          parent = groupEls[gk];
+        }
+        parent.appendChild(wrapper);
 
         const slider = wrapper.querySelector('input[type=range]');
         const numInput = wrapper.querySelector('input[type=number]');
