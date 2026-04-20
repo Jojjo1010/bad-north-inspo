@@ -931,7 +931,7 @@ export class Renderer3D {
       c.panelX = cx;
       c.panelY = cy;
 
-      if (c.assignment) continue;
+      if (c.assignment || c.isMoving) continue;
 
       ctx.beginPath();
       ctx.arc(cx, cy, CREW_RADIUS + 4, 0, Math.PI * 2);

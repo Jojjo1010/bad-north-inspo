@@ -113,7 +113,7 @@ export class InputManager {
 
   findCrewInPanel(crew) {
     for (const c of crew) {
-      if (c.assignment) continue;
+      if (c.assignment || c.isMoving) continue;
       if (c.panelX !== undefined && this.hitCircle(c.panelX, c.panelY, CREW_RADIUS + 6)) return c;
     }
     return null;
