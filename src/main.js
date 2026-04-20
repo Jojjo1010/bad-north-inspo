@@ -267,40 +267,39 @@ function updateSetup(dt) {
       return;
     }
 
-    // Check if clicking on a crew member
-    const clickedCrew = findCrewAtMouse();
-    if (clickedCrew) {
-      if (clickedCrew === selectedCrew) {
-        // Clicking selected crew again: deselect
-        selectedCrew = null;
-      } else {
-        // Select this crew
-        selectedCrew = clickedCrew;
-      }
-      return;
-    }
-
-    // If crew is selected and we click a slot: move them there
+    // If crew is selected, try to move them to clicked slot first
     if (selectedCrew) {
       const slot = findSlotAtMouse();
       if (slot) {
         if (slot.autoWeaponId) return;
+        if (slot.crew === selectedCrew) {
+          // Clicked own slot: deselect
+          selectedCrew = null;
+          return;
+        }
         const fromSlot = selectedCrew.assignment;
         if (fromSlot) {
-          // Walk from current slot to target using path-based system
           const fromX = fromSlot.worldX;
           const fromY = fromSlot.worldY;
           const fromCar = train.findCarForSlot(fromSlot);
           train.unassignCrew(selectedCrew);
-          selectedCrew.moveScreenX = undefined; // ensure path-based rendering
+          selectedCrew.moveScreenX = undefined;
           train.startCrewMove(selectedCrew, fromX, fromY, fromCar, slot);
-          console.log('WALK START', { isMoving: selectedCrew.isMoving, moveX: selectedCrew.moveX, moveY: selectedCrew.moveY, pathLen: selectedCrew.movePath.length, fromX, fromY });
         } else {
           train.assignCrew(selectedCrew, slot);
         }
+        selectedCrew = null;
         return;
       }
+      // Clicked empty space: deselect
       selectedCrew = null;
+      return;
+    }
+
+    // No crew selected: check if clicking on a crew member to select
+    const clickedCrew = findCrewAtMouse();
+    if (clickedCrew) {
+      selectedCrew = clickedCrew;
       return;
     }
   }
