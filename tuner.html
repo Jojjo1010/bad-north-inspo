@@ -4,124 +4,306 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Train Defense — Game Tuner</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <script type="importmap">
+    { "imports": {
+      "three": "https://unpkg.com/three@0.164.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.164.0/examples/jsm/"
+    }}
+  </script>
   <style>
+    :root {
+      --bg-0: #09090b; --bg-1: #18181b; --bg-2: #27272a;
+      --border: #3f3f46; --border-hover: #52525b;
+      --text: #fafafa; --text-muted: #a1a1aa; --text-dim: #71717a;
+      --accent: #f59e0b; --accent-dim: #92400e;
+      --green: #22c55e; --green-dim: #166534;
+      --red: #ef4444; --blue: #3b82f6; --purple: #a855f7; --cyan: #06b6d4;
+      --radius: 8px; --radius-lg: 12px;
+      --font: 'Inter', system-ui, sans-serif;
+      --mono: 'JetBrains Mono', monospace;
+      --shadow: 0 1px 3px rgba(0,0,0,0.4), 0 1px 2px rgba(0,0,0,0.3);
+    }
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: 'Segoe UI', system-ui, sans-serif; background: #1a1a2e; color: #e0e0e0; padding: 20px; max-width: 1400px; margin: 0 auto; }
-    h1 { color: #f5a623; margin-bottom: 8px; font-size: 24px; }
-    .subtitle { color: #888; margin-bottom: 24px; font-size: 13px; }
-    .actions { display: flex; gap: 10px; margin-bottom: 24px; position: sticky; top: 0; background: #1a1a2e; padding: 12px 0; z-index: 10; border-bottom: 1px solid #333; }
-    button { padding: 10px 20px; border: none; border-radius: 6px; font-size: 14px; font-weight: 600; cursor: pointer; transition: background 0.15s; }
-    .btn-save { background: #2ecc71; color: #000; }
-    .btn-save:hover { background: #27ae60; }
-    .btn-save.saved { background: #555; color: #aaa; cursor: default; }
-    .btn-reset { background: #555; color: #ddd; }
-    .btn-reset:hover { background: #666; }
-    .status { align-self: center; font-size: 13px; color: #888; margin-left: auto; }
-    #sections { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
-    @media (max-width: 1000px) { #sections { grid-template-columns: repeat(2, 1fr); } }
-    @media (max-width: 600px) { #sections { grid-template-columns: 1fr; } }
-    .section { background: #16213e; border: 1px solid #2a2a4a; border-radius: 10px; padding: 16px; }
-    .section h2 { color: #c8a96e; font-size: 15px; margin-bottom: 12px; padding-bottom: 6px; border-bottom: 1px solid #2a2a4a; }
-    .row { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; padding: 4px 0; }
-    .row:hover { background: rgba(255,255,255,0.03); border-radius: 4px; }
-    .row label { width: 160px; font-size: 12px; color: #bbb; flex-shrink: 0; }
-    .row input[type=range] { flex: 1; accent-color: #f5a623; height: 6px; min-width: 60px; }
-    .row .value { width: 50px; text-align: right; font-family: monospace; font-size: 13px; color: #f5a623; flex-shrink: 0; }
-    .row .default { width: 65px; text-align: right; font-size: 10px; color: #555; flex-shrink: 0; }
+    body { font-family: var(--font); background: var(--bg-0); color: var(--text); line-height: 1.5; }
+
+    /* Header */
+    .header { position: sticky; top: 0; z-index: 20; background: var(--bg-0); border-bottom: 1px solid var(--border); backdrop-filter: blur(12px); }
+    .header-inner { max-width: 1440px; margin: 0 auto; padding: 12px 24px; display: flex; align-items: center; gap: 16px; }
+    .header h1 { font-size: 18px; font-weight: 700; color: var(--text); }
+    .header h1 span { color: var(--accent); }
+    .header .sep { width: 1px; height: 24px; background: var(--border); }
+    .header .status { font-size: 13px; color: var(--text-dim); font-family: var(--mono); }
+    .header .actions { margin-left: auto; display: flex; gap: 8px; }
+
+    /* Buttons */
+    .btn { padding: 8px 16px; border: 1px solid var(--border); border-radius: var(--radius); font-size: 13px; font-weight: 500; font-family: var(--font); cursor: pointer; transition: all 0.15s; background: var(--bg-2); color: var(--text); }
+    .btn:hover { border-color: var(--border-hover); background: #333; }
+    .btn-primary { background: var(--green); border-color: var(--green); color: #000; font-weight: 600; }
+    .btn-primary:hover { background: #16a34a; }
+    .btn-primary.saved { background: var(--bg-2); border-color: var(--border); color: var(--text-dim); }
+    .btn-danger { color: var(--red); }
+    .btn-danger:hover { background: rgba(239,68,68,0.1); border-color: var(--red); }
+
+    /* Layout */
+    .content { max-width: 1440px; margin: 0 auto; padding: 24px; }
+
+    /* 3D Preview */
+    .preview-bar { margin-bottom: 24px; background: var(--bg-1); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; }
+    .preview-bar h3 { padding: 12px 16px 0; font-size: 13px; font-weight: 600; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+    .preview-canvas { width: 100%; height: 200px; display: block; }
+    .preview-labels { display: flex; gap: 24px; padding: 8px 16px 12px; font-size: 12px; color: var(--text-dim); font-family: var(--mono); }
+    .preview-labels span { display: flex; align-items: center; gap: 6px; }
+    .preview-labels .dot { width: 8px; height: 8px; border-radius: 50%; }
+
+    /* Grid */
+    .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; }
+    @media (max-width: 1100px) { .grid { grid-template-columns: repeat(2, 1fr); } }
+    @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+
+    /* Cards */
+    .card { background: var(--bg-1); border: 1px solid var(--border); border-radius: var(--radius-lg); overflow: hidden; transition: border-color 0.15s; }
+    .card:hover { border-color: var(--border-hover); }
+    .card-header { padding: 12px 16px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; }
+    .card-header .icon { width: 20px; height: 20px; border-radius: 4px; display: flex; align-items: center; justify-content: center; font-size: 12px; }
+    .card-header h2 { font-size: 14px; font-weight: 600; }
+    .card-header .count { margin-left: auto; font-size: 11px; color: var(--text-dim); font-family: var(--mono); }
+    .card-body { padding: 8px 0; }
+
+    /* Slider rows */
+    .slider-row { display: flex; align-items: center; gap: 8px; padding: 6px 16px; transition: background 0.1s; }
+    .slider-row:hover { background: rgba(255,255,255,0.02); }
+    .slider-row label { width: 140px; font-size: 12px; color: var(--text-muted); flex-shrink: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .slider-row .track-wrap { flex: 1; position: relative; min-width: 60px; height: 28px; display: flex; align-items: center; }
+
+    /* Custom range slider */
+    input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 4px; background: var(--bg-2); border-radius: 2px; outline: none; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 50%; background: var(--text); border: 2px solid var(--accent); cursor: grab; transition: box-shadow 0.15s; }
+    input[type=range]::-webkit-slider-thumb:hover { box-shadow: 0 0 0 4px rgba(245,158,11,0.2); }
+    input[type=range]::-webkit-slider-thumb:active { cursor: grabbing; box-shadow: 0 0 0 6px rgba(245,158,11,0.3); }
+    input[type=range]::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--text); border: 2px solid var(--accent); cursor: grab; }
+
+    .slider-row .val { width: 52px; text-align: right; font-family: var(--mono); font-size: 13px; font-weight: 500; color: var(--accent); flex-shrink: 0; }
+    .slider-row .def { width: 50px; text-align: right; font-size: 10px; color: var(--text-dim); flex-shrink: 0; font-family: var(--mono); }
+
+    /* Section color coding */
+    .card[data-section="Train"] .card-header { border-left: 3px solid var(--green); }
+    .card[data-section="Enemies"] .card-header { border-left: 3px solid var(--red); }
+    .card[data-section="Weapons"] .card-header { border-left: 3px solid var(--blue); }
+    .card[data-section="Turret"] .card-header { border-left: 3px solid #ffb74d; }
+    .card[data-section="Steam Blast"] .card-header { border-left: 3px solid #8ecae6; }
+    .card[data-section="Laser"] .card-header { border-left: 3px solid #b388ff; }
+    .card[data-section="Progression"] .card-header,
+    .card[data-section="World"] .card-header { border-left: 3px solid var(--cyan); }
+    .card[data-section="Coins"] .card-header { border-left: 3px solid var(--accent); }
+    .card[data-section^="Shop"] .card-header { border-left: 3px solid var(--purple); }
   </style>
 </head>
 <body>
-  <h1>Game Tuner</h1>
-  <p class="subtitle">Adjust values and save. The game reads these on world start.</p>
-  <div class="actions">
-    <button class="btn-save" id="saveBtn" onclick="save()">Save</button>
-    <button class="btn-reset" onclick="resetAll()">Reset to Defaults</button>
-    <span class="status" id="status"></span>
+  <div class="header">
+    <div class="header-inner">
+      <h1><span>Train Defense</span> Tuner</h1>
+      <div class="sep"></div>
+      <span class="status" id="status">Loading...</span>
+      <div class="actions">
+        <button class="btn btn-danger" onclick="resetAll()">Reset</button>
+        <button class="btn btn-primary" id="saveBtn" onclick="save()">Save</button>
+      </div>
+    </div>
   </div>
-  <div id="sections"></div>
 
-  <script>
+  <div class="content">
+    <div class="preview-bar">
+      <h3>3D Preview</h3>
+      <canvas class="preview-canvas" id="preview"></canvas>
+      <div class="preview-labels">
+        <span><span class="dot" style="background:#8e44ad"></span> Purple Enemy</span>
+        <span><span class="dot" style="background:#c0392b"></span> Red Enemy</span>
+        <span><span class="dot" style="background:#888"></span> Train</span>
+        <span><span class="dot" style="background:#f5a623"></span> Coin</span>
+      </div>
+    </div>
+    <div class="grid" id="sections"></div>
+  </div>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
+
+    // ======= 3D PREVIEW =======
+    const previewCanvas = document.getElementById('preview');
+    const previewRenderer = new THREE.WebGLRenderer({ canvas: previewCanvas, antialias: true });
+    previewRenderer.setPixelRatio(window.devicePixelRatio);
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x18181b);
+
+    const camera = new THREE.PerspectiveCamera(35, 4, 0.1, 2000);
+    camera.position.set(200, 120, 200);
+    camera.lookAt(0, 10, 0);
+
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+    const dirLight = new THREE.DirectionalLight(0xffffff, 0.8);
+    dirLight.position.set(100, 150, 100);
+    scene.add(dirLight);
+
+    // Ground grid
+    const grid = new THREE.GridHelper(400, 40, 0x3f3f46, 0x27272a);
+    scene.add(grid);
+
+    // Placeholder objects (replaced by FBX when loaded)
+    const purpleEnemy = new THREE.Mesh(new THREE.ConeGeometry(6, 16, 8), new THREE.MeshLambertMaterial({ color: 0x8e44ad }));
+    purpleEnemy.position.set(-60, 8, 0);
+    scene.add(purpleEnemy);
+
+    const redEnemy = new THREE.Mesh(new THREE.ConeGeometry(6, 16, 8), new THREE.MeshLambertMaterial({ color: 0xc0392b }));
+    redEnemy.position.set(-20, 8, 0);
+    scene.add(redEnemy);
+
+    const coinMesh = new THREE.Mesh(
+      new THREE.CylinderGeometry(5, 5, 1.5, 16),
+      new THREE.MeshLambertMaterial({ color: 0xf5a623 })
+    );
+    coinMesh.rotation.x = Math.PI / 2;
+    coinMesh.position.set(30, 5, 0);
+    scene.add(coinMesh);
+
+    let trainModel = null;
+
+    // Load FBX models
+    const loader = new FBXLoader();
+    const modelScales = { Train: 0.05, enemy: 0.05, AutoGun: 0.15, Laser: 0.15, Gun: 0.05, Garlic: 0.05 };
+
+    loader.load('/assets/Train.fbx', (obj) => {
+      obj.scale.setScalar(0.05);
+      obj.position.set(60, 0, 0);
+      scene.add(obj);
+      trainModel = obj;
+    });
+
+    loader.load('/assets/enemy.fbx', (obj) => {
+      // Purple
+      const p = obj.clone();
+      p.scale.setScalar(0.045 * 1.5);
+      p.position.copy(purpleEnemy.position);
+      scene.remove(purpleEnemy);
+      scene.add(p);
+      window._purpleModel = p;
+
+      // Red
+      const r = obj.clone();
+      r.scale.setScalar(0.045 * 5);
+      r.position.copy(redEnemy.position);
+      r.traverse(c => { if (c.isMesh && c.material) { c.material = c.material.clone(); c.material.color.set(0xc0392b); } });
+      scene.remove(redEnemy);
+      scene.add(r);
+      window._redModel = r;
+    });
+
+    function resizePreview() {
+      const rect = previewCanvas.parentElement.getBoundingClientRect();
+      const w = rect.width;
+      const h = 200;
+      previewRenderer.setSize(w, h);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+    }
+    window.addEventListener('resize', resizePreview);
+    resizePreview();
+
+    let angle = 0;
+    function animatePreview() {
+      angle += 0.003;
+      camera.position.x = Math.cos(angle) * 280;
+      camera.position.z = Math.sin(angle) * 280;
+      camera.position.y = 120;
+      camera.lookAt(0, 10, 0);
+      previewRenderer.render(scene, camera);
+      requestAnimationFrame(animatePreview);
+    }
+    animatePreview();
+
+    // Update preview when sliders change
+    window.updatePreview = function(values) {
+      const baseR = values.ENEMY_RADIUS || 6;
+      const purpleMult = values.ENEMY_PURPLE_RADIUS_MULT || 1.5;
+      const redMult = values.ENEMY_RED_RADIUS_MULT || 5;
+      if (window._purpleModel) window._purpleModel.scale.setScalar(0.045 * purpleMult);
+      if (window._redModel) window._redModel.scale.setScalar(0.045 * redMult);
+    };
+
+    // ======= TUNER PARAMS =======
     const PARAMS = [
-      // Train
       { section: 'Train', key: 'TRAIN_MAX_HP', label: 'Max HP', default: 100, min: 20, max: 500, step: 10 },
       { section: 'Train', key: 'TRAIN_SPEED', label: 'Speed (px/sec)', default: 167, min: 50, max: 400, step: 1 },
-      { section: 'Train', key: 'CAR_WIDTH', label: 'Car Width (hitbox)', default: 32, min: 10, max: 100, step: 1 },
-      { section: 'Train', key: 'CAR_HEIGHT', label: 'Car Height (hitbox)', default: 14, min: 5, max: 60, step: 1 },
+      { section: 'Train', key: 'CAR_WIDTH', label: 'Hitbox Width', default: 32, min: 10, max: 100, step: 1 },
+      { section: 'Train', key: 'CAR_HEIGHT', label: 'Hitbox Height', default: 14, min: 5, max: 60, step: 1 },
       { section: 'Train', key: 'CAR_GAP', label: 'Car Gap', default: 6, min: 0, max: 20, step: 1 },
 
-      // Enemies
       { section: 'Enemies', key: 'ENEMY_BASE_HP', label: 'Base HP', default: 20, min: 5, max: 200, step: 5 },
       { section: 'Enemies', key: 'ENEMY_BASE_SPEED', label: 'Base Speed', default: 50, min: 10, max: 200, step: 5 },
       { section: 'Enemies', key: 'ENEMY_RADIUS', label: 'Base Radius', default: 6, min: 2, max: 30, step: 1 },
       { section: 'Enemies', key: 'ENEMY_CONTACT_DAMAGE', label: 'Contact Damage', default: 6, min: 1, max: 30, step: 1 },
       { section: 'Enemies', key: 'ENEMY_SPAWN_INTERVAL_START', label: 'Spawn Interval (start)', default: 1.5, min: 0.2, max: 5, step: 0.1 },
       { section: 'Enemies', key: 'ENEMY_SPAWN_INTERVAL_MIN', label: 'Spawn Interval (min)', default: 0.25, min: 0.05, max: 2, step: 0.05 },
-      { section: 'Enemies', key: 'ENEMY_PURPLE_RADIUS_MULT', label: 'Purple Radius Mult', default: 1.5, min: 0.5, max: 5, step: 0.25 },
-      { section: 'Enemies', key: 'ENEMY_RED_RADIUS_MULT', label: 'Red Radius Mult', default: 5, min: 1, max: 10, step: 0.5 },
+      { section: 'Enemies', key: 'ENEMY_PURPLE_RADIUS_MULT', label: 'Purple Size Mult', default: 1.5, min: 0.5, max: 5, step: 0.25 },
+      { section: 'Enemies', key: 'ENEMY_RED_RADIUS_MULT', label: 'Red Size Mult', default: 5, min: 1, max: 10, step: 0.5 },
       { section: 'Enemies', key: 'ENEMY_PURPLE_HP_MULT', label: 'Purple HP Mult', default: 1, min: 0.5, max: 5, step: 0.5 },
       { section: 'Enemies', key: 'ENEMY_RED1_HP_MULT', label: 'Red (mid) HP Mult', default: 4, min: 1, max: 15, step: 0.5 },
       { section: 'Enemies', key: 'ENEMY_RED2_HP_MULT', label: 'Red (hard) HP Mult', default: 6, min: 1, max: 20, step: 0.5 },
 
-      // Weapons
-      { section: 'Weapons', key: 'WEAPON_DAMAGE', label: 'Crew Weapon Damage', default: 12, min: 1, max: 50, step: 1 },
+      { section: 'Weapons', key: 'WEAPON_DAMAGE', label: 'Crew Damage', default: 12, min: 1, max: 50, step: 1 },
       { section: 'Weapons', key: 'WEAPON_FIRE_RATE', label: 'Crew Fire Rate', default: 5, min: 1, max: 20, step: 0.5 },
-      { section: 'Weapons', key: 'WEAPON_RANGE', label: 'Crew Weapon Range', default: 220, min: 50, max: 500, step: 10 },
+      { section: 'Weapons', key: 'WEAPON_RANGE', label: 'Crew Range', default: 220, min: 50, max: 500, step: 10 },
       { section: 'Weapons', key: 'PROJECTILE_SPEED', label: 'Projectile Speed', default: 350, min: 100, max: 800, step: 10 },
-      { section: 'Weapons', key: 'DRIVER_DAMAGE_BUFF', label: 'Driver Damage Buff', default: 1.5, min: 1, max: 3, step: 0.1 },
+      { section: 'Weapons', key: 'DRIVER_DAMAGE_BUFF', label: 'Driver Buff', default: 1.5, min: 1, max: 3, step: 0.1 },
 
-      // Progression
       { section: 'Progression', key: 'XP_PER_KILL', label: 'XP per Kill', default: 12, min: 1, max: 50, step: 1 },
       { section: 'Progression', key: 'XP_PER_LEVEL', label: 'XP per Level', default: 80, min: 10, max: 300, step: 5 },
       { section: 'Progression', key: 'TARGET_DISTANCE', label: 'Run Distance', default: 10000, min: 2000, max: 30000, step: 500 },
 
-      // World
       { section: 'World', key: 'ZONES_PER_WORLD', label: 'Zones per World', default: 3, min: 1, max: 10, step: 1 },
-      { section: 'World', key: 'GOLD_PER_STATION', label: 'Gold per Station (exit)', default: 25, min: 5, max: 100, step: 5 },
+      { section: 'World', key: 'GOLD_PER_STATION', label: 'Gold/Station (exit)', default: 25, min: 5, max: 100, step: 5 },
       { section: 'World', key: 'COAL_PER_WIN', label: 'Coal per Win', default: 2, min: 0, max: 5, step: 1 },
 
-      // Coins
-      { section: 'Coins', key: 'COIN_VALUE', label: 'Coin Value (gold)', default: 10, min: 1, max: 50, step: 1 },
-      { section: 'Coins', key: 'COIN_SPAWN_INTERVAL', label: 'Coin Spawn Interval', default: 3, min: 0.5, max: 10, step: 0.5 },
+      { section: 'Coins', key: 'COIN_VALUE', label: 'Coin Value', default: 10, min: 1, max: 50, step: 1 },
+      { section: 'Coins', key: 'COIN_SPAWN_INTERVAL', label: 'Spawn Interval', default: 3, min: 0.5, max: 10, step: 0.5 },
 
-      // Turret weapon (per-level)
       ...[1,2,3,4,5].flatMap((lv,i) => {
         const d = [{s:1,d:10,f:1.2,r:250},{s:2,d:12,f:1.1,r:270},{s:3,d:14,f:1.0,r:290},{s:4,d:16,f:0.9,r:310},{s:5,d:18,f:0.8,r:340}][i];
         return [
-          { section: 'Turret', key: `TURRET_LV${lv}_SHOTS`, label: `Lv${lv} Shots/Burst`, default: d.s, min: 1, max: 10, step: 1 },
-          { section: 'Turret', key: `TURRET_LV${lv}_DAMAGE`, label: `Lv${lv} Damage`, default: d.d, min: 1, max: 50, step: 1 },
-          { section: 'Turret', key: `TURRET_LV${lv}_FIRE_INTERVAL`, label: `Lv${lv} Fire Interval`, default: d.f, min: 0.2, max: 3, step: 0.05 },
+          { section: 'Turret', key: `TURRET_LV${lv}_SHOTS`, label: `Lv${lv} Shots`, default: d.s, min: 1, max: 10, step: 1 },
+          { section: 'Turret', key: `TURRET_LV${lv}_DAMAGE`, label: `Lv${lv} Dmg`, default: d.d, min: 1, max: 50, step: 1 },
+          { section: 'Turret', key: `TURRET_LV${lv}_FIRE_INTERVAL`, label: `Lv${lv} Interval`, default: d.f, min: 0.2, max: 3, step: 0.05 },
           { section: 'Turret', key: `TURRET_LV${lv}_RANGE`, label: `Lv${lv} Range`, default: d.r, min: 100, max: 600, step: 10 },
         ];
       }),
 
-      // Steam Blast (per-level)
       ...[1,2,3,4,5].flatMap((lv,i) => {
         const d = [{r:80,d:4,t:0.5},{r:100,d:6,t:0.45},{r:125,d:9,t:0.4},{r:155,d:13,t:0.35},{r:190,d:18,t:0.3}][i];
         return [
           { section: 'Steam Blast', key: `STEAM_LV${lv}_RADIUS`, label: `Lv${lv} Radius`, default: d.r, min: 20, max: 400, step: 5 },
-          { section: 'Steam Blast', key: `STEAM_LV${lv}_DAMAGE`, label: `Lv${lv} Damage`, default: d.d, min: 1, max: 50, step: 1 },
-          { section: 'Steam Blast', key: `STEAM_LV${lv}_TICK_RATE`, label: `Lv${lv} Tick Rate`, default: d.t, min: 0.1, max: 2, step: 0.05 },
+          { section: 'Steam Blast', key: `STEAM_LV${lv}_DAMAGE`, label: `Lv${lv} Dmg`, default: d.d, min: 1, max: 50, step: 1 },
+          { section: 'Steam Blast', key: `STEAM_LV${lv}_TICK_RATE`, label: `Lv${lv} Tick`, default: d.t, min: 0.1, max: 2, step: 0.05 },
         ];
       }),
 
-      // Laser (per-level)
       ...[1,2,3,4,5].flatMap((lv,i) => {
         const d = [{b:2,d:8,f:2.5,s:300},{b:3,d:10,f:2.2,s:320},{b:4,d:13,f:1.9,s:340},{b:5,d:16,f:1.6,s:360},{b:7,d:20,f:1.3,s:400}][i];
         return [
           { section: 'Laser', key: `LASER_LV${lv}_BOUNCES`, label: `Lv${lv} Bounces`, default: d.b, min: 1, max: 15, step: 1 },
-          { section: 'Laser', key: `LASER_LV${lv}_DAMAGE`, label: `Lv${lv} Damage`, default: d.d, min: 1, max: 50, step: 1 },
-          { section: 'Laser', key: `LASER_LV${lv}_FIRE_INTERVAL`, label: `Lv${lv} Fire Interval`, default: d.f, min: 0.3, max: 5, step: 0.1 },
+          { section: 'Laser', key: `LASER_LV${lv}_DAMAGE`, label: `Lv${lv} Dmg`, default: d.d, min: 1, max: 50, step: 1 },
+          { section: 'Laser', key: `LASER_LV${lv}_FIRE_INTERVAL`, label: `Lv${lv} Interval`, default: d.f, min: 0.3, max: 5, step: 0.1 },
           { section: 'Laser', key: `LASER_LV${lv}_SPEED`, label: `Lv${lv} Speed`, default: d.s, min: 100, max: 800, step: 10 },
         ];
       }),
 
-      // Shop upgrades (costs and per-level values)
       { section: 'Shop: Damage', key: 'SHOP_DAMAGE_COST', label: 'Base Cost', default: 40, min: 5, max: 200, step: 5 },
       { section: 'Shop: Damage', key: 'SHOP_DAMAGE_PER_LEVEL', label: '% per Level', default: 15, min: 5, max: 50, step: 1 },
       { section: 'Shop: Damage', key: 'SHOP_DAMAGE_MAX_LEVEL', label: 'Max Level', default: 5, min: 1, max: 10, step: 1 },
 
       { section: 'Shop: Shield', key: 'SHOP_SHIELD_COST', label: 'Base Cost', default: 35, min: 5, max: 200, step: 5 },
-      { section: 'Shop: Shield', key: 'SHOP_SHIELD_PER_LEVEL', label: 'Reduction per Level', default: 2, min: 1, max: 10, step: 1 },
+      { section: 'Shop: Shield', key: 'SHOP_SHIELD_PER_LEVEL', label: 'Reduction/Lv', default: 2, min: 1, max: 10, step: 1 },
       { section: 'Shop: Shield', key: 'SHOP_SHIELD_MAX_LEVEL', label: 'Max Level', default: 5, min: 1, max: 10, step: 1 },
 
       { section: 'Shop: Cool-off', key: 'SHOP_COOLOFF_COST', label: 'Base Cost', default: 45, min: 5, max: 200, step: 5 },
@@ -144,6 +326,13 @@
       { section: 'Shop: Crew', key: 'SHOP_CREW_MAX_LEVEL', label: 'Max Slots', default: 2, min: 1, max: 5, step: 1 },
     ];
 
+    const SECTION_ICONS = {
+      'Train': '🚂', 'Enemies': '👾', 'Weapons': '🔫', 'Progression': '📈',
+      'World': '🗺', 'Coins': '🪙', 'Turret': '🔫', 'Steam Blast': '💨', 'Laser': '⚡',
+      'Shop: Damage': '💥', 'Shop: Shield': '🛡', 'Shop: Cool-off': '❄',
+      'Shop: Max Hull': '❤', 'Shop: Range': '🎯', 'Shop: Greed': '💰', 'Shop: Crew': '👤',
+    };
+
     let values = {};
     let dirty = false;
 
@@ -154,34 +343,46 @@
         if (resp.ok) saved = await resp.json();
       } catch (e) {}
       values = {};
-      for (const p of PARAMS) {
-        values[p.key] = saved[p.key] ?? p.default;
-      }
+      for (const p of PARAMS) values[p.key] = saved[p.key] ?? p.default;
     }
 
     function render() {
       const container = document.getElementById('sections');
       container.innerHTML = '';
-      const sections = {};
+      const sectionEls = {};
 
       for (const p of PARAMS) {
-        if (!sections[p.section]) {
-          sections[p.section] = document.createElement('div');
-          sections[p.section].className = 'section';
-          sections[p.section].innerHTML = `<h2>${p.section}</h2>`;
-          container.appendChild(sections[p.section]);
+        if (!sectionEls[p.section]) {
+          const card = document.createElement('div');
+          card.className = 'card';
+          card.dataset.section = p.section;
+          const count = PARAMS.filter(pp => pp.section === p.section).length;
+          card.innerHTML = `
+            <div class="card-header">
+              <span class="icon">${SECTION_ICONS[p.section] || '⚙'}</span>
+              <h2>${p.section}</h2>
+              <span class="count">${count} params</span>
+            </div>
+            <div class="card-body"></div>
+          `;
+          container.appendChild(card);
+          sectionEls[p.section] = card.querySelector('.card-body');
         }
 
         const row = document.createElement('div');
-        row.className = 'row';
+        row.className = 'slider-row';
         const isFloat = p.step < 1;
+        const displayVal = isFloat ? values[p.key].toFixed(2) : values[p.key];
+        const defVal = isFloat ? p.default.toFixed(2) : p.default;
         row.innerHTML = `
-          <label>${p.label}</label>
-          <input type="range" min="${p.min}" max="${p.max}" step="${p.step}" value="${values[p.key]}" data-key="${p.key}">
-          <span class="value" id="val-${p.key}">${isFloat ? values[p.key].toFixed(2) : values[p.key]}</span>
-          <span class="default">(def: ${isFloat ? p.default.toFixed(2) : p.default})</span>
+          <label title="${p.key}">${p.label}</label>
+          <div class="track-wrap">
+            <input type="range" min="${p.min}" max="${p.max}" step="${p.step}" value="${values[p.key]}" data-key="${p.key}">
+          </div>
+          <span class="val" id="val-${p.key}">${displayVal}</span>
+          <span class="def">${defVal}</span>
         `;
-        sections[p.section].appendChild(row);
+        sectionEls[p.section].appendChild(row);
 
         const slider = row.querySelector('input');
         slider.addEventListener('input', () => {
@@ -189,6 +390,7 @@
           values[p.key] = v;
           document.getElementById(`val-${p.key}`).textContent = isFloat ? v.toFixed(2) : v;
           setDirty(true);
+          if (window.updatePreview) window.updatePreview(values);
         });
       }
     }
@@ -207,7 +409,7 @@
       }
     }
 
-    async function save() {
+    window.save = async function() {
       try {
         const resp = await fetch('/save-tuning', {
           method: 'POST',
@@ -216,14 +418,14 @@
         });
         if (!resp.ok) throw new Error('Server error');
         setDirty(false);
-        document.getElementById('status').textContent = 'Saved to tuning.json! Refresh the game to apply.';
+        document.getElementById('status').textContent = 'Saved! Refresh game to apply.';
         setTimeout(() => { if (!dirty) document.getElementById('status').textContent = ''; }, 3000);
       } catch (e) {
         document.getElementById('status').textContent = 'Save failed — is server.js running?';
       }
-    }
+    };
 
-    async function resetAll() {
+    window.resetAll = async function() {
       if (!confirm('Reset all values to defaults?')) return;
       for (const p of PARAMS) values[p.key] = p.default;
       await fetch('/save-tuning', {
@@ -233,16 +435,16 @@
       });
       render();
       setDirty(false);
-      document.getElementById('status').textContent = 'Reset to defaults and saved.';
-    }
+      if (window.updatePreview) window.updatePreview(values);
+      document.getElementById('status').textContent = 'Reset to defaults.';
+    };
 
-    (async () => {
-      await load();
-      render();
-      setDirty(false);
-      document.getElementById('status').textContent = 'Loaded from tuning.json.';
-      setTimeout(() => document.getElementById('status').textContent = '', 2000);
-    })();
+    await load();
+    render();
+    setDirty(false);
+    if (window.updatePreview) window.updatePreview(values);
+    document.getElementById('status').textContent = 'Loaded from tuning.json';
+    setTimeout(() => document.getElementById('status').textContent = '', 2000);
   </script>
 </body>
 </html>
