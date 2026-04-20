@@ -286,7 +286,6 @@ function updateSetup(dt) {
           train.unassignCrew(selectedCrew);
           selectedCrew.moveScreenX = undefined;
           train.startCrewMove(selectedCrew, fromX, fromY, fromCar, slot);
-          document.title = `WALK: moving=${selectedCrew.isMoving} path=${selectedCrew.movePath.length} from=${Math.round(fromX)},${Math.round(fromY)} to=${Math.round(slot.worldX)},${Math.round(slot.worldY)}`;
         } else {
           train.assignCrew(selectedCrew, slot);
         }
@@ -354,42 +353,37 @@ function updateRun(dt) {
   handleKeyboardRotation(dt);
 
   if (input.clicked) {
-    // Click on crew to select
-    const clickedCrew = findCrewAtMouse();
-    if (clickedCrew) {
-      selectedCrew = clickedCrew === selectedCrew ? null : clickedCrew;
-      return;
-    }
-
-    // If crew selected, click slot to send them there
+    // If crew selected, try to move them to clicked slot first
     if (selectedCrew && !selectedCrew.isMoving) {
       const slot = findSlotAtMouse();
       if (slot) {
-        // Can't move to a slot with an auto-weapon
         if (slot.autoWeaponId) return;
-        // Animated walk: unassign, set up screen-space movement, assign on arrival
+        if (slot.crew === selectedCrew) {
+          selectedCrew = null;
+          return;
+        }
         const fromSlot = selectedCrew.assignment;
         if (fromSlot) {
-          const fromSX = slotScreenX(fromSlot);
-          const fromSY = slotScreenY(fromSlot);
-          const toSX = slotScreenX(slot);
-          const toSY = slotScreenY(slot);
+          const fromX = fromSlot.worldX;
+          const fromY = fromSlot.worldY;
+          const fromCar = train.findCarForSlot(fromSlot);
           train.unassignCrew(selectedCrew);
-          selectedCrew.isMoving = true;
-          selectedCrew.moveScreenX = fromSX;
-          selectedCrew.moveScreenY = fromSY;
-          selectedCrew.moveTargetX = toSX;
-          selectedCrew.moveTargetY = toSY;
-          selectedCrew.moveTargetSlot = slot;
+          selectedCrew.moveScreenX = undefined;
+          train.startCrewMove(selectedCrew, fromX, fromY, fromCar, slot);
         } else {
-          // From panel — instant
           train.assignCrew(selectedCrew, slot);
         }
+        selectedCrew = null;
         return;
       }
-
-      // Click empty space: deselect
       selectedCrew = null;
+      return;
+    }
+
+    // No crew selected (or crew is moving): click crew to select
+    const clickedCrew = findCrewAtMouse();
+    if (clickedCrew) {
+      selectedCrew = clickedCrew === selectedCrew ? null : clickedCrew;
       return;
     }
   }
