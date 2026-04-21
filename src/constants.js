@@ -74,6 +74,18 @@ export const MAX_COINS = 30;
 export const MAX_FLYING_COINS = 30;
 export const COIN_FLY_SPEED = 400;
 
+// Manual gun (crew weapon) — level scaling
+export const MANUAL_GUN = {
+  id: 'manualGun', name: 'Crew Gun', icon: '\uD83D\uDD2B', color: '#e74c3c',
+  desc: 'Upgrade crew weapon damage and fire rate',
+  maxLevel: 5,
+  levels: [0,1,2,3,4].map(i => ({
+    damage: T('MANUAL_LV1_DAMAGE', 12) + i * T('MANUAL_DAMAGE_GROWTH', 4),
+    fireRate: T('MANUAL_LV1_FIRE_RATE', 5) + i * T('MANUAL_FIRE_RATE_GROWTH', 0.8),
+    range: T('MANUAL_LV1_RANGE', 220) + i * T('MANUAL_RANGE_GROWTH', 15),
+  })),
+};
+
 // Auto-Weapons (VS-style, gained via level-up) — levels read from tuning
 export const MAX_AUTO_WEAPON_LEVEL = 5;
 // Auto-Weapons — levels generated from base + per-level scaling

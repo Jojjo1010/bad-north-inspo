@@ -4,7 +4,7 @@ import { toWorld, toWorldX, toWorldZ, toPixelX, toPixelZ } from './coordMap.js';
 import {
   CANVAS_WIDTH, CANVAS_HEIGHT, MOUNT_RADIUS, CREW_RADIUS,
   WEAPON_RANGE, TARGET_DISTANCE, COIN_RADIUS,
-  AUTO_WEAPONS, MAX_ENEMIES, MAX_PROJECTILES, MAX_RICOCHET_BOLTS,
+  AUTO_WEAPONS, MANUAL_GUN, MAX_ENEMIES, MAX_PROJECTILES, MAX_RICOCHET_BOLTS,
   MAX_COINS, MAX_FLYING_COINS
 } from './constants.js';
 
@@ -1262,10 +1262,26 @@ export class Renderer3D {
     const startX = 16;
     const y = CANVAS_HEIGHT - 36;
 
+    // First slot: manual crew gun (always visible)
+    const mgX = startX;
+    const mgLevel = train.manualGunLevel;
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    this.roundRect(mgX, y, 42, 30, 4);
+    ctx.fill();
+    ctx.font = '14px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillStyle = MANUAL_GUN.color;
+    ctx.fillText(MANUAL_GUN.icon, mgX + 21, y + 15);
+    for (let l = 0; l < 5; l++) {
+      ctx.fillStyle = l < mgLevel ? MANUAL_GUN.color : '#333';
+      ctx.fillRect(mgX + 4 + l * 8, y + 22, 6, 3);
+    }
+
+    // Remaining slots: auto-weapons
     for (let i = 0; i < weaponIds.length; i++) {
       const id = weaponIds[i];
       const def = AUTO_WEAPONS[id];
-      const x = startX + i * 50;
+      const x = startX + (i + 1) * 50;
       const hasIt = train.hasAutoWeapon(id);
       const level = train.autoWeaponLevel(id);
 

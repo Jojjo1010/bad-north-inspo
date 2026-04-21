@@ -3,7 +3,8 @@ import {
   MOUNT_RADIUS, WEAPON_CONE_HALF_ANGLE, WEAPON_RANGE,
   WEAPON_FIRE_RATE, WEAPON_DAMAGE, CREW_COLORS,
   XP_PER_LEVEL, CARGO_BOXES_START, CARGO_MULTIPLIER_PER_BOX,
-  AUTO_WEAPONS, MAX_AUTO_WEAPON_LEVEL, SHOP_TUNING
+  AUTO_WEAPONS, MAX_AUTO_WEAPON_LEVEL, SHOP_TUNING,
+  MANUAL_GUN
 } from './constants.js';
 
 const CREW_MOVE_SPEED = 120; // px/sec
@@ -20,6 +21,7 @@ export class WeaponMount {
     this.worldX = 0;
     this.worldY = 0;
     this.autoWeaponId = null;
+    this._manualGunLevel = 1; // set from train
   }
 
   get isManned() {
@@ -34,29 +36,23 @@ export class WeaponMount {
     return this.crew !== null || this.autoWeaponId !== null;
   }
 
-  // Effective weapon stats — from crew's weapon or mount defaults
+  // Effective weapon stats — from manual gun level
   get damage() {
-    if (this.crew && this.crew.weaponId) {
-      const stats = AUTO_WEAPONS[this.crew.weaponId]?.levels[this.crew.weaponLevel - 1];
-      return stats?.damage || WEAPON_DAMAGE;
-    }
-    return WEAPON_DAMAGE;
+    const lvl = this._manualGunLevel;
+    const stats = MANUAL_GUN.levels[lvl - 1];
+    return stats ? stats.damage : WEAPON_DAMAGE;
   }
 
   get fireRate() {
-    if (this.crew && this.crew.weaponId) {
-      const stats = AUTO_WEAPONS[this.crew.weaponId]?.levels[this.crew.weaponLevel - 1];
-      return stats ? (1 / stats.fireInterval) : WEAPON_FIRE_RATE;
-    }
-    return WEAPON_FIRE_RATE;
+    const lvl = this._manualGunLevel;
+    const stats = MANUAL_GUN.levels[lvl - 1];
+    return stats ? stats.fireRate : WEAPON_FIRE_RATE;
   }
 
   get range() {
-    if (this.crew && this.crew.weaponId) {
-      const stats = AUTO_WEAPONS[this.crew.weaponId]?.levels[this.crew.weaponLevel - 1];
-      return stats?.range || WEAPON_RANGE;
-    }
-    return WEAPON_RANGE;
+    const lvl = this._manualGunLevel;
+    const stats = MANUAL_GUN.levels[lvl - 1];
+    return stats ? stats.range : WEAPON_RANGE;
   }
 }
 
@@ -206,6 +202,9 @@ export class Train {
     this.armorReduction = 0;
     this.greedMultiplier = 1;
 
+    // Manual gun upgrade level (applies to all crew weapons)
+    this.manualGunLevel = 1;
+
     // Auto-weapons (VS-style)
     this.autoWeapons = {};
 
@@ -217,6 +216,9 @@ export class Train {
       baseArea: 0, // level 0-5, each = +15% range/radius
       damage:   0, // level 0-5, each = +15% damage
     };
+
+    // Sync manual gun level to mounts
+    this._syncManualGunLevel();
 
     // Start with 1 crew — more are recruited via level-up powerups
     this.crew = [
@@ -261,6 +263,18 @@ export class Train {
     mount.autoWeaponId = weaponId;
     this.autoWeapons[weaponId] = { level: 1, cooldownTimer: 0, tickTimer: 0, mount };
     return true;
+  }
+
+  upgradeManualGun() {
+    if (this.manualGunLevel >= MANUAL_GUN.maxLevel) return;
+    this.manualGunLevel++;
+    this._syncManualGunLevel();
+  }
+
+  _syncManualGunLevel() {
+    for (const m of this.allMounts) {
+      m._manualGunLevel = this.manualGunLevel;
+    }
   }
 
   upgradeAutoWeapon(weaponId) {

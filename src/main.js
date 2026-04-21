@@ -1,7 +1,7 @@
 import {
   CANVAS_WIDTH, CANVAS_HEIGHT, CAMERA_TRAIN_X,
   CAR_WIDTH, CAR_HEIGHT, CAR_GAP, TRAIN_SPEED,
-  TARGET_DISTANCE, AUTO_WEAPONS, MAX_AUTO_WEAPON_LEVEL, MOUNT_RADIUS,
+  TARGET_DISTANCE, AUTO_WEAPONS, MAX_AUTO_WEAPON_LEVEL, MOUNT_RADIUS, MANUAL_GUN,
   ZONES_PER_WORLD, ZONE_DIFFICULTY_SCALE, GOLD_PER_STATION, COAL_PER_WIN, SHOP_TUNING,
   TRAIN_MAX_HP
 } from './constants.js';
@@ -146,7 +146,19 @@ function prepareForCombat() {
 function generateLevelUpCards(train) {
   const cards = [];
 
-  // Weapon cards
+  // Manual gun upgrade
+  if (train.manualGunLevel < MANUAL_GUN.maxLevel) {
+    const nextLv = train.manualGunLevel + 1;
+    const nextStats = MANUAL_GUN.levels[nextLv - 1];
+    cards.push({
+      type: 'upgradeManual',
+      name: `${MANUAL_GUN.name} Lv${nextLv}`, icon: MANUAL_GUN.icon, color: MANUAL_GUN.color,
+      desc: `DMG ${nextStats.damage} | Rate ${nextStats.fireRate.toFixed(1)}/s`,
+      apply(t) { t.upgradeManualGun(); },
+    });
+  }
+
+  // Auto-weapon cards
   for (const [id, def] of Object.entries(AUTO_WEAPONS)) {
     if (!train.hasAutoWeapon(id) && train.hasEmptyMount) {
       const wid = id;
@@ -469,6 +481,26 @@ function renderRun() {
     dctx2.textAlign = 'center';
     const msg = banditCount === 1 ? '⚠ BANDIT ON BOARD! Move crew to fight!' : `⚠ ${banditCount} BANDITS! Move crew to fight!`;
     dctx2.fillText(msg, CANVAS_WIDTH / 2, bannerY + 25);
+  }
+  // Crew idle on auto-weapon slot hint (after bandit defeated)
+  if (banditCount === 0) {
+    const idleCrew = train.crew.filter(c => c.assignment && !c.assignment.isDriverSeat && c.assignment.hasAutoWeapon && !c.isMoving);
+    if (idleCrew.length > 0) {
+      const dctx3 = renderer.ctx;
+      const bannerW = 360;
+      const bannerH = 32;
+      const bannerX = CANVAS_WIDTH / 2 - bannerW / 2;
+      const bannerY = 44;
+      dctx3.fillStyle = 'rgba(40, 60, 120, 0.8)';
+      dctx3.fillRect(bannerX, bannerY, bannerW, bannerH);
+      dctx3.strokeStyle = '#5a8adb';
+      dctx3.lineWidth = 1;
+      dctx3.strokeRect(bannerX, bannerY, bannerW, bannerH);
+      dctx3.fillStyle = '#fff';
+      dctx3.font = 'bold 13px monospace';
+      dctx3.textAlign = 'center';
+      dctx3.fillText('Crew idle! Move to an empty slot to resume firing.', CANVAS_WIDTH / 2, bannerY + 21);
+    }
   }
   if (selectedCrew) renderer.drawSelectedIndicator(selectedCrew);
   if (debugMode) drawDebugHitboxes();
