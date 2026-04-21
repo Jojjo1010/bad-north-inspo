@@ -3,6 +3,7 @@ import {
   BANDIT_SPEED, BANDIT_SPAWN_INTERVAL, BANDIT_JUMP_DURATION,
   BANDIT_STEAL_RATE, BANDIT_FIGHT_DURATION, MAX_BANDITS
 } from './constants.js';
+import { startStealLoop, stopStealLoop } from './audio.js';
 
 const STATES = {
   RUNNING: 0,    // running alongside the track
@@ -185,6 +186,16 @@ export class BanditSystem {
       this.spawnTimer = interval;
       this.trySpawn(train);
     }
+
+    // Steal sound: loop while any bandit is actively stealing gold
+    const anyStealing = this.pool.some(b =>
+      b.active && b.state === STATES.ON_TRAIN && !b.targetSlot?.autoWeaponId
+    );
+    if (anyStealing) {
+      startStealLoop();
+    } else {
+      stopStealLoop();
+    }
   }
 
   trySpawn(train) {
@@ -216,6 +227,7 @@ export class BanditSystem {
   }
 
   reset() {
+    stopStealLoop();
     for (const b of this.pool) {
       b.active = false;
       if (b.targetSlot) {

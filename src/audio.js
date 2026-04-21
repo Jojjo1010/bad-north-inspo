@@ -213,6 +213,42 @@ export function playLevelUpMp3() { playMp3('assets/levelup.mp3', 0.6); }
 export function playZoneCompleteMp3() { playMp3('assets/zonecomplete.mp3', 0.7); }
 export function playWinWorldMp3() { playMp3('assets/winworld.mp3', 0.7); }
 
+// --- LOOPING STEAL SFX ---
+let stealSource = null;
+let stealBuffer = null;
+let stealPlaying = false;
+
+async function loadStealBuffer() {
+  if (stealBuffer) return stealBuffer;
+  const c = getCtx();
+  const resp = await fetch('assets/steal.mp3');
+  const arrayBuf = await resp.arrayBuffer();
+  stealBuffer = await c.decodeAudioData(arrayBuf);
+  return stealBuffer;
+}
+
+export async function startStealLoop() {
+  if (stealPlaying) return;
+  const c = getCtx();
+  stealPlaying = true;
+  const buf = await loadStealBuffer();
+  if (!stealPlaying) return;
+  stealSource = c.createBufferSource();
+  stealSource.buffer = buf;
+  stealSource.loop = true;
+  stealSource.connect(sfxGainNode);
+  stealSource.start();
+}
+
+export function stopStealLoop() {
+  stealPlaying = false;
+  if (stealSource) {
+    try { stealSource.stop(); } catch(e) {}
+    try { stealSource.disconnect(); } catch(e) {}
+    stealSource = null;
+  }
+}
+
 // --- BACKGROUND MUSIC (MP3 file, looping) ---
 async function loadMusicBuffer() {
   if (musicBuffer) return musicBuffer;
