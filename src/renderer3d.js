@@ -1156,6 +1156,11 @@ export class Renderer3D {
   // =============================================
   drawCrewPanel(crew, panelY) {
     const ctx = this.ctx;
+
+    // Only show panel if there are unassigned crew to place
+    const hasUnassigned = crew.some(c => !c.assignment && !c.isMoving);
+    if (!hasUnassigned) return;
+
     const spacing = 70;
     const totalW = crew.length * spacing;
     const startX = CANVAS_WIDTH / 2 - totalW / 2;
@@ -1170,7 +1175,7 @@ export class Renderer3D {
     ctx.fillStyle = '#f5a623';
     ctx.font = 'bold 13px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('CLICK CREW → CLICK SLOT', CANVAS_WIDTH / 2, panelY - 18);
+    ctx.fillText('CLICK CREW \u2192 CLICK SLOT', CANVAS_WIDTH / 2, panelY - 18);
 
     for (let i = 0; i < crew.length; i++) {
       const c = crew[i];
