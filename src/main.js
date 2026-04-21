@@ -397,8 +397,11 @@ function updateRun(dt) {
   }
 
   train.distance += TRAIN_SPEED * dt;
-  if (train._regenRate > 0) {
-    train.hp = Math.min(train.hp + train._regenRate * dt, train.maxHp);
+  // Regen: defense regen + Medic role bonus (2 HP/s when stationed)
+  let regenRate = train._regenRate;
+  if (train.medicStationed) regenRate += 2;
+  if (regenRate > 0) {
+    train.hp = Math.min(train.hp + regenRate * dt, train.maxHp);
   }
   if (train.distance >= TARGET_DISTANCE) { won = true; enterGameOver(); return; }
   if (train.hp <= 0) { train.hp = 0; won = false; enterGameOver(); return; }

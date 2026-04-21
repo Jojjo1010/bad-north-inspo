@@ -110,10 +110,13 @@ export class TrainCar {
   get doorRightY() { return this.worldY + this.height / 2; }
 }
 
+const CREW_ROLES = ['Gunner', 'Engineer', 'Medic'];
+
 export class CrewMember {
   constructor(id) {
     this.id = id;
     this.color = CREW_COLORS[id];
+    this.role = CREW_ROLES[id] || null; // Gunner, Engineer, Medic
     this.assignment = null;
     this.reassignCooldown = 0;
     this.panelX = 0;
@@ -331,6 +334,15 @@ export class Train {
     const loco = this.cars.find(c => c.type === 'locomotive');
     return loco && loco.driverSeat && loco.driverSeat.crew !== null;
   }
+
+  // Role helpers — true when the crew member exists, is assigned, and not walking
+  isRoleStationed(role) {
+    const c = this.crew.find(m => m.role === role);
+    return c && c.assignment && !c.isMoving;
+  }
+
+  get engineerStationed() { return this.isRoleStationed('Engineer'); }
+  get medicStationed() { return this.isRoleStationed('Medic'); }
 
   updateWorldPositions(screenX, screenY) {
     for (const car of this.cars) {

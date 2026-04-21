@@ -1522,9 +1522,18 @@ export class Renderer3D {
       ctx.textAlign = 'center';
       ctx.fillStyle = c.color;
       ctx.fillText(crewNames[i], x + slotW / 2, crewY + 10);
+      // Role name
+      if (c.role) {
+        ctx.font = '6px monospace';
+        ctx.fillStyle = c.color;
+        ctx.globalAlpha = 0.7;
+        ctx.fillText(c.role.toUpperCase(), x + slotW / 2, crewY + 18);
+        ctx.globalAlpha = 1;
+      }
       // Gun icon + level
-      ctx.font = '12px monospace';
-      ctx.fillText('\uD83D\uDD2B', x + slotW / 2, crewY + 23);
+      ctx.font = '10px monospace';
+      ctx.fillStyle = c.color;
+      ctx.fillText('\uD83D\uDD2B', x + slotW / 2, crewY + 28);
       this._drawLevelPips(ctx, x + 2, crewY + 1, c.gunLevel, c.color);
     }
 

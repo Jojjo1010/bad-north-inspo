@@ -197,6 +197,7 @@ export class CombatSystem {
 
       let damage = mount.damage * train.totalDamageMultiplier;
       if (hasDriver) damage *= DRIVER_DAMAGE_BUFF;
+      if (mount.crew.role === 'Gunner') damage *= 1.2; // Gunner role bonus: +20% manual gun damage
 
       this.fireProjectile(mount.worldX, mount.worldY, angle, damage, 'crew', mount.crew.color);
       mount.cooldownTimer = (1 / mount.fireRate) * train.totalCooldownMultiplier;
@@ -305,7 +306,8 @@ export class CombatSystem {
   // === AUTO-WEAPONS (fire from their mount position) ===
   updateAutoWeapons(dt, train, enemies) {
     const dmgMult = train.totalDamageMultiplier;
-    const cdMult = train.totalCooldownMultiplier;
+    let cdMult = train.totalCooldownMultiplier;
+    if (train.engineerStationed) cdMult *= 0.85; // Engineer role bonus: 15% faster auto-weapons
     const areaMult = train.totalAreaMultiplier;
 
     // --- TURRET ---
