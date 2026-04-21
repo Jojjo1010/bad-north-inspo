@@ -21,7 +21,7 @@ export class WeaponMount {
     this.worldX = 0;
     this.worldY = 0;
     this.autoWeaponId = null;
-    this._manualGunLevel = 1; // set from train
+    this._manualGunLevel = 1;
   }
 
   get isManned() {

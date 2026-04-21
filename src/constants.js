@@ -121,6 +121,10 @@ export const AUTO_WEAPONS = {
   },
 };
 
+// Coal shop
+export const COAL_SHOP_COST = T('COAL_SHOP_COST', 30);
+export const COAL_SHOP_AMOUNT = T('COAL_SHOP_AMOUNT', 2);
+
 // Shop upgrade tuning
 export const SHOP_TUNING = {
   damage:   { cost: T('SHOP_DAMAGE_COST', 40),   maxLevel: T('SHOP_DAMAGE_MAX_LEVEL', 5),   perLevel: T('SHOP_DAMAGE_PER_LEVEL', 15) },

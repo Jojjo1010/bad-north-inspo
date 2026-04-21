@@ -3,7 +3,7 @@ import {
   CAR_WIDTH, CAR_HEIGHT, CAR_GAP, TRAIN_SPEED,
   TARGET_DISTANCE, AUTO_WEAPONS, MAX_AUTO_WEAPON_LEVEL, MOUNT_RADIUS, MANUAL_GUN,
   ZONES_PER_WORLD, ZONE_DIFFICULTY_SCALE, GOLD_PER_STATION, COAL_PER_WIN, SHOP_TUNING,
-  TRAIN_MAX_HP
+  TRAIN_MAX_HP, COAL_SHOP_COST, COAL_SHOP_AMOUNT
 } from './constants.js';
 import { Train } from './train.js';
 import { Renderer3D } from './renderer3d.js';
@@ -54,8 +54,6 @@ let pendingWeaponId = null; // weapon waiting to be placed on a mount
 
 // === PERSISTENT UPGRADES (shop, kept across worlds — costs/levels from tuner) ===
 const ST = SHOP_TUNING;
-const COAL_SHOP_COST = 30;
-const COAL_SHOP_AMOUNT = 2;
 const STARTING_COAL = 4;
 const MAX_COAL = 8;
 
@@ -393,7 +391,6 @@ function updateRun(dt) {
   }
 
   train.distance += TRAIN_SPEED * dt;
-  // Regen defense
   if (train._regenRate > 0) {
     train.hp = Math.min(train.hp + train._regenRate * dt, train.maxHp);
   }
@@ -533,8 +530,8 @@ function renderRun() {
   }
   // Crew idle on auto-weapon slot hint (after bandit defeated)
   if (banditCount === 0) {
-    const idleCrew = train.crew.filter(c => c.assignment && !c.assignment.isDriverSeat && c.assignment.hasAutoWeapon && !c.isMoving);
-    if (idleCrew.length > 0) {
+    const hasIdleCrew = train.crew.some(c => c.assignment && !c.assignment.isDriverSeat && c.assignment.hasAutoWeapon && !c.isMoving);
+    if (hasIdleCrew) {
       const dctx3 = renderer.ctx;
       const bannerW = 360;
       const bannerH = 32;
@@ -903,8 +900,9 @@ function updateShop() {
       mouseHover = i;
     }
   }
-  // Coal row hover
-  if (save._coalShopY !== undefined && input.hitRect(60, save._coalShopY, CANVAS_WIDTH - 120, 36)) {
+  // Coal row hover (Y matches renderer: startY=110, rowH=44, gap=6)
+  const coalRowY = 110 + UPGRADE_KEYS.length * (44 + 6);
+  if (input.hitRect(60, coalRowY, CANVAS_WIDTH - 120, 36)) {
     mouseHover = UPGRADE_KEYS.length;
   }
   if (mouseHover >= 0) {
@@ -958,7 +956,7 @@ function updateShop() {
 
 function renderShop() {
   renderer.drawTerrain(0);
-  renderer.drawShop(save, UPGRADE_KEYS, hoveredShopItem, departBtn, input, kbShopOnDepart, COAL_SHOP_COST, COAL_SHOP_AMOUNT);
+  renderer.drawShop(save, UPGRADE_KEYS, hoveredShopItem, departBtn, input, kbShopOnDepart);
   renderer.flush();
 }
 

@@ -4,7 +4,8 @@ import { toWorld, toWorldX, toWorldZ, toPixelX, toPixelZ } from './coordMap.js';
 import {
   CANVAS_WIDTH, CANVAS_HEIGHT, MOUNT_RADIUS, CREW_RADIUS,
   WEAPON_RANGE, TARGET_DISTANCE, COIN_RADIUS,
-  AUTO_WEAPONS, MANUAL_GUN, MAX_ENEMIES, MAX_PROJECTILES, MAX_RICOCHET_BOLTS,
+  AUTO_WEAPONS, MANUAL_GUN, COAL_SHOP_COST, COAL_SHOP_AMOUNT,
+  MAX_ENEMIES, MAX_PROJECTILES, MAX_RICOCHET_BOLTS,
   MAX_COINS, MAX_FLYING_COINS
 } from './constants.js';
 
@@ -460,7 +461,6 @@ export class Renderer3D {
         ctx.setLineDash([]);
       }
 
-      // Crew cat + direction arrow (projected from 3D to match gun barrel)
       if (mount.crew) {
         ctx.font = '12px serif';
         ctx.textAlign = 'center';
@@ -541,7 +541,6 @@ export class Renderer3D {
         });
       }
 
-      // Draw emoji + HP bar on 2D overlay at projected screen position
       const screenPos = this._project(w.x, w.z);
       const ctx = this.ctx;
 
@@ -751,7 +750,6 @@ export class Renderer3D {
         sx = projected.x; sy = projected.y;
       }
 
-      // Draw on 2D overlay — cat emoji
       const pulse = 0.8 + Math.sin(performance.now() * 0.008) * 0.2;
       ctx.globalAlpha = pulse;
       ctx.font = '20px serif';
@@ -1170,11 +1168,6 @@ export class Renderer3D {
   // =============================================
   drawCrewPanel(crew, panelY) {
     const ctx = this.ctx;
-
-    // Only show panel if there are unassigned crew to place
-    const hasUnassigned = crew.some(c => !c.assignment && !c.isMoving);
-    if (!hasUnassigned) return;
-
     const spacing = 70;
     const totalW = crew.length * spacing;
     const startX = CANVAS_WIDTH / 2 - totalW / 2;
@@ -1261,6 +1254,25 @@ export class Renderer3D {
   // =============================================
   // AUTO-WEAPON HUD
   // =============================================
+  _drawLevelPips(ctx, x, y, level, color) {
+    for (let l = 0; l < 5; l++) {
+      ctx.fillStyle = l < level ? color : '#333';
+      ctx.fillRect(x + 4 + l * 8, y + 22, 6, 3);
+    }
+  }
+
+  _drawSlotBox(ctx, x, y, w, h, filled, borderColor) {
+    ctx.fillStyle = filled ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.2)';
+    this.roundRect(x, y, w, h, 4);
+    ctx.fill();
+    ctx.strokeStyle = borderColor || (filled ? '#555' : '#444');
+    ctx.lineWidth = 1;
+    if (!filled) ctx.setLineDash([3, 2]);
+    this.roundRect(x, y, w, h, 4);
+    ctx.stroke();
+    if (!filled) ctx.setLineDash([]);
+  }
+
   drawAutoWeaponHUD(train) {
     const ctx = this.ctx;
     const startX = 16;
@@ -1268,7 +1280,6 @@ export class Renderer3D {
     const slotH = 30;
     const gap = 8;
 
-    // === DEFENSE SLOTS (top row) ===
     const defY = CANVAS_HEIGHT - 72;
     ctx.fillStyle = '#aaa';
     ctx.font = 'bold 8px monospace';
@@ -1278,40 +1289,23 @@ export class Renderer3D {
     for (let i = 0; i < train.maxDefenseSlots; i++) {
       const x = startX + i * (slotW + gap);
       const def = train.defenseSlots[i];
-
-      ctx.fillStyle = def ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.2)';
-      this.roundRect(x, defY, slotW, slotH, 4);
-      ctx.fill();
-      ctx.strokeStyle = def ? def.color : '#444';
-      ctx.lineWidth = 1;
-      ctx.setLineDash(def ? [] : [3, 2]);
-      this.roundRect(x, defY, slotW, slotH, 4);
-      ctx.stroke();
-      ctx.setLineDash([]);
-
+      this._drawSlotBox(ctx, x, defY, slotW, slotH, !!def, def?.color);
       if (def) {
         ctx.font = '14px monospace';
         ctx.textAlign = 'center';
         ctx.fillStyle = def.color;
         ctx.fillText(def.icon, x + slotW / 2, defY + 15);
-        // Level pips
-        for (let l = 0; l < 5; l++) {
-          ctx.fillStyle = l < def.level ? def.color : '#333';
-          ctx.fillRect(x + 4 + l * 8, defY + 22, 6, 3);
-        }
+        this._drawLevelPips(ctx, x, defY, def.level, def.color);
       }
     }
 
-    // === WEAPON SLOTS (bottom row): 1 manual + 2 auto ===
     const weapY = CANVAS_HEIGHT - 36;
     ctx.fillStyle = '#aaa';
     ctx.font = 'bold 8px monospace';
     ctx.textAlign = 'left';
     ctx.fillText('WEAPONS', startX, weapY - 3);
 
-    // Slot 0: manual crew gun
     const mgX = startX;
-    const mgLevel = train.manualGunLevel;
     ctx.fillStyle = 'rgba(0,0,0,0.5)';
     this.roundRect(mgX, weapY, slotW, slotH, 4);
     ctx.fill();
@@ -1319,27 +1313,18 @@ export class Renderer3D {
     ctx.textAlign = 'center';
     ctx.fillStyle = MANUAL_GUN.color;
     ctx.fillText(MANUAL_GUN.icon, mgX + slotW / 2, weapY + 15);
-    for (let l = 0; l < 5; l++) {
-      ctx.fillStyle = l < mgLevel ? MANUAL_GUN.color : '#333';
-      ctx.fillRect(mgX + 4 + l * 8, weapY + 22, 6, 3);
-    }
+    this._drawLevelPips(ctx, mgX, weapY, train.manualGunLevel, MANUAL_GUN.color);
 
-    // Slots 1-2: auto weapon slots
-    const equippedAutos = Object.entries(train.autoWeapons);
+    // Cache to avoid Object.entries allocation per frame
+    if (!train._autoWeaponEntries || train._autoWeaponEntriesLen !== train.autoWeaponCount) {
+      train._autoWeaponEntries = Object.entries(train.autoWeapons);
+      train._autoWeaponEntriesLen = train.autoWeaponCount;
+    }
+    const equippedAutos = train._autoWeaponEntries;
     for (let i = 0; i < train.maxAutoWeapons; i++) {
       const x = startX + (i + 1) * (slotW + gap);
-      const entry = equippedAutos[i]; // [id, {level, ...}]
-
-      ctx.fillStyle = entry ? 'rgba(0,0,0,0.5)' : 'rgba(0,0,0,0.2)';
-      this.roundRect(x, weapY, slotW, slotH, 4);
-      ctx.fill();
-      ctx.strokeStyle = entry ? '#555' : '#444';
-      ctx.lineWidth = 1;
-      ctx.setLineDash(entry ? [] : [3, 2]);
-      this.roundRect(x, weapY, slotW, slotH, 4);
-      ctx.stroke();
-      ctx.setLineDash([]);
-
+      const entry = equippedAutos[i];
+      this._drawSlotBox(ctx, x, weapY, slotW, slotH, !!entry);
       if (entry) {
         const [id, w] = entry;
         const def = AUTO_WEAPONS[id];
@@ -1347,10 +1332,7 @@ export class Renderer3D {
         ctx.textAlign = 'center';
         ctx.fillStyle = def.color;
         ctx.fillText(def.icon, x + slotW / 2, weapY + 15);
-        for (let l = 0; l < 5; l++) {
-          ctx.fillStyle = l < w.level ? def.color : '#333';
-          ctx.fillRect(x + 4 + l * 8, weapY + 22, 6, 3);
-        }
+        this._drawLevelPips(ctx, x, weapY, w.level, def.color);
       }
     }
   }
@@ -1629,7 +1611,7 @@ export class Renderer3D {
   // =============================================
   // SHOP
   // =============================================
-  drawShop(save, upgradeKeys, hoveredIndex, departBtn, input, kbOnDepart = false, coalCost = 30, coalAmount = 2) {
+  drawShop(save, upgradeKeys, hoveredIndex, departBtn, input, kbOnDepart = false) {
     const ctx = this.ctx;
 
     ctx.fillStyle = '#1a1a2e';
@@ -1716,8 +1698,7 @@ export class Renderer3D {
     const coalIdx = upgradeKeys.length;
     const coalHovered = hoveredIndex === coalIdx;
     const coalFull = save.coal >= save.maxCoal;
-    const coalCanAfford = !coalFull && save.gold >= coalCost;
-    save._coalShopY = coalY;
+    const coalCanAfford = !coalFull && save.gold >= COAL_SHOP_COST;
 
     ctx.fillStyle = coalHovered ? '#2a3a2a' : '#1e2e1e';
     ctx.strokeStyle = coalHovered ? '#f5a623' : '#333';
@@ -1737,7 +1718,7 @@ export class Renderer3D {
 
     ctx.fillStyle = '#888';
     ctx.font = '11px monospace';
-    ctx.fillText(`+${coalAmount} coal (${save.coal}/${save.maxCoal})`, rowX + 40, coalY + 35);
+    ctx.fillText(`+${COAL_SHOP_AMOUNT} coal (${save.coal}/${save.maxCoal})`, rowX + 40, coalY + 35);
 
     ctx.textAlign = 'right';
     if (coalFull) {
@@ -1747,7 +1728,7 @@ export class Renderer3D {
     } else {
       ctx.fillStyle = coalCanAfford ? '#f5a623' : '#e74c3c';
       ctx.font = 'bold 12px monospace';
-      ctx.fillText(`${coalCost}g`, rowX + rowW - 12, coalY + 28);
+      ctx.fillText(`${COAL_SHOP_COST}g`, rowX + rowW - 12, coalY + 28);
     }
     ctx.textAlign = 'left';
 
@@ -1856,24 +1837,31 @@ export class Renderer3D {
     const sx = (s) => pad + s.x * mapW;
     const sy = (s) => mapY + s.y * mapH;
 
-    // Scattered zombie emojis across the wasteland
+    // Precompute zombie positions once per zone difficulty
+    if (!this._zombieCache || this._zombieCacheDiff !== zone.difficulty) {
+      const count = 20 + zone.difficulty * 5;
+      this._zombieCache = [];
+      this._zombieCacheDiff = zone.difficulty;
+      for (let i = 0; i < count; i++) {
+        const seed1 = (i * 7919 + 1301) % 9973;
+        const seed2 = (i * 6271 + 3571) % 9973;
+        this._zombieCache.push({
+          x: 20 + (seed1 / 9973) * (W - 40),
+          y: 60 + (seed2 / 9973) * (H - 100),
+          alpha: 0.6 + (i % 5) * 0.08,
+          font: `${10 + (i % 4) * 3}px serif`,
+          emoji: (seed1 + seed2) % 5 === 0 ? '\uD83E\uDD9F' : '\uD83E\uDDDF',
+          swayOffset: i * 1.7,
+        });
+      }
+    }
     ctx.textAlign = 'center';
-    const zombieCount = 20 + zone.difficulty * 5;
     const t = performance.now() * 0.001;
-    for (let i = 0; i < zombieCount; i++) {
-      // Deterministic pseudo-random positions from seed
-      const seed1 = (i * 7919 + 1301) % 9973;
-      const seed2 = (i * 6271 + 3571) % 9973;
-      const zx = 20 + (seed1 / 9973) * (W - 40);
-      const zy = 60 + (seed2 / 9973) * (H - 100);
-      // Subtle sway
-      const sway = Math.sin(t * 0.8 + i * 1.7) * 2;
-      const alpha = 0.6 + (i % 5) * 0.08;
-      const size = 10 + (i % 4) * 3;
-      ctx.globalAlpha = alpha;
-      ctx.font = `${size}px serif`;
-      const isBug = (seed1 + seed2) % 5 === 0;
-      ctx.fillText(isBug ? '\uD83E\uDD9F' : '\uD83E\uDDDF', zx + sway, zy);
+    for (const z of this._zombieCache) {
+      const sway = Math.sin(t * 0.8 + z.swayOffset) * 2;
+      ctx.globalAlpha = z.alpha;
+      ctx.font = z.font;
+      ctx.fillText(z.emoji, z.x + sway, z.y);
     }
     ctx.globalAlpha = 1;
 

@@ -94,7 +94,6 @@ export class CoinSystem {
   update(dt, distance, goldHudPos) {
     this.spawnTimer -= dt;
     if (this.spawnTimer <= 0) {
-      // Rare magnet spawn
       if (Math.random() < MAGNET_SPAWN_CHANCE) {
         this.spawnMagnet();
       }
