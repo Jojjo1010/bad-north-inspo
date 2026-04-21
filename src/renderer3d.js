@@ -1805,16 +1805,6 @@ export class Renderer3D {
     ctx.textAlign = 'right';
     ctx.fillText(`x${cargoMult.toFixed(1)}`, goldX - 10, cargoY + 17);
 
-    // === MISSION LABEL — top-left, below HP bar ===
-    const missionY = hpY + hpBarH + 14;
-    ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    this.roundRect(hpX, missionY, 220, 20, 4);
-    ctx.fill();
-    ctx.fillStyle = '#c8a96e';
-    ctx.font = '11px monospace';
-    ctx.textAlign = 'left';
-    ctx.fillText('Eastport \u2014 Medical Supplies', hpX + 6, missionY + 14);
-
     // === MINI-MAP — bottom-right ===
     this.drawMiniMap(train.distance);
   }
@@ -1843,125 +1833,7 @@ export class Renderer3D {
       ctx.fillText(`${waveInfo.waveNumber}`, waveX + 50, waveY + 20);
     }
 
-    // Active modifier badge — bottom, right of slot boxes
-    if (waveInfo.modifier) {
-      const mod = waveInfo.modifier;
-      const badgeX = 188;
-      const badgeY = CANVAS_HEIGHT - 88;
-      ctx.fillStyle = 'rgba(0,0,0,0.65)';
-      ctx.beginPath();
-      this.roundRect(badgeX, badgeY, 110, 22, 4);
-      ctx.fill();
-      ctx.strokeStyle = mod.color;
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      this.roundRect(badgeX, badgeY, 110, 22, 4);
-      ctx.stroke();
-      ctx.fillStyle = mod.color;
-      ctx.font = 'bold 11px monospace';
-      ctx.textAlign = 'left';
-      ctx.fillText(mod.name.toUpperCase(), badgeX + 6, badgeY + 15);
-    }
 
-    // Surge warning banner — top center
-    if (waveInfo.isWarning) {
-      const pulse = 0.5 + Math.sin(now * 0.01) * 0.5;
-      const bannerW = 360;
-      const bannerH = 36;
-      const bannerX = CANVAS_WIDTH / 2 - bannerW / 2;
-      const bannerY = 88;
-
-      // Pulsing red border
-      ctx.strokeStyle = `rgba(255, 60, 40, ${0.5 + pulse * 0.5})`;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      this.roundRect(bannerX, bannerY, bannerW, bannerH, 6);
-      ctx.stroke();
-
-      // Background
-      ctx.fillStyle = `rgba(140, 20, 10, ${0.7 + pulse * 0.2})`;
-      ctx.beginPath();
-      this.roundRect(bannerX, bannerY, bannerW, bannerH, 6);
-      ctx.fill();
-
-      // Text
-      ctx.fillStyle = `rgba(255, 255, 255, ${0.7 + pulse * 0.3})`;
-      ctx.font = 'bold 13px monospace';
-      ctx.textAlign = 'center';
-      const nextWave = waveInfo.waveNumber + 1;
-      ctx.fillText(`Wave ${nextWave} \u2014 ${waveInfo.warningLabel}`, CANVAS_WIDTH / 2, bannerY + 24);
-
-      // Direction indicator below warning banner
-      const dirLabels = {
-        right:  '\u2192 FROM AHEAD',
-        top:    '\u2193 FROM ABOVE',
-        bottom: '\u2191 FROM BELOW',
-        both:   '\u2195 PINCER ATTACK',
-      };
-      const dirLabel = dirLabels[waveInfo.direction] || dirLabels.right;
-      const dirBannerW = 260;
-      const dirBannerH = 28;
-      const dirBannerX = CANVAS_WIDTH / 2 - dirBannerW / 2;
-      const dirBannerY = bannerY + bannerH + 4;
-
-      ctx.fillStyle = `rgba(180, 120, 0, ${0.75 + pulse * 0.2})`;
-      ctx.beginPath();
-      this.roundRect(dirBannerX, dirBannerY, dirBannerW, dirBannerH, 5);
-      ctx.fill();
-
-      ctx.strokeStyle = `rgba(255, 200, 50, ${0.6 + pulse * 0.4})`;
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      this.roundRect(dirBannerX, dirBannerY, dirBannerW, dirBannerH, 5);
-      ctx.stroke();
-
-      ctx.fillStyle = `rgba(255, 230, 80, ${0.85 + pulse * 0.15})`;
-      ctx.font = 'bold 14px monospace';
-      ctx.textAlign = 'center';
-      ctx.fillText(dirLabel, CANVAS_WIDTH / 2, dirBannerY + 19);
-    }
-
-    // Active surge indicator — pulsing red border overlay on edges
-    if (waveInfo.isSurge) {
-      const pulse = 0.3 + Math.sin(now * 0.006) * 0.3;
-      const borderSize = 4;
-
-      // Red tint on screen edges
-      const grad = ctx.createLinearGradient(0, 0, borderSize * 8, 0);
-      grad.addColorStop(0, `rgba(200, 30, 20, ${pulse})`);
-      grad.addColorStop(1, 'rgba(200, 30, 20, 0)');
-      ctx.fillStyle = grad;
-      ctx.fillRect(0, 0, borderSize * 8, CANVAS_HEIGHT);
-
-      const grad2 = ctx.createLinearGradient(CANVAS_WIDTH, 0, CANVAS_WIDTH - borderSize * 8, 0);
-      grad2.addColorStop(0, `rgba(200, 30, 20, ${pulse})`);
-      grad2.addColorStop(1, 'rgba(200, 30, 20, 0)');
-      ctx.fillStyle = grad2;
-      ctx.fillRect(CANVAS_WIDTH - borderSize * 8, 0, borderSize * 8, CANVAS_HEIGHT);
-
-      // Surge banner
-      const bannerW = 300;
-      const bannerH = 30;
-      const bannerX = CANVAS_WIDTH / 2 - bannerW / 2;
-      const bannerY = 88;
-
-      ctx.fillStyle = `rgba(180, 20, 10, ${0.7 + pulse * 0.2})`;
-      ctx.beginPath();
-      this.roundRect(bannerX, bannerY, bannerW, bannerH, 6);
-      ctx.fill();
-
-      ctx.strokeStyle = `rgba(255, 80, 60, ${pulse + 0.3})`;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      this.roundRect(bannerX, bannerY, bannerW, bannerH, 6);
-      ctx.stroke();
-
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 13px monospace';
-      ctx.textAlign = 'center';
-      const surgeText = waveInfo.isBossStation ? `BOSS WAVE ${waveInfo.waveNumber}` : `Wave ${waveInfo.waveNumber} \u2014 ${waveInfo.surgeLabel}`;
-      ctx.fillText(surgeText, CANVAS_WIDTH / 2, bannerY + 21);
-    }
   }
 
   drawMiniMap(distance) {

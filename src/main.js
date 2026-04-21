@@ -601,11 +601,6 @@ function renderRun() {
   if (train.crew.some(c => !c.assignment && !c.isMoving)) {
     renderer.drawCrewPanel(train.crew, CANVAS_HEIGHT - 70);
   }
-  // Trajectory preview — show when a crew member is selected and stationed at a mount
-  const aimMount = getSelectedMount();
-  if (aimMount && selectedCrew && !selectedCrew.isMoving) {
-    renderer.drawTrajectoryPreview(aimMount, input.mouseX, input.mouseY);
-  }
   renderer.drawHUD(train);
   renderer.drawWaveHUD(spawner.waveInfo);
   renderer.drawAutoWeaponHUD(train);

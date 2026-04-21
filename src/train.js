@@ -1,6 +1,6 @@
 import {
   CAR_WIDTH, CAR_HEIGHT, CAR_GAP, TRAIN_MAX_HP,
-  MOUNT_RADIUS, WEAPON_CONE_HALF_ANGLE, WEAPON_RANGE,
+  MOUNT_RADIUS, WEAPON_CONE_HALF_ANGLE, AUTO_WEAPON_CONE_HALF_ANGLE, WEAPON_RANGE,
   WEAPON_FIRE_RATE, WEAPON_DAMAGE, CREW_COLORS,
   XP_PER_LEVEL, CARGO_BOXES_START, CARGO_MULTIPLIER_PER_BOX,
   AUTO_WEAPONS, MAX_AUTO_WEAPON_LEVEL, SHOP_TUNING,
@@ -265,6 +265,7 @@ export class Train {
     const mount = this.allMounts.find(m => !m.isOccupied);
     if (!mount) return false;
     mount.autoWeaponId = weaponId;
+    mount.coneHalfAngle = AUTO_WEAPON_CONE_HALF_ANGLE;
     this.autoWeapons[weaponId] = { level: 1, cooldownTimer: 0, tickTimer: 0, mount };
     return true;
   }

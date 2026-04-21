@@ -185,15 +185,18 @@ export class CombatSystem {
     const hasDriver = train.hasDriver;
     const areaMult = train.totalAreaMultiplier;
 
-    // Phase 1: rotate unselected crew cones every frame (independent of cooldown)
+    // Phase 1: rotate all non-player-aimed cones every frame
     for (const mount of train.allMounts) {
-      if (!mount.isManned || mount.hasAutoWeapon) continue;
       if (mount.crew === selectedCrew) continue; // selected crew aims via mouse
+      const isAutoWeapon = mount.hasAutoWeapon && !mount.isManned;
+      const isCrew = mount.isManned && !mount.hasAutoWeapon;
+      if (!isAutoWeapon && !isCrew) continue;
       const nearest = this.findClosestEnemy(mount, enemies, areaMult);
       if (nearest) {
         const desiredAngle = Math.atan2(nearest.y - mount.worldY, nearest.x - mount.worldX);
         const diff = normalizeAngle(desiredAngle - mount.coneDirection);
-        const maxRot = 2.0 * dt; // 2 rad/s rotation speed
+        const rotSpeed = isAutoWeapon ? 1.5 : 2.0; // auto-weapons rotate slower
+        const maxRot = rotSpeed * dt;
         if (Math.abs(diff) < maxRot) {
           mount.coneDirection = desiredAngle;
         } else {
@@ -349,6 +352,7 @@ export class CombatSystem {
         const stats = train.getAutoWeaponStats('turret');
         w.cooldownTimer -= dt;
         if (w.cooldownTimer <= 0) {
+          // Find closest enemy within cone
           let closest = null;
           const range = stats.range * areaMult;
           let closestDist = range * range;
@@ -356,7 +360,11 @@ export class CombatSystem {
             if (!e.active) continue;
             const dx = e.x - mx, dy = e.y - my;
             const d = dx * dx + dy * dy;
-            if (d < closestDist) { closest = e; closestDist = d; }
+            if (d >= closestDist) continue;
+            const angleToE = Math.atan2(dy, dx);
+            const diff = Math.abs(normalizeAngle(angleToE - m.coneDirection));
+            if (diff > m.coneHalfAngle) continue;
+            closest = e; closestDist = d;
           }
           if (closest) {
             const dmg = stats.damage * dmgMult;
