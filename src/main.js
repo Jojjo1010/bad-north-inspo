@@ -316,8 +316,8 @@ function renderSetup() {
   renderer.drawWeaponMounts(train, getSelectedMount(), true);
   renderer.drawMovingCrew(train.crew);
   renderer.drawCrewPanel(train.crew, crewPanelY);
-  renderer.drawSetupOverlay();
   const crewReady = train.crew.some(c => c.assignment && !c.assignment.isDriverSeat);
+  if (!crewReady) renderer.drawSetupOverlay();
   renderer.drawDepartButton(departBtn.x, departBtn.y, departBtn.w, departBtn.h,
     crewReady && input.hitRect(departBtn.x, departBtn.y, departBtn.w, departBtn.h), !crewReady);
   if (selectedCrew) renderer.drawSelectedIndicator(selectedCrew);
