@@ -13,7 +13,7 @@ import { CombatSystem } from './combat.js';
 import { CoinSystem } from './coins.js';
 import { BanditSystem, BANDIT_STATES } from './bandits.js';
 import { Zone, STATION_TYPES } from './zone.js';
-import { playLevelUp, playPowerup, playVictory, playDefeat, startMusic, stopMusic, getMusicVolume, getSfxVolume, setMusicVolume, setSfxVolume, playLevelUpMp3, playZoneCompleteMp3, playWinWorldMp3 } from './audio.js';
+import { playPowerup, playDefeat, startMusic, stopMusic, getMusicVolume, getSfxVolume, setMusicVolume, setSfxVolume, playLevelUpMp3, playZoneCompleteMp3, playWinWorldMp3 } from './audio.js';
 
 const STATES = { ZONE_MAP: 0, SETUP: 1, RUNNING: 2, LEVELUP: 3, PLACE_WEAPON: 4, GAMEOVER: 5, PAUSED: 6, SHOP: 7, SETTINGS: 8 };
 
@@ -80,6 +80,8 @@ const trainScreenX = CANVAS_WIDTH / 2 - trainTotalWidth / 2 + TRAIN_3D_OFFSET;
 const trainScreenY = CANVAS_HEIGHT / 2 - CAR_HEIGHT / 2;
 const crewPanelY = trainScreenY + CAR_HEIGHT + 80;
 const departBtn = { x: CANVAS_WIDTH / 2 - 70, y: CANVAS_HEIGHT - 80, w: 140, h: 48 };
+const shopMapBtn = { x: CANVAS_WIDTH / 2 - 150, y: CANVAS_HEIGHT - 80, w: 140, h: 48 };
+const shopNextBtn = { x: CANVAS_WIDTH / 2 + 10, y: CANVAS_HEIGHT - 80, w: 140, h: 48 };
 
 let stateBeforePause = STATES.SETUP; // remember where we came from
 const pauseButtons = {
@@ -818,6 +820,7 @@ function enterGameOver() {
   state = STATES.GAMEOVER;
   gameOverType = won ? 'zone' : 'death';
   if (won) {
+    zone.addCoal(COAL_PER_WIN);
     playZoneCompleteMp3();
     for (let i = 0; i < 6; i++) {
       setTimeout(() => renderer.spawnConfetti(), i * 150);
@@ -857,19 +860,16 @@ function updateGameOver() {
   if (gameOverType === 'zone') {
     if (input.clicked) {
       if (input.hitRect(gameOverBtns.shop.x, gameOverBtns.shop.y, gameOverBtns.shop.w, gameOverBtns.shop.h)) {
-        zone.addCoal(COAL_PER_WIN);
         state = STATES.SHOP;
         hoveredShopItem = -1;
         return;
       }
       if (input.hitRect(gameOverBtns.nextZone.x, gameOverBtns.nextZone.y, gameOverBtns.nextZone.w, gameOverBtns.nextZone.h)) {
-        zone.addCoal(COAL_PER_WIN);
         state = STATES.ZONE_MAP;
         return;
       }
     }
     if (confirmKey) {
-      zone.addCoal(COAL_PER_WIN);
       state = STATES.ZONE_MAP;
       return;
     }
@@ -965,15 +965,11 @@ function updateShop() {
       }
     }
     if (input.clicked) {
-      // "Back to Map" button (left)
-      const mapBtn = { x: CANVAS_WIDTH / 2 - 150, y: departBtn.y, w: 140, h: departBtn.h };
-      if (input.hitRect(mapBtn.x, mapBtn.y, mapBtn.w, mapBtn.h)) {
+      if (input.hitRect(shopMapBtn.x, shopMapBtn.y, shopMapBtn.w, shopMapBtn.h)) {
         state = STATES.ZONE_MAP;
         return;
       }
-      // "Next Zone" button (right)
-      const nextBtn = { x: CANVAS_WIDTH / 2 + 10, y: departBtn.y, w: 140, h: departBtn.h };
-      if (input.hitRect(nextBtn.x, nextBtn.y, nextBtn.w, nextBtn.h)) {
+      if (input.hitRect(shopNextBtn.x, shopNextBtn.y, shopNextBtn.w, shopNextBtn.h)) {
         leaveShop();
         return;
       }
@@ -985,7 +981,7 @@ function updateShop() {
 
 function renderShop() {
   renderer.drawTerrain(0);
-  renderer.drawShop(save, UPGRADE_KEYS, hoveredShopItem, departBtn, input, kbShopOnDepart);
+  renderer.drawShop(save, UPGRADE_KEYS, hoveredShopItem, shopMapBtn, shopNextBtn, input, kbShopOnDepart);
   renderer.flush();
 }
 

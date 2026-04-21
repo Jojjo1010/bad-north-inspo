@@ -584,8 +584,9 @@ export class Renderer3D {
       mesh.visible = true;
 
       // Color by source
-      if (mesh.material && mesh.material.color) {
+      if (mesh.material && mesh.material.color && mesh._lastColor !== p.color) {
         mesh.material.color.set(p.color);
+        mesh._lastColor = p.color;
       }
       idx++;
     }
@@ -1633,7 +1634,7 @@ export class Renderer3D {
   // =============================================
   // SHOP
   // =============================================
-  drawShop(save, upgradeKeys, hoveredIndex, departBtn, input, kbOnDepart = false) {
+  drawShop(save, upgradeKeys, hoveredIndex, mapBtn, nextBtn, input, kbOnDepart = false) {
     const ctx = this.ctx;
 
     ctx.fillStyle = '#1a1a2e';
@@ -1754,12 +1755,6 @@ export class Renderer3D {
     }
     ctx.textAlign = 'left';
 
-    // Next Zone button (right side)
-    const nextZoneBtn = { x: CANVAS_WIDTH / 2 + 10, y: departBtn.y, w: 140, h: departBtn.h };
-    const mapBtn = { x: CANVAS_WIDTH / 2 - 150, y: departBtn.y, w: 140, h: departBtn.h };
-    this._shopNextZoneBtn = nextZoneBtn;
-
-    // Back to Map
     const mapH = input.hitRect(mapBtn.x, mapBtn.y, mapBtn.w, mapBtn.h);
     ctx.fillStyle = mapH ? '#555' : '#333';
     this.roundRect(mapBtn.x, mapBtn.y, mapBtn.w, mapBtn.h, 8);
@@ -1769,18 +1764,17 @@ export class Renderer3D {
     ctx.textAlign = 'center';
     ctx.fillText('BACK TO MAP', mapBtn.x + mapBtn.w / 2, mapBtn.y + mapBtn.h / 2 + 5);
 
-    // Next Zone
-    const nextH = input.hitRect(nextZoneBtn.x, nextZoneBtn.y, nextZoneBtn.w, nextZoneBtn.h) || kbOnDepart;
+    const nextH = input.hitRect(nextBtn.x, nextBtn.y, nextBtn.w, nextBtn.h) || kbOnDepart;
     ctx.fillStyle = nextH ? '#e09520' : '#f5a623';
     ctx.strokeStyle = kbOnDepart ? '#fff' : 'transparent';
     ctx.lineWidth = 2;
-    this.roundRect(nextZoneBtn.x, nextZoneBtn.y, nextZoneBtn.w, nextZoneBtn.h, 8);
+    this.roundRect(nextBtn.x, nextBtn.y, nextBtn.w, nextBtn.h, 8);
     ctx.fill();
     if (kbOnDepart) ctx.stroke();
     ctx.fillStyle = '#000';
     ctx.font = 'bold 14px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('NEXT ZONE', nextZoneBtn.x + nextZoneBtn.w / 2, nextZoneBtn.y + nextZoneBtn.h / 2 + 5);
+    ctx.fillText('NEXT ZONE', nextBtn.x + nextBtn.w / 2, nextBtn.y + nextBtn.h / 2 + 5);
   }
 
   // =============================================
