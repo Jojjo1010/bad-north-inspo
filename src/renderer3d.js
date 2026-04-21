@@ -1081,6 +1081,23 @@ export class Renderer3D {
     ctx.textAlign = 'right';
     ctx.fillText(`${train.runGold}`, goldX - 10, xpY + 19);
 
+    // === CARGO — below gold ===
+    const cargoY = xpY + 32;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    this.roundRect(goldX - 100, cargoY, 96, 24, 4);
+    ctx.fill();
+
+    ctx.fillStyle = '#8B6914';
+    ctx.font = 'bold 10px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('CARGO', goldX - 96, cargoY + 10);
+
+    const cargoMult = train.cargoMultiplier;
+    ctx.fillStyle = '#c8a96e';
+    ctx.font = 'bold 13px monospace';
+    ctx.textAlign = 'right';
+    ctx.fillText(`x${cargoMult.toFixed(1)}`, goldX - 10, cargoY + 17);
+
     // === MINI-MAP — bottom-right ===
     this.drawMiniMap(train.distance);
   }
@@ -1099,9 +1116,9 @@ export class Renderer3D {
     ctx.fillStyle = '#aaa';
     ctx.font = '10px monospace';
     ctx.textAlign = 'left';
-    ctx.fillText('Start', mapX, mapY + mapH + 12);
+    ctx.fillText('Depot', mapX, mapY + mapH + 12);
     ctx.textAlign = 'right';
-    ctx.fillText('Finish', mapX + mapW, mapY + mapH + 12);
+    ctx.fillText('Delivery', mapX + mapW, mapY + mapH + 12);
 
     ctx.strokeStyle = '#666';
     ctx.lineWidth = 2;
@@ -1180,6 +1197,19 @@ export class Renderer3D {
   // =============================================
   // SETUP OVERLAY
   // =============================================
+  drawMissionBrief() {
+    const ctx = this.ctx;
+    ctx.fillStyle = 'rgba(0,0,0,0.4)';
+    ctx.fillRect(0, 0, CANVAS_WIDTH, 50);
+    ctx.fillStyle = '#c8a96e';
+    ctx.font = 'bold 18px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('Crew ready! Depart when prepared.', CANVAS_WIDTH / 2, 22);
+    ctx.fillStyle = '#8a7a5a';
+    ctx.font = '13px monospace';
+    ctx.fillText('Zombies will attack the train. Bandits will steal your gold.', CANVAS_WIDTH / 2, 42);
+  }
+
   drawSetupOverlay() {
     const ctx = this.ctx;
     ctx.fillStyle = 'rgba(0,0,0,0.4)';
@@ -1402,12 +1432,15 @@ export class Renderer3D {
       ctx.fillStyle = '#fff';
       ctx.font = 'bold 20px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('All zones conquered!', cx, cy + 30);
+      ctx.fillText('All cargo delivered!', cx, cy + 30);
+      ctx.fillStyle = '#c8a96e';
+      ctx.font = '14px monospace';
+      ctx.fillText('The wasteland couldn\'t stop this train.', cx, cy + 50);
 
       // Total gold
       ctx.fillStyle = '#f5a623';
       ctx.font = 'bold 28px monospace';
-      ctx.fillText(`Treasury: ${totalGold} Gold`, cx, cy + 65);
+      ctx.fillText(`Treasury: ${totalGold} Gold`, cx, cy + 85);
 
     } else if (gameOverType === 'zone') {
       // === ZONE WIN — delivered celebration ===
@@ -1436,17 +1469,17 @@ export class Renderer3D {
       ctx.textAlign = 'center';
       ctx.fillText('DELIVERED!', cx, cy - 70);
 
-      // Stats
-      ctx.fillStyle = '#fff';
-      ctx.font = '18px monospace';
-      ctx.fillText(`Level: ${train.level}`, cx, cy - 30);
+      // Subtitle
+      ctx.fillStyle = '#8fbc8f';
+      ctx.font = '16px monospace';
+      ctx.fillText('Cargo delivered safely through the wasteland!', cx, cy - 38);
 
       // Gold breakdown with animated counter effect
       const mult = train.cargoMultiplier;
       ctx.fillStyle = '#aaa';
       ctx.font = '14px monospace';
-      ctx.fillText(`Gold collected: ${train.runGold}`, cx, cy + 0);
-      ctx.fillText(`Cargo bonus: x${mult.toFixed(1)}`, cx, cy + 20);
+      ctx.fillText(`Gold collected: ${train.runGold}`, cx, cy - 8);
+      ctx.fillText(`Cargo delivery bonus: x${mult.toFixed(1)}`, cx, cy + 12);
 
       ctx.fillStyle = '#f5a623';
       ctx.font = 'bold 28px monospace';
@@ -1464,14 +1497,18 @@ export class Renderer3D {
       ctx.textAlign = 'center';
       ctx.fillText('TRAIN DESTROYED', cx, cy - 70);
 
+      ctx.fillStyle = '#cc8888';
+      ctx.font = '15px monospace';
+      ctx.fillText('The cargo was lost to the wasteland...', cx, cy - 38);
+
       ctx.fillStyle = '#fff';
-      ctx.font = '18px monospace';
+      ctx.font = '16px monospace';
       const pct = Math.floor(train.distance / TARGET_DISTANCE * 100);
-      ctx.fillText(`Distance: ${pct}%  |  Level: ${train.level}`, cx, cy - 25);
+      ctx.fillText(`Distance: ${pct}%  |  Level: ${train.level}`, cx, cy - 10);
 
       ctx.fillStyle = '#ccc';
-      ctx.font = '16px monospace';
-      ctx.fillText(`Gold salvaged: ${train.runGold}  (no cargo bonus)`, cx, cy + 5);
+      ctx.font = '14px monospace';
+      ctx.fillText(`Gold salvaged: ${train.runGold}  (cargo lost)`, cx, cy + 12);
 
       ctx.fillStyle = '#f5a623';
       ctx.font = 'bold 24px monospace';
@@ -1662,7 +1699,12 @@ export class Renderer3D {
     ctx.fillStyle = '#c8a96e';
     ctx.font = 'bold 24px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText(`ZONE ${zone.difficulty} \u2014 RAIL MAP`, W / 2, 32);
+    ctx.fillText(`ZONE ${zone.difficulty} \u2014 RAIL MAP`, W / 2, 28);
+
+    // Flavor subtitle
+    ctx.fillStyle = '#8a7a5a';
+    ctx.font = '12px monospace';
+    ctx.fillText('Deliver the cargo. Survive the wasteland.', W / 2, 44);
 
     // Coal display
     ctx.fillStyle = '#aaa';
@@ -1879,7 +1921,10 @@ export class Renderer3D {
 
       ctx.fillStyle = '#ff6b6b';
       ctx.font = 'bold 16px monospace';
-      ctx.fillText('The horde is stronger here...', cx, cy + 25);
+      ctx.fillText('The horde is stronger here...', cx, cy + 20);
+      ctx.fillStyle = '#aa4444';
+      ctx.font = '13px monospace';
+      ctx.fillText('Protect the cargo at all costs!', cx, cy + 42);
     } else {
       ctx.fillStyle = 'rgba(0,0,0,0.6)';
       ctx.fillRect(0, 0, W, H);
@@ -1897,9 +1942,9 @@ export class Renderer3D {
       ctx.fillStyle = '#aaa';
       ctx.font = '14px monospace';
       const subtitles = {
-        combat: 'Zombies incoming...',
-        empty: 'Nothing here...',
-        exit: 'Shop time!',
+        combat: 'Defend the train! Deliver the cargo!',
+        empty: 'The wasteland is quiet... for now.',
+        exit: 'Cargo delivered! Time to resupply.',
       };
       ctx.fillText(subtitles[arrival.type] || '', cx, cy + 30);
     }

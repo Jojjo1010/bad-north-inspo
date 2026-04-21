@@ -317,7 +317,11 @@ function renderSetup() {
   renderer.drawMovingCrew(train.crew);
   renderer.drawCrewPanel(train.crew, crewPanelY);
   const crewReady = train.crew.some(c => c.assignment && !c.assignment.isDriverSeat);
-  if (!crewReady) renderer.drawSetupOverlay();
+  if (!crewReady) {
+    renderer.drawSetupOverlay();
+  } else {
+    renderer.drawMissionBrief();
+  }
   renderer.drawDepartButton(departBtn.x, departBtn.y, departBtn.w, departBtn.h,
     crewReady && input.hitRect(departBtn.x, departBtn.y, departBtn.w, departBtn.h), !crewReady);
   if (selectedCrew) renderer.drawSelectedIndicator(selectedCrew);
