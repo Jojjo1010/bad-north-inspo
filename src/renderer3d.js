@@ -1702,9 +1702,9 @@ export class Renderer3D {
     ctx.fillText(`ZONE ${zone.difficulty} \u2014 RAIL MAP`, W / 2, 28);
 
     // Flavor subtitle
-    ctx.fillStyle = '#8a7a5a';
-    ctx.font = '12px monospace';
-    ctx.fillText('Deliver the cargo. Survive the wasteland.', W / 2, 44);
+    ctx.fillStyle = '#d4c4a0';
+    ctx.font = '13px monospace';
+    ctx.fillText('Deliver the cargo. Survive the wasteland.', W / 2, 46);
 
     // Coal display
     ctx.fillStyle = '#aaa';
