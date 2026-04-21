@@ -542,9 +542,16 @@ export class Renderer3D {
         });
       }
 
-      // Draw HP bar on 2D overlay at projected screen position
+      // Draw emoji + HP bar on 2D overlay at projected screen position
       const screenPos = this._project(w.x, w.z);
       const ctx = this.ctx;
+
+      // Enemy emoji
+      const emojiSize = Math.round(12 + (e.radius - 6) * 2);
+      ctx.font = `${emojiSize}px serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText(e.kind === 'bug' ? '\uD83D\uDC1B' : '\uD83E\uDDDF', screenPos.x, screenPos.y + 4);
+
       const barW = Math.max(20, e.radius * 1.5);
       const barH = 3;
       const barX = screenPos.x - barW / 2;
@@ -1743,7 +1750,8 @@ export class Renderer3D {
       const size = 10 + (i % 4) * 3;
       ctx.globalAlpha = alpha;
       ctx.font = `${size}px serif`;
-      ctx.fillText('\uD83E\uDDDF', zx + sway, zy);
+      const isBug = (seed1 + seed2) % 5 === 0;
+      ctx.fillText(isBug ? '\uD83D\uDC1B' : '\uD83E\uDDDF', zx + sway, zy);
     }
     ctx.globalAlpha = 1;
 

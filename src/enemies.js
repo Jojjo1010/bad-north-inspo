@@ -16,6 +16,7 @@ export class Enemy {
     this.speed = 0;
     this.radius = ENEMY_RADIUS;
     this.color = '#2d6a2e';
+    this.kind = 'zombie'; // 'zombie' or 'bug'
     this.damage = ENEMY_CONTACT_DAMAGE;
     this.flashTimer = 0;
   }
@@ -134,6 +135,7 @@ export class Spawner {
     enemy.radius = ENEMY_RADIUS * ENEMY_RADIUS_MULT[colorIdx];
     enemy.hp = hp * ENEMY_HP_MULT[colorIdx];
     enemy.maxHp = enemy.hp;
+    enemy.kind = Math.random() < 0.6 ? 'zombie' : 'bug';
 
     // Pick target: 70% cargo, 15% rear weapon, 15% front weapon
     let targetBounds = carBounds.cargo; // default
