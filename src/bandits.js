@@ -151,12 +151,8 @@ export class Bandit {
 
   die() {
     if (this.targetSlot) {
-      // If crew was sent to fight on an auto-weapon slot, unassign them after
-      if (this.targetSlot.autoWeaponId && this.targetSlot.crew) {
-        const crew = this.targetSlot.crew;
-        crew.assignment = null;
-        this.targetSlot.crew = null;
-      }
+      // Crew stays assigned after defeating the bandit — they guard the slot
+      // but won't fire (combat.js skips crew on auto-weapon mounts)
       this.targetSlot._bandit = null;
     }
     this.state = STATES.DEAD;

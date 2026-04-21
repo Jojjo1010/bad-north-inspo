@@ -175,7 +175,7 @@ export class CombatSystem {
     const hasDriver = train.hasDriver;
     const areaMult = train.totalAreaMultiplier;
     for (const mount of train.allMounts) {
-      if (!mount.isManned) continue;
+      if (!mount.isManned || mount.hasAutoWeapon) continue;
 
       mount.cooldownTimer -= dt;
       if (mount.cooldownTimer > 0) continue;
