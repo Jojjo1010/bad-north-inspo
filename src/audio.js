@@ -130,23 +130,6 @@ export function playCoinPickup() {
   playMp3('assets/coin.mp3', 0.6);
 }
 
-export function playLevelUp() {
-  const c = getCtx();
-  const notes = [523, 659, 784, 1047];
-  notes.forEach((freq, i) => {
-    const osc = c.createOscillator();
-    const g = sfxGain(0.12);
-    osc.type = 'sine';
-    osc.frequency.value = freq;
-    g.gain.setValueAtTime(0.001, c.currentTime + i * 0.1);
-    g.gain.linearRampToValueAtTime(0.12, c.currentTime + i * 0.1 + 0.03);
-    g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + i * 0.1 + 0.25);
-    osc.connect(g);
-    osc.start(c.currentTime + i * 0.1);
-    osc.stop(c.currentTime + i * 0.1 + 0.3);
-  });
-}
-
 export function playPowerup() {
   const c = getCtx();
   const osc = c.createOscillator();
@@ -158,38 +141,6 @@ export function playPowerup() {
   osc.connect(g);
   osc.start(c.currentTime);
   osc.stop(c.currentTime + 0.3);
-}
-
-export function playVictory() {
-  const c = getCtx();
-  const melody = [523, 659, 784, 1047, 784, 1047];
-  const durations = [0.15, 0.15, 0.15, 0.3, 0.15, 0.4];
-  let time = c.currentTime;
-  melody.forEach((freq, i) => {
-    const osc = c.createOscillator();
-    const g = sfxGain(0.15);
-    osc.type = 'triangle';
-    osc.frequency.value = freq;
-    g.gain.setValueAtTime(0.15, time);
-    g.gain.exponentialRampToValueAtTime(0.001, time + durations[i]);
-    osc.connect(g);
-    osc.start(time);
-    osc.stop(time + durations[i] + 0.05);
-    time += durations[i];
-  });
-}
-
-export function playDefeat() {
-  const c = getCtx();
-  const osc = c.createOscillator();
-  const g = sfxGain(0.15);
-  osc.type = 'sawtooth';
-  osc.frequency.setValueAtTime(400, c.currentTime);
-  osc.frequency.exponentialRampToValueAtTime(80, c.currentTime + 0.8);
-  g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 1.0);
-  osc.connect(g);
-  osc.start(c.currentTime);
-  osc.stop(c.currentTime + 1.0);
 }
 
 // --- ONE-SHOT MP3 SFX ---
