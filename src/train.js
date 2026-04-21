@@ -111,11 +111,13 @@ export class TrainCar {
 }
 
 const CREW_ROLES = ['Gunner', 'Engineer', 'Medic'];
+const CREW_NAMES = ['Rex', 'Kit', 'Rosa'];
 
 export class CrewMember {
   constructor(id) {
     this.id = id;
     this.color = CREW_COLORS[id];
+    this.name = CREW_NAMES[id] || null;
     this.role = CREW_ROLES[id] || null; // Gunner, Engineer, Medic
     this.assignment = null;
     this.reassignCooldown = 0;

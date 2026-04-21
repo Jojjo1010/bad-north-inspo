@@ -1239,6 +1239,16 @@ export class Renderer3D {
     ctx.textAlign = 'right';
     ctx.fillText(`x${cargoMult.toFixed(1)}`, goldX - 10, cargoY + 17);
 
+    // === MISSION LABEL — top-left, below HP bar ===
+    const missionY = hpY + hpBarH + 14;
+    ctx.fillStyle = 'rgba(0,0,0,0.5)';
+    this.roundRect(hpX, missionY, 220, 20, 4);
+    ctx.fill();
+    ctx.fillStyle = '#c8a96e';
+    ctx.font = '11px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('Eastport \u2014 Medical Supplies', hpX + 6, missionY + 14);
+
     // === MINI-MAP — bottom-right ===
     this.drawMiniMap(train.distance);
   }
@@ -1270,7 +1280,7 @@ export class Renderer3D {
     // Surge warning banner — top center
     if (waveInfo.isWarning) {
       const pulse = 0.5 + Math.sin(now * 0.01) * 0.5;
-      const bannerW = 280;
+      const bannerW = 360;
       const bannerH = 36;
       const bannerX = CANVAS_WIDTH / 2 - bannerW / 2;
       const bannerY = 88;
@@ -1290,10 +1300,10 @@ export class Renderer3D {
 
       // Text
       ctx.fillStyle = `rgba(255, 255, 255, ${0.7 + pulse * 0.3})`;
-      ctx.font = 'bold 16px monospace';
+      ctx.font = 'bold 13px monospace';
       ctx.textAlign = 'center';
       const nextWave = waveInfo.waveNumber + 1;
-      ctx.fillText(`WAVE ${nextWave} INCOMING`, CANVAS_WIDTH / 2, bannerY + 24);
+      ctx.fillText(`Wave ${nextWave} \u2014 ${waveInfo.warningLabel}`, CANVAS_WIDTH / 2, bannerY + 24);
     }
 
     // Active surge indicator — pulsing red border overlay on edges
@@ -1315,7 +1325,7 @@ export class Renderer3D {
       ctx.fillRect(CANVAS_WIDTH - borderSize * 8, 0, borderSize * 8, CANVAS_HEIGHT);
 
       // Surge banner
-      const bannerW = 200;
+      const bannerW = 300;
       const bannerH = 30;
       const bannerX = CANVAS_WIDTH / 2 - bannerW / 2;
       const bannerY = 88;
@@ -1332,10 +1342,10 @@ export class Renderer3D {
       ctx.stroke();
 
       ctx.fillStyle = '#fff';
-      ctx.font = 'bold 14px monospace';
+      ctx.font = 'bold 13px monospace';
       ctx.textAlign = 'center';
-      const label = waveInfo.isBossStation ? `BOSS WAVE ${waveInfo.waveNumber}` : `WAVE ${waveInfo.waveNumber}`;
-      ctx.fillText(label, CANVAS_WIDTH / 2, bannerY + 21);
+      const surgeText = waveInfo.isBossStation ? `BOSS WAVE ${waveInfo.waveNumber}` : `Wave ${waveInfo.waveNumber} \u2014 ${waveInfo.surgeLabel}`;
+      ctx.fillText(surgeText, CANVAS_WIDTH / 2, bannerY + 21);
     }
   }
 
@@ -1497,8 +1507,6 @@ export class Renderer3D {
     const slotW = 48;
     const slotH = 34;
     const gap = 6;
-    const crewNames = ['Orb', 'Davie', 'Punk'];
-
     // --- CREW ROW (top) ---
     const crewY = CANVAS_HEIGHT - 116;
     ctx.fillStyle = '#ccc';
@@ -1521,7 +1529,7 @@ export class Renderer3D {
       ctx.font = 'bold 8px monospace';
       ctx.textAlign = 'center';
       ctx.fillStyle = c.color;
-      ctx.fillText(crewNames[i], x + slotW / 2, crewY + 10);
+      ctx.fillText(c.name ?? `Crew ${i}`, x + slotW / 2, crewY + 10);
       // Role name
       if (c.role) {
         ctx.font = '6px monospace';
@@ -1746,7 +1754,7 @@ export class Renderer3D {
       ctx.fillText('All cargo delivered!', cx, cy + 20);
       ctx.fillStyle = '#c8a96e';
       ctx.font = '14px monospace';
-      ctx.fillText('The wasteland couldn\'t stop this train.', cx, cy + 40);
+      ctx.fillText(`The supplies reached Eastport. ${goldEarned} lives saved.`, cx, cy + 40);
 
       // Gold breakdown
       ctx.fillStyle = '#aaa';
@@ -1840,18 +1848,22 @@ export class Renderer3D {
       ctx.font = '15px monospace';
       ctx.fillText('The cargo was lost to the wasteland...', cx, cy - 38);
 
+      ctx.fillStyle = '#aa6666';
+      ctx.font = 'italic 14px monospace';
+      ctx.fillText('The train never arrived.', cx, cy - 18);
+
       ctx.fillStyle = '#fff';
       ctx.font = '16px monospace';
       const pct = Math.floor(train.distance / TARGET_DISTANCE * 100);
-      ctx.fillText(`Distance: ${pct}%  |  Level: ${train.level}`, cx, cy - 10);
+      ctx.fillText(`Distance: ${pct}%  |  Level: ${train.level}`, cx, cy + 8);
 
       ctx.fillStyle = '#ccc';
       ctx.font = '14px monospace';
-      ctx.fillText(`Gold salvaged: ${train.runGold}  (cargo lost)`, cx, cy + 12);
+      ctx.fillText(`Gold salvaged: ${train.runGold}  (cargo lost)`, cx, cy + 28);
 
       ctx.fillStyle = '#f5a623';
       ctx.font = 'bold 24px monospace';
-      ctx.fillText(`+${goldEarned} Gold`, cx, cy + 38);
+      ctx.fillText(`+${goldEarned} Gold`, cx, cy + 54);
     }
 
     const btnY = gameOverType === 'world' ? cy + 140 : cy + 70;

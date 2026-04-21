@@ -69,6 +69,29 @@ export class Enemy {
   }
 }
 
+// Enemy tier names (indexed by tier 0–2)
+export const ENEMY_TIER_NAMES = ['Scavenger', 'Raider', 'War Rig'];
+
+// Wave thematic labels — [warningText, surgeText]
+const WAVE_LABELS = [
+  ['Scouts approaching',      'Scout party'],       // wave 1
+  ['Scouts approaching',      'Scout party'],       // wave 2
+  ['Raiding party incoming',  'Under attack'],      // wave 3
+  ['Raiding party incoming',  'Under attack'],      // wave 4
+  ['The horde approaches',    'Horde assault'],     // wave 5
+  ['The horde approaches',    'Horde assault'],     // wave 6
+];
+const WAVE_LABELS_MAX = ['The horde has found you', 'Overwhelming force']; // wave 7+
+
+function getWaveLabel(waveNumber, isSurge) {
+  const idx = Math.max(0, waveNumber - 1);
+  const pair = idx < WAVE_LABELS.length ? WAVE_LABELS[idx] : WAVE_LABELS_MAX;
+  // pair is either a two-element array or the max pair array
+  return Array.isArray(pair) && pair.length === 2
+    ? pair[isSurge ? 1 : 0]
+    : pair[isSurge ? 1 : 0];
+}
+
 // Wave phases
 const WAVE_PHASE = { CALM: 0, WARNING: 1, SURGE: 2 };
 
@@ -94,15 +117,22 @@ export class Spawner {
 
   /** Current wave info for HUD rendering */
   get waveInfo() {
+    const isSurge = this.wavePhase === WAVE_PHASE.SURGE;
+    const isWarning = this.wavePhase === WAVE_PHASE.WARNING;
+    // Warning text refers to the upcoming wave (waveNumber + 1)
+    const warningLabel = getWaveLabel(this.waveNumber + 1, false);
+    const surgeLabel = getWaveLabel(this.waveNumber, true);
     return {
       waveNumber: this.waveNumber,
       phase: this.wavePhase,
       phaseTimer: this.wavePhaseTimer,
       cycleTimer: this.waveCycleTimer,
-      isSurge: this.wavePhase === WAVE_PHASE.SURGE,
-      isWarning: this.wavePhase === WAVE_PHASE.WARNING,
+      isSurge,
+      isWarning,
       isCalm: this.wavePhase === WAVE_PHASE.CALM,
       isBossStation: this.isBossStation,
+      warningLabel,
+      surgeLabel,
     };
   }
 
@@ -222,6 +252,8 @@ export class Spawner {
     enemy.radius = ENEMY_RADIUS * ENEMY_RADIUS_MULT[colorIdx];
     enemy.hp = hp * ENEMY_HP_MULT[colorIdx];
     enemy.maxHp = enemy.hp;
+    enemy.tier = colorIdx;
+    enemy.name = ENEMY_TIER_NAMES[colorIdx];
     enemy.kind = Math.random() < 0.6 ? 'zombie' : 'bug';
 
     // Pick target: 70% cargo, 15% rear weapon, 15% front weapon
