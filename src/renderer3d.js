@@ -34,7 +34,7 @@ export class Renderer3D {
     this._unprojNear = new THREE.Vector3();
     this._unprojFar = new THREE.Vector3();
     this._unprojDir = new THREE.Vector3();
-    this.scene.background = new THREE.Color(0x2d3a1e);
+    this.scene.background = new THREE.Color(0x8a7a52);
 
     // --- Camera (isometric view matching Blender reference) ---
     // Camera frustum must match UI canvas aspect (960/640 = 1.5) for projection to align
@@ -77,7 +77,7 @@ export class Renderer3D {
 
     // --- Ground plane ---
     const groundGeo = new THREE.PlaneGeometry(2000, 2000);
-    const groundMat = new THREE.MeshLambertMaterial({ color: 0x3d5c2e });
+    const groundMat = new THREE.MeshLambertMaterial({ color: 0xb5a272 });
     this.ground = new THREE.Mesh(groundGeo, groundMat);
     this.ground.rotation.x = -Math.PI / 2;
     this.ground.position.y = -0.5;
@@ -1645,11 +1645,11 @@ export class Renderer3D {
     const W = CANVAS_WIDTH;
     const H = CANVAS_HEIGHT;
 
-    // Background — earthy terrain
-    ctx.fillStyle = '#2d3a1e';
+    // Background — sandy terrain
+    ctx.fillStyle = '#6b5c3e';
     ctx.fillRect(0, 0, W, H);
-    // Subtle grass texture
-    ctx.fillStyle = '#334420';
+    // Subtle sand texture
+    ctx.fillStyle = '#7a6b48';
     for (let i = 0; i < 80; i++) {
       const px = (i * 173 + 41) % W;
       const py = (i * 131 + i * i * 7) % H;
