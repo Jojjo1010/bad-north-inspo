@@ -165,6 +165,10 @@ export function playZoneCompleteMp3() { playMp3('assets/zonecomplete.mp3', 0.7);
 export function playWinWorldMp3() { playMp3('assets/winworld.mp3', 0.7); }
 export function playDefeatMp3() { playMp3('assets/loose.mp3', 0.7); }
 
+export function playStealCoin() {
+  playMp3('assets/steal.mp3', 0.8);
+}
+
 // Preload all MP3 SFX so first play is instant
 export async function preloadSfx() {
   const c = getCtx();

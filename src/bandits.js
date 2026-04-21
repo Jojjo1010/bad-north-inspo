@@ -3,7 +3,7 @@ import {
   BANDIT_SPEED, BANDIT_SPAWN_INTERVAL, BANDIT_JUMP_DURATION,
   BANDIT_STEAL_RATE, BANDIT_FIGHT_DURATION, MAX_BANDITS
 } from './constants.js';
-import { startStealLoop, stopStealLoop } from './audio.js';
+import { startStealLoop, stopStealLoop, playStealCoin } from './audio.js';
 
 const STATES = {
   RUNNING: 0,    // running alongside the track
@@ -110,6 +110,7 @@ export class Bandit {
               train.runGold = Math.max(0, train.runGold - stolen);
               this.totalStolen += stolen;
               this.stealFlash = 0.8;
+              playStealCoin();
             }
             this.stealAccumulator -= stolen;
           }
