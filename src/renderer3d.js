@@ -1566,6 +1566,25 @@ export class Renderer3D {
       ctx.font = 'bold 14px monospace';
       ctx.fillText('+2 Coal', cx, cy + 78);
 
+    } else if (gameOverType === 'combat') {
+      // === COMBAT WIN ===
+      ctx.fillStyle = '#f5a623';
+      ctx.font = 'bold 40px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('STATION CLEARED!', cx, cy - 70);
+
+      ctx.fillStyle = '#ccc';
+      ctx.font = '16px monospace';
+      ctx.fillText('The train pushes on through the wasteland.', cx, cy - 35);
+
+      ctx.fillStyle = '#f5a623';
+      ctx.font = 'bold 24px monospace';
+      ctx.fillText(`+${goldEarned} Gold`, cx, cy + 10);
+
+      ctx.fillStyle = '#555';
+      ctx.font = 'bold 14px monospace';
+      ctx.fillText('+2 Coal', cx, cy + 35);
+
     } else {
       // === DEATH ===
       ctx.fillStyle = '#e74c3c';
@@ -1626,7 +1645,7 @@ export class Renderer3D {
       ctx.fillStyle = h ? '#f5a623' : '#ccc';
       ctx.font = 'bold 16px monospace';
       ctx.textAlign = 'center';
-      const label = gameOverType === 'world' ? 'NEW WORLD' : 'TRY AGAIN';
+      const label = gameOverType === 'world' ? 'NEW WORLD' : gameOverType === 'combat' ? 'CONTINUE' : 'TRY AGAIN';
       ctx.fillText(label, btn.x + btn.w / 2, btn.y + btn.h / 2 + 5);
     }
   }

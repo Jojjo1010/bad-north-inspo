@@ -807,7 +807,7 @@ function renderPlaceWeapon() {
 
 // --- GAMEOVER ---
 let goldEarned = 0;
-let gameOverType = 'death'; // 'death' | 'zone' | 'world'
+let gameOverType = 'death'; // 'death' | 'combat' | 'zone' | 'world'
 
 function enterGameOver() {
   const cargoMultiplier = train.cargoMultiplier;
@@ -818,15 +818,26 @@ function enterGameOver() {
   }
   save.gold += goldEarned;
   state = STATES.GAMEOVER;
-  gameOverType = won ? 'zone' : 'death';
+  gameOverType = won ? 'combat' : 'death';
   if (won) {
     zone.addCoal(COAL_PER_WIN);
-    playZoneCompleteMp3();
+    playPowerup();
     for (let i = 0; i < 6; i++) {
       setTimeout(() => renderer.spawnConfetti(), i * 150);
     }
   } else {
     playDefeat();
+  }
+}
+
+function enterZoneComplete() {
+  won = true;
+  goldEarned = zone.stationsVisited * GOLD_PER_STATION;
+  gameOverType = 'zone';
+  state = STATES.GAMEOVER;
+  playZoneCompleteMp3();
+  for (let i = 0; i < 6; i++) {
+    setTimeout(() => renderer.spawnConfetti(), i * 150);
   }
 }
 
@@ -875,7 +886,11 @@ function updateGameOver() {
     }
   } else {
     if (confirmKey || (input.clicked && input.hitRect(gameOverBtns.continue.x, gameOverBtns.continue.y, gameOverBtns.continue.w, gameOverBtns.continue.h))) {
-      afterGameOver();
+      if (gameOverType === 'combat') {
+        state = STATES.ZONE_MAP;
+      } else {
+        afterGameOver();
+      }
       return;
     }
   }
@@ -1329,11 +1344,9 @@ function updateStationArrival(dt) {
       case STATION_TYPES.EXIT:
         save.gold += zone.stationsVisited * GOLD_PER_STATION;
         if (zoneNumber >= ZONES_PER_WORLD) {
-          // Last zone — skip shop, go to world complete
           enterWorldComplete();
         } else {
-          state = STATES.SHOP;
-          hoveredShopItem = -1;
+          enterZoneComplete();
         }
         break;
       case STATION_TYPES.EMPTY:
