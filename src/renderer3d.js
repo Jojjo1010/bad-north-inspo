@@ -6,7 +6,7 @@ import {
   WEAPON_RANGE, TARGET_DISTANCE, COIN_RADIUS,
   AUTO_WEAPONS, MANUAL_GUN, COAL_SHOP_COST, COAL_SHOP_AMOUNT,
   MAX_ENEMIES, MAX_PROJECTILES, MAX_RICOCHET_BOLTS,
-  MAX_COINS, MAX_FLYING_COINS
+  MAX_COINS, MAX_FLYING_COINS, MAX_BANDITS
 } from './constants.js';
 
 export class Renderer3D {
@@ -201,6 +201,24 @@ export class Renderer3D {
       mesh.position.y = 8;
       this.scene.add(mesh);
       this.flyingCoinPool.push(mesh);
+    }
+
+    // Bandit pool — small red box (car-like)
+    this.banditPool = [];
+    const banditMat = new THREE.MeshLambertMaterial({ color: 0xcc3333 });
+    for (let i = 0; i < MAX_BANDITS; i++) {
+      const group = new THREE.Group();
+      // Body
+      const body = new THREE.Mesh(new THREE.BoxGeometry(5, 3, 3), banditMat.clone());
+      body.position.y = 1.5;
+      group.add(body);
+      // Roof/head
+      const head = new THREE.Mesh(new THREE.BoxGeometry(3, 2, 2.5), banditMat.clone());
+      head.position.y = 3.5;
+      group.add(head);
+      group.visible = false;
+      this.scene.add(group);
+      this.banditPool.push(group);
     }
 
     // Train — single FBX model (contains all cars), centered at origin
@@ -760,16 +778,26 @@ export class Renderer3D {
     }
   }
 
-  drawBandits(bandits) {
+  drawBandits(bandits, allMounts) {
     const ctx = this.ctx;
+    let poolIdx = 0;
     for (const b of bandits) {
-      if (!b.active) continue;
+      if (!b.active) {
+        continue;
+      }
+
+      // --- 3D mesh ---
+      const mesh = poolIdx < this.banditPool.length ? this.banditPool[poolIdx] : null;
+      poolIdx++;
 
       // Project bandit position to screen
       let sx, sy;
+      let worldX3d = null, worldZ3d = null;
       if (b.state <= 1) {
         // RUNNING or JUMPING — use world coords
         const w = toWorld(b.x, b.y);
+        worldX3d = w.x;
+        worldZ3d = w.z;
         const s = this._project(w.x, w.z);
         sx = s.x;
         sy = s.y;
@@ -779,15 +807,61 @@ export class Renderer3D {
           sy -= Math.sin(progress * Math.PI) * 20;
         }
       } else if (b.targetSlot) {
-        // ON_TRAIN, FIGHTING — use slot screen coords
+        // ON_TRAIN, FIGHTING — use slot screen coords + find 3D offset
         sx = b.targetSlot.screenX ?? b.targetSlot.worldX;
         sy = b.targetSlot.screenY ?? b.targetSlot.worldY;
+        if (allMounts) {
+          const mi = allMounts.indexOf(b.targetSlot);
+          if (mi >= 0 && this.mountOffsets3D[mi]) {
+            worldX3d = this.mountOffsets3D[mi].x;
+            worldZ3d = this.mountOffsets3D[mi].z;
+          }
+        }
       } else {
         // DEAD — project world coords
         const w = toWorld(b.x, b.y);
+        worldX3d = w.x;
+        worldZ3d = w.z;
         const s = this._project(w.x, w.z);
         sx = s.x;
         sy = s.y;
+      }
+
+      // Position 3D mesh
+      if (mesh) {
+        if (worldX3d !== null) {
+          mesh.visible = true;
+          mesh.position.x = worldX3d;
+          mesh.position.z = worldZ3d;
+          if (b.state <= 1) {
+            mesh.position.y = b.state === 1
+              ? 4 + Math.sin((1 - Math.max(0, b.timer / 0.4)) * Math.PI) * 12
+              : 4;
+          } else {
+            mesh.position.y = 18; // on top of train
+          }
+          // Rotate toward train when running
+          if (b.state === 0) {
+            mesh.rotation.y = b.side > 0 ? -Math.PI / 2 : Math.PI / 2;
+          }
+          // Flash white on hit
+          const color = (b.state === 3 && b.flashTimer % 0.3 < 0.15) ? 0xffffff : 0xcc3333;
+          mesh.children.forEach(c => { if (c.material) c.material.color.setHex(color); });
+          // Fade on death
+          if (b.state === 4) {
+            const alpha = Math.max(0, b.timer / 0.6);
+            mesh.children.forEach(c => {
+              if (c.material) { c.material.transparent = true; c.material.opacity = alpha; }
+            });
+            mesh.rotation.y += 0.1;
+          } else {
+            mesh.children.forEach(c => {
+              if (c.material && c.material.transparent) { c.material.transparent = false; c.material.opacity = 1; }
+            });
+          }
+        } else {
+          mesh.visible = false;
+        }
       }
 
       switch (b.state) {
@@ -916,6 +990,10 @@ export class Renderer3D {
           break;
         }
       }
+    }
+    // Hide unused bandit meshes
+    for (let i = poolIdx; i < this.banditPool.length; i++) {
+      this.banditPool[i].visible = false;
     }
   }
 

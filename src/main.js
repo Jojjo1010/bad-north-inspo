@@ -498,7 +498,7 @@ function renderRun() {
   renderer.drawTrain(train);
   renderer.drawWeaponMounts(train, getSelectedMount(), selectedCrew !== null);
   renderer.drawMovingCrew(train.crew);
-  renderer.drawBandits(banditSystem.pool);
+  renderer.drawBandits(banditSystem.pool, train.allMounts);
   renderer.drawFlyingCoins(coinSystem.flyingCoins);
   renderer.drawDamageFlash(train);
   renderer.drawMagnetFlash(coinSystem);
