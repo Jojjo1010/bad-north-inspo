@@ -1602,7 +1602,10 @@ const startScreenBtns = {
 function updateStartScreen() {
   if (!input.clicked) return;
   if (input.hitRect(startScreenBtns.start.x, startScreenBtns.start.y, startScreenBtns.start.w, startScreenBtns.start.h)) {
-    state = STATES.WORLD_SELECT;
+    selectedWorld = WORLDS[0];
+    startNewWorld();
+    combatDifficulty = selectedWorld.difficulty;
+    state = STATES.WORLD_MAP;
   } else if (input.hitRect(startScreenBtns.powerups.x, startScreenBtns.powerups.y, startScreenBtns.powerups.w, startScreenBtns.powerups.h)) {
     hoveredShopItem = -1;
     kbShopIndex = 0;
@@ -1679,7 +1682,7 @@ function updateWorldMap() {
       }
     }
   }
-  if (input.keyPressed('Escape')) state = STATES.WORLD_SELECT;
+  if (input.keyPressed('Escape')) state = STATES.START_SCREEN;
 }
 
 function renderWorldMap() {
