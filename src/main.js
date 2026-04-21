@@ -1673,7 +1673,7 @@ function updateWorldMap() {
   for (const z of zones) {
     if (!z.isCurrent) continue;
     if (input.clicked) {
-      const dx = input.x - z.cx, dy = input.y - z.cy;
+      const dx = input.mouseX - z.cx, dy = input.mouseY - z.cy;
       if (dx * dx + dy * dy <= z.r * z.r) {
         state = STATES.ZONE_MAP;
       }
