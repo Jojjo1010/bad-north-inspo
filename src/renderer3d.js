@@ -602,8 +602,40 @@ export class Renderer3D {
       const sx = screenPos.x;
       const sy = screenPos.y;
 
-      // Slot indicator on overlay
+      // Firing cone visualization
       const hasAuto = mount.hasAutoWeapon;
+      if (mount.isManned || hasAuto) {
+        const coneColor = mount.isManned && mount.crew
+          ? mount.crew.color
+          : (hasAuto && AUTO_WEAPONS[mount.autoWeaponId] ? AUTO_WEAPONS[mount.autoWeaponId].color : '#ffffff');
+
+        // Project center direction to screen space
+        const dirDist = 40;
+        const dirX = offset.x + Math.cos(mount.coneDirection) * dirDist;
+        const dirZ = offset.z + Math.sin(mount.coneDirection) * dirDist;
+        const dirScreen = this._project(dirX, dirZ);
+        const screenAngle = Math.atan2(dirScreen.y - sy, dirScreen.x - sx);
+
+        const coneRadius = 52;
+        const startAngle = screenAngle - mount.coneHalfAngle;
+        const endAngle = screenAngle + mount.coneHalfAngle;
+
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.arc(sx, sy, coneRadius, startAngle, endAngle, false);
+        ctx.closePath();
+        ctx.fillStyle = coneColor;
+        ctx.globalAlpha = 0.13;
+        ctx.fill();
+        ctx.strokeStyle = coneColor;
+        ctx.globalAlpha = 0.45;
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Slot indicator on overlay
       const active = mount.isManned || hasAuto;
       if (!hasAuto && !mount.isManned) {
         // Empty box to show "weapon slot available"
@@ -2465,7 +2497,7 @@ export class Renderer3D {
       ctx.fillStyle = h ? '#f5a623' : '#ccc';
       ctx.font = 'bold 16px monospace';
       ctx.textAlign = 'center';
-      const label = gameOverType === 'world' ? 'NEW WORLD' : gameOverType === 'combat' ? 'CONTINUE' : 'TRY AGAIN';
+      const label = gameOverType === 'world' ? 'NEW WORLD' : gameOverType === 'combat' ? 'CONTINUE' : 'MAIN MENU';
       ctx.fillText(label, btn.x + btn.w / 2, btn.y + btn.h / 2 + 5);
     }
   }
@@ -3066,6 +3098,326 @@ export class Renderer3D {
     ctx.arc(x, y, range, angle - halfAngle, angle + halfAngle);
     ctx.closePath();
     ctx.fill();
+  }
+
+  // =============================================
+  // START SCREEN
+  // =============================================
+  drawStartScreen(btn, input) {
+    const ctx = this.ctx;
+    const cx = CANVAS_WIDTH / 2;
+    const t = performance.now() * 0.001;
+
+    // Background gradient
+    const bg = ctx.createRadialGradient(cx, CANVAS_HEIGHT * 0.45, 60, cx, CANVAS_HEIGHT * 0.45, 500);
+    bg.addColorStop(0, '#1a1208');
+    bg.addColorStop(1, '#0a0804');
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+    // Animated dust/star particles (simple dots)
+    ctx.fillStyle = 'rgba(200,180,120,0.25)';
+    for (let i = 0; i < 40; i++) {
+      const px = ((i * 137.5 + t * 8) % CANVAS_WIDTH);
+      const py = ((i * 97.3 + t * 3) % CANVAS_HEIGHT);
+      ctx.fillRect(px, py, 1.5, 1.5);
+    }
+
+    // Title
+    const pulse = 1 + Math.sin(t * 1.8) * 0.02;
+    ctx.save();
+    ctx.translate(cx, 180);
+    ctx.scale(pulse, pulse);
+    ctx.fillStyle = '#f5a623';
+    ctx.font = 'bold 64px monospace';
+    ctx.textAlign = 'center';
+    ctx.shadowColor = '#c88a1a';
+    ctx.shadowBlur = 24;
+    ctx.fillText('TRAIN DEFENSE', 0, 0);
+    ctx.shadowBlur = 0;
+    ctx.restore();
+
+    // Subtitle
+    ctx.fillStyle = '#c8a96e';
+    ctx.font = '18px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('Transport medical supplies to Eastport.', cx, 230);
+    ctx.fillStyle = '#7a6040';
+    ctx.font = '13px monospace';
+    ctx.fillText('Survive the wasteland — or die trying.', cx, 254);
+
+    // Train silhouette decoration
+    ctx.fillStyle = 'rgba(245, 166, 35, 0.08)';
+    for (let c = 0; c < 4; c++) {
+      const carX = cx - 180 + c * 90;
+      const carY = 296;
+      this.roundRect(carX, carY, 80, 36, 4);
+      ctx.fill();
+    }
+
+    // START GAME button
+    const h = input.hitRect(btn.x, btn.y, btn.w, btn.h);
+    const glow = 0.6 + Math.sin(t * 3) * 0.4;
+    ctx.fillStyle = h ? '#3a2800' : '#2a1c00';
+    ctx.strokeStyle = h ? `rgba(245,166,35,${0.9 + glow * 0.1})` : `rgba(245,166,35,${0.5 + glow * 0.5})`;
+    ctx.lineWidth = h ? 2.5 : 2;
+    this.roundRect(btn.x, btn.y, btn.w, btn.h, 8);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = h ? '#f5a623' : '#c8a96e';
+    ctx.font = 'bold 22px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('START GAME', btn.x + btn.w / 2, btn.y + btn.h / 2 + 8);
+
+    ctx.fillStyle = '#555';
+    ctx.font = '11px monospace';
+    ctx.fillText('v1.0  —  Train Defense', cx, CANVAS_HEIGHT - 16);
+  }
+
+  // =============================================
+  // WORLD SELECT
+  // =============================================
+  drawWorldSelect(worlds, card, getCardX, hoveredIndex, input) {
+    const ctx = this.ctx;
+    const cx = CANVAS_WIDTH / 2;
+    const cardY = CANVAS_HEIGHT / 2 - card.h / 2;
+
+    // Background
+    ctx.fillStyle = '#0d0d18';
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+    ctx.fillStyle = '#f5a623';
+    ctx.font = 'bold 32px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('SELECT WORLD', cx, 70);
+
+    ctx.fillStyle = '#776040';
+    ctx.font = '14px monospace';
+    ctx.fillText('Each world is a full run across 3 zones.', cx, 100);
+
+    for (let i = 0; i < worlds.length; i++) {
+      const w = worlds[i];
+      const x = getCardX(i);
+      const isHovered = hoveredIndex === i;
+
+      // Card background
+      ctx.fillStyle = isHovered ? 'rgba(40,30,10,0.9)' : 'rgba(20,15,5,0.85)';
+      this.roundRect(x, cardY, card.w, card.h, 10);
+      ctx.fill();
+
+      // Card border
+      ctx.strokeStyle = isHovered ? w.accent : 'rgba(100,80,40,0.6)';
+      ctx.lineWidth = isHovered ? 2.5 : 1.5;
+      this.roundRect(x, cardY, card.w, card.h, 10);
+      ctx.stroke();
+
+      // World name
+      ctx.fillStyle = w.color;
+      ctx.font = 'bold 18px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(w.name, x + card.w / 2, cardY + 36);
+
+      // Subtitle
+      ctx.fillStyle = 'rgba(200,180,140,0.7)';
+      ctx.font = '11px monospace';
+      ctx.fillText(w.subtitle, x + card.w / 2, cardY + 56);
+
+      // Divider
+      ctx.strokeStyle = 'rgba(100,80,40,0.4)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.moveTo(x + 16, cardY + 70);
+      ctx.lineTo(x + card.w - 16, cardY + 70);
+      ctx.stroke();
+
+      // Difficulty stars
+      ctx.font = '22px monospace';
+      ctx.textAlign = 'center';
+      const stars = '★'.repeat(w.stars) + '☆'.repeat(3 - w.stars);
+      ctx.fillStyle = w.accent;
+      ctx.fillText(stars, x + card.w / 2, cardY + 102);
+      ctx.fillStyle = 'rgba(200,180,140,0.5)';
+      ctx.font = '11px monospace';
+      ctx.fillText('DIFFICULTY', x + card.w / 2, cardY + 118);
+
+      // Zone count
+      ctx.fillStyle = 'rgba(200,180,140,0.6)';
+      ctx.font = '12px monospace';
+      ctx.fillText('3 zones  •  Destination: Eastport', x + card.w / 2, cardY + 148);
+
+      // Multiplier badge
+      ctx.fillStyle = isHovered ? w.accent : 'rgba(160,130,60,0.7)';
+      ctx.font = 'bold 13px monospace';
+      ctx.fillText(`×${w.difficulty.toFixed(1)} enemy strength`, x + card.w / 2, cardY + 170);
+
+      // SELECT button at bottom of card
+      const selBtnY = cardY + card.h - 54;
+      ctx.fillStyle = isHovered ? '#2a1c00' : '#181008';
+      ctx.strokeStyle = isHovered ? w.accent : 'rgba(120,90,30,0.5)';
+      ctx.lineWidth = isHovered ? 2 : 1;
+      this.roundRect(x + 20, selBtnY, card.w - 40, 36, 6);
+      ctx.fill();
+      ctx.stroke();
+      ctx.fillStyle = isHovered ? w.accent : '#886030';
+      ctx.font = 'bold 14px monospace';
+      ctx.fillText('SELECT', x + card.w / 2, selBtnY + 23);
+    }
+
+    ctx.fillStyle = '#444';
+    ctx.font = '12px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('Press Esc to go back', cx, CANVAS_HEIGHT - 20);
+  }
+
+  // =============================================
+  // WORLD MAP
+  // =============================================
+  drawWorldMap(zones, world, zoneNumber, input) {
+    const ctx = this.ctx;
+    const cx = CANVAS_WIDTH / 2;
+    const t = performance.now() * 0.001;
+
+    // Background
+    ctx.fillStyle = '#0d0d18';
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+    // Header
+    ctx.fillStyle = world ? world.color : '#c8a96e';
+    ctx.font = 'bold 28px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(world ? world.name.toUpperCase() : 'WORLD MAP', cx, 60);
+    ctx.fillStyle = '#776040';
+    ctx.font = '13px monospace';
+    ctx.fillText('World Map  —  Select your zone', cx, 82);
+
+    // Draw railroad track between zones
+    if (zones.length > 1) {
+      for (let i = 0; i < zones.length - 1; i++) {
+        const a = zones[i], b = zones[i + 1];
+        const trackY = a.cy;
+        // Rail ties
+        ctx.strokeStyle = 'rgba(100,80,40,0.4)';
+        ctx.lineWidth = 1;
+        for (let tx = a.cx + a.r + 4; tx < b.cx - b.r - 4; tx += 14) {
+          ctx.beginPath();
+          ctx.moveTo(tx, trackY - 5);
+          ctx.lineTo(tx + 8, trackY - 5);
+          ctx.stroke();
+          ctx.beginPath();
+          ctx.moveTo(tx, trackY + 5);
+          ctx.lineTo(tx + 8, trackY + 5);
+          ctx.stroke();
+        }
+        // Rails
+        ctx.strokeStyle = a.completed ? 'rgba(200,160,60,0.6)' : 'rgba(80,65,35,0.5)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(a.cx + a.r, trackY - 5);
+        ctx.lineTo(b.cx - b.r, trackY - 5);
+        ctx.stroke();
+        ctx.beginPath();
+        ctx.moveTo(a.cx + a.r, trackY + 5);
+        ctx.lineTo(b.cx - b.r, trackY + 5);
+        ctx.stroke();
+      }
+    }
+
+    // Zone labels above nodes
+    const ZONE_NAMES = ['The Approach', 'The Heartlands', 'Final Stretch'];
+
+    for (const z of zones) {
+      const pulse = z.isCurrent ? 0.7 + Math.sin(t * 3) * 0.3 : 1;
+
+      // Node circle
+      if (z.completed) {
+        ctx.fillStyle = 'rgba(180,140,40,0.25)';
+      } else if (z.isCurrent) {
+        ctx.fillStyle = `rgba(40,30,10,${0.7 + Math.sin(t * 2) * 0.15})`;
+      } else {
+        ctx.fillStyle = 'rgba(10,10,10,0.6)';
+      }
+      ctx.beginPath();
+      ctx.arc(z.cx, z.cy, z.r, 0, Math.PI * 2);
+      ctx.fill();
+
+      // Node border
+      if (z.completed) {
+        ctx.strokeStyle = '#c8a96e';
+        ctx.lineWidth = 2;
+      } else if (z.isCurrent) {
+        ctx.strokeStyle = world ? world.accent : '#f5a623';
+        ctx.globalAlpha = pulse;
+        ctx.lineWidth = 2.5;
+      } else {
+        ctx.strokeStyle = 'rgba(60,50,30,0.5)';
+        ctx.lineWidth = 1.5;
+      }
+      ctx.beginPath();
+      ctx.arc(z.cx, z.cy, z.r, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+
+      // Zone icon / content
+      if (z.completed) {
+        ctx.fillStyle = '#c8a96e';
+        ctx.font = '28px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText('✓', z.cx, z.cy + 10);
+      } else if (z.isCurrent) {
+        ctx.fillStyle = world ? world.accent : '#f5a623';
+        ctx.font = 'bold 16px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(`ZONE ${z.number}`, z.cx, z.cy - 6);
+        ctx.font = '11px monospace';
+        ctx.fillStyle = 'rgba(200,180,140,0.8)';
+        ctx.fillText('click to enter', z.cx, z.cy + 10);
+      } else {
+        ctx.fillStyle = 'rgba(80,65,35,0.6)';
+        ctx.font = 'bold 14px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(`ZONE ${z.number}`, z.cx, z.cy + 5);
+      }
+
+      // Zone name below node
+      const name = ZONE_NAMES[z.index] || `Zone ${z.number}`;
+      ctx.fillStyle = z.isLocked ? 'rgba(100,80,40,0.4)' : z.completed ? '#9a7a3a' : (world ? world.color : '#c8a96e');
+      ctx.font = `${z.isCurrent ? 'bold ' : ''}13px monospace`;
+      ctx.textAlign = 'center';
+      ctx.fillText(name, z.cx, z.cy + z.r + 20);
+
+      // "COMPLETED" tag on finished zones
+      if (z.completed) {
+        ctx.fillStyle = 'rgba(180,140,40,0.5)';
+        ctx.font = '10px monospace';
+        ctx.fillText('COMPLETED', z.cx, z.cy + z.r + 36);
+      }
+    }
+
+    // Destination marker (Eastport)
+    const lastZone = zones[zones.length - 1];
+    const destX = lastZone.cx + lastZone.r + 60;
+    const destY = lastZone.cy;
+    ctx.fillStyle = 'rgba(245,166,35,0.15)';
+    ctx.beginPath();
+    ctx.arc(destX, destY, 28, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(245,166,35,0.4)';
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    ctx.arc(destX, destY, 28, 0, Math.PI * 2);
+    ctx.stroke();
+    ctx.fillStyle = '#f5a623';
+    ctx.font = '13px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('🏥', destX, destY + 4);
+    ctx.fillStyle = 'rgba(200,160,60,0.7)';
+    ctx.font = '10px monospace';
+    ctx.fillText('EASTPORT', destX, destY + 28 + 14);
+
+    ctx.fillStyle = '#444';
+    ctx.font = '12px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('Press Esc to change world', cx, CANVAS_HEIGHT - 20);
   }
 
   roundRect(x, y, w, h, r) {

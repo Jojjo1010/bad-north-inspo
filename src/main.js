@@ -15,7 +15,18 @@ import { BanditSystem, BANDIT_STATES } from './bandits.js';
 import { Zone, STATION_TYPES } from './zone.js';
 import { playPowerup, startMusic, stopMusic, getMusicVolume, getSfxVolume, setMusicVolume, setSfxVolume, playLevelUpMp3, playZoneCompleteMp3, playWinWorldMp3, playDefeatMp3, preloadSfx, playWeaponAcquire } from './audio.js';
 
-const STATES = { ZONE_MAP: 0, SETUP: 1, RUNNING: 2, LEVELUP: 3, PLACE_WEAPON: 4, GAMEOVER: 5, PAUSED: 6, SHOP: 7, SETTINGS: 8 };
+const STATES = {
+  ZONE_MAP: 0, SETUP: 1, RUNNING: 2, LEVELUP: 3, PLACE_WEAPON: 4,
+  GAMEOVER: 5, PAUSED: 6, SHOP: 7, SETTINGS: 8,
+  START_SCREEN: 9, WORLD_SELECT: 10, WORLD_MAP: 11,
+};
+
+// World definitions — each sets a base difficulty multiplier and theme
+const WORLDS = [
+  { id: 1, name: 'The Dustlands',  subtitle: 'Arid plains crossing',       difficulty: 1.0, color: '#c8a96e', accent: '#f5a623', stars: 1 },
+  { id: 2, name: 'Iron Wastes',    subtitle: 'Ruined industrial badlands',  difficulty: 1.5, color: '#8ab5c8', accent: '#5ab4db', stars: 2 },
+  { id: 3, name: 'The Inferno',    subtitle: 'Volcanic hellscape',          difficulty: 2.0, color: '#e87050', accent: '#e74c3c', stars: 3 },
+];
 
 const threeCanvas = document.getElementById('game3d');
 const uiCanvas = document.getElementById('gameUI');
@@ -36,7 +47,9 @@ const combat = new CombatSystem();
 const coinSystem = new CoinSystem();
 const banditSystem = new BanditSystem();
 
-let state = STATES.ZONE_MAP;
+let state = STATES.START_SCREEN;
+let selectedWorld = WORLDS[0];
+let hoveredWorldIndex = -1;
 let train = null;
 let zone = null;
 let lastTime = performance.now();
@@ -1012,8 +1025,8 @@ function afterGameOver() {
   if (won) {
     state = STATES.ZONE_MAP;
   } else {
-    startNewWorld();
-    state = STATES.ZONE_MAP;
+    // Death returns to the start screen so the player picks a world again
+    state = STATES.START_SCREEN;
   }
 }
 
@@ -1480,6 +1493,90 @@ function renderZoneMap() {
   renderer.flush();
 }
 
+// --- START SCREEN ---
+const startScreenBtn = { x: CANVAS_WIDTH / 2 - 110, y: CANVAS_HEIGHT / 2 + 30, w: 220, h: 56 };
+
+function updateStartScreen() {
+  if (input.clicked && input.hitRect(startScreenBtn.x, startScreenBtn.y, startScreenBtn.w, startScreenBtn.h)) {
+    state = STATES.WORLD_SELECT;
+  }
+}
+
+function renderStartScreen() {
+  renderer.drawStartScreen(startScreenBtn, input);
+  renderer.flush();
+}
+
+// --- WORLD SELECT ---
+const WORLD_CARD = { w: 210, h: 270, gap: 28 };
+
+function getWorldCardX(i) {
+  const total = WORLDS.length * WORLD_CARD.w + (WORLDS.length - 1) * WORLD_CARD.gap;
+  return CANVAS_WIDTH / 2 - total / 2 + i * (WORLD_CARD.w + WORLD_CARD.gap);
+}
+
+function updateWorldSelect() {
+  hoveredWorldIndex = -1;
+  const cardY = CANVAS_HEIGHT / 2 - WORLD_CARD.h / 2;
+  for (let i = 0; i < WORLDS.length; i++) {
+    const cx = getWorldCardX(i);
+    if (input.hitRect(cx, cardY, WORLD_CARD.w, WORLD_CARD.h)) {
+      hoveredWorldIndex = i;
+      if (input.clicked) {
+        selectedWorld = WORLDS[i];
+        startNewWorld();
+        // Apply world difficulty on top of the reset done by startNewWorld
+        combatDifficulty = selectedWorld.difficulty;
+        state = STATES.WORLD_MAP;
+      }
+    }
+  }
+  if (input.keyPressed('Escape')) state = STATES.START_SCREEN;
+}
+
+function renderWorldSelect() {
+  renderer.drawWorldSelect(WORLDS, WORLD_CARD, getWorldCardX, hoveredWorldIndex, input);
+  renderer.flush();
+}
+
+// --- WORLD MAP ---
+function getWorldMapZones() {
+  const nodeR = 48;
+  const gap = 120;
+  const total = ZONES_PER_WORLD * nodeR * 2 + (ZONES_PER_WORLD - 1) * gap;
+  const startX = CANVAS_WIDTH / 2 - total / 2 + nodeR;
+  const cy = CANVAS_HEIGHT / 2 - 10;
+  return Array.from({ length: ZONES_PER_WORLD }, (_, i) => ({
+    index: i,
+    number: i + 1,
+    cx: startX + i * (nodeR * 2 + gap),
+    cy,
+    r: nodeR,
+    completed: zoneNumber > i + 1,
+    isCurrent: zoneNumber === i + 1,
+    isLocked: zoneNumber < i + 1,
+  }));
+}
+
+function updateWorldMap() {
+  const zones = getWorldMapZones();
+  for (const z of zones) {
+    if (!z.isCurrent) continue;
+    if (input.clicked) {
+      const dx = input.x - z.cx, dy = input.y - z.cy;
+      if (dx * dx + dy * dy <= z.r * z.r) {
+        state = STATES.ZONE_MAP;
+      }
+    }
+  }
+  if (input.keyPressed('Escape')) state = STATES.WORLD_SELECT;
+}
+
+function renderWorldMap() {
+  renderer.drawWorldMap(getWorldMapZones(), selectedWorld, zoneNumber, input);
+  renderer.flush();
+}
+
 // --- MAIN LOOP ---
 function loop(timestamp) {
   const dt = Math.min((timestamp - lastTime) / 1000, 0.05);
@@ -1490,7 +1587,7 @@ function loop(timestamp) {
   if (input.keyPressed('F3')) debugMode = !debugMode;
 
   // Esc toggles pause (from running, setup, or levelup)
-  if (state !== STATES.PAUSED && state !== STATES.GAMEOVER && state !== STATES.SHOP && state !== STATES.ZONE_MAP && input.keyPressed('Escape')) {
+  if (state !== STATES.PAUSED && state !== STATES.GAMEOVER && state !== STATES.SHOP && state !== STATES.ZONE_MAP && state !== STATES.START_SCREEN && state !== STATES.WORLD_SELECT && state !== STATES.WORLD_MAP && input.keyPressed('Escape')) {
     stateBeforePause = state;
     state = STATES.PAUSED;
     // Consume the frame so updatePaused doesn't see the same Esc
@@ -1501,20 +1598,24 @@ function loop(timestamp) {
   }
 
   switch (state) {
-    case STATES.ZONE_MAP: updateZoneMap();  renderZoneMap();  break;
-    case STATES.SETUP:   updateSetup(dt);  renderSetup();    break;
-    case STATES.RUNNING: updateRun(dt);    renderRun();      break;
-    case STATES.LEVELUP: updateLevelUp();  renderLevelUp();  break;
-    case STATES.PLACE_WEAPON: updatePlaceWeapon(); renderPlaceWeapon(); break;
-    case STATES.GAMEOVER: updateGameOver(); renderGameOver(); break;
-    case STATES.PAUSED:  updatePaused();   renderPaused();   break;
-    case STATES.SHOP:    updateShop();     renderShop();     break;
-    case STATES.SETTINGS: updateSettings(); renderSettings(); break;
+    case STATES.START_SCREEN:  updateStartScreen();  renderStartScreen();  break;
+    case STATES.WORLD_SELECT:  updateWorldSelect();  renderWorldSelect();  break;
+    case STATES.WORLD_MAP:     updateWorldMap();     renderWorldMap();     break;
+    case STATES.ZONE_MAP:      updateZoneMap();      renderZoneMap();      break;
+    case STATES.SETUP:         updateSetup(dt);      renderSetup();        break;
+    case STATES.RUNNING:       updateRun(dt);        renderRun();          break;
+    case STATES.LEVELUP:       updateLevelUp();      renderLevelUp();      break;
+    case STATES.PLACE_WEAPON:  updatePlaceWeapon();  renderPlaceWeapon();  break;
+    case STATES.GAMEOVER:      updateGameOver();     renderGameOver();     break;
+    case STATES.PAUSED:        updatePaused();       renderPaused();       break;
+    case STATES.SHOP:          updateShop();         renderShop();         break;
+    case STATES.SETTINGS:      updateSettings();     renderSettings();     break;
   }
   input.endFrame();
   requestAnimationFrame(loop);
 }
 
+// Initialize game data so train/zone exist, but start on the title screen
 startNewWorld();
-train.updateWorldPositions(trainScreenX, trainScreenY);
+state = STATES.START_SCREEN;
 requestAnimationFrame(loop);
