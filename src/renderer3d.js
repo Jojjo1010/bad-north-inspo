@@ -682,6 +682,35 @@ export class Renderer3D {
     }
   }
 
+  drawMagnets(magnets) {
+    const ctx = this.ctx;
+    const t = performance.now() * 0.003;
+    for (const m of magnets) {
+      if (!m.active) continue;
+      const bobY = Math.sin(t + m.bobPhase) * 2;
+      const w = toWorld(m.x, m.y);
+      const s = this._project(w.x, w.z);
+      // Pulsing glow
+      const pulse = 0.6 + Math.sin(t * 3 + m.bobPhase) * 0.4;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y + bobY * 0.5, 16, 0, Math.PI * 2);
+      ctx.fillStyle = `rgba(230, 50, 50, ${pulse * 0.25})`;
+      ctx.fill();
+      // Magnet emoji
+      ctx.font = '18px serif';
+      ctx.textAlign = 'center';
+      ctx.fillText('\uD83E\uDDF2', s.x, s.y + bobY * 0.5 + 6);
+    }
+  }
+
+  drawMagnetFlash(coinSystem) {
+    if (!coinSystem || coinSystem.magnetFlash <= 0) return;
+    const ctx = this.ctx;
+    const alpha = Math.min(0.3, coinSystem.magnetFlash * 0.6);
+    ctx.fillStyle = `rgba(255, 200, 50, ${alpha})`;
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  }
+
   drawFlyingCoins(flyingCoins) {
     let idx = 0;
     for (const fc of flyingCoins) {

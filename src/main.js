@@ -450,6 +450,7 @@ function renderRun() {
   renderer.drawTerrain(train.distance);
   renderer.drawSteamBlastAura(train);
   renderer.drawWorldCoins(coinSystem.coins);
+  renderer.drawMagnets(coinSystem.magnets);
   renderer.drawEnemies(spawner.pool);
   renderer.drawDamageNumbers(combat.damageNumbers);
   renderer.drawProjectiles(combat.projectiles);
@@ -460,6 +461,7 @@ function renderRun() {
   renderer.drawBandits(banditSystem.pool);
   renderer.drawFlyingCoins(coinSystem.flyingCoins);
   renderer.drawDamageFlash(train);
+  renderer.drawMagnetFlash(coinSystem);
   // Show crew panel if any crew is unassigned (at bottom of screen, away from train)
   if (train.crew.some(c => !c.assignment && !c.isMoving)) {
     renderer.drawCrewPanel(train.crew, CANVAS_HEIGHT - 70);
