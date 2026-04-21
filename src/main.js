@@ -779,13 +779,19 @@ function enterGameOver() {
 
 function enterWorldComplete() {
   won = true;
-  goldEarned = 0;
+  // World completion bonus gold
+  goldEarned = 200 + Math.floor(train.runGold * 0.5);
+  save.gold += goldEarned;
   gameOverType = 'world';
   state = STATES.GAMEOVER;
   playVictory();
-  // Massive confetti burst
-  for (let i = 0; i < 6; i++) {
-    setTimeout(() => renderer.spawnConfetti(), i * 200);
+  // Massive confetti + fireworks bursts
+  for (let i = 0; i < 15; i++) {
+    setTimeout(() => renderer.spawnConfetti(), i * 150);
+  }
+  // Staggered firework bursts
+  for (let i = 0; i < 8; i++) {
+    setTimeout(() => renderer.spawnFirework(), 300 + i * 400);
   }
 }
 

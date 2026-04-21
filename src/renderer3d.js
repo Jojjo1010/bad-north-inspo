@@ -1476,15 +1476,24 @@ export class Renderer3D {
       ctx.fillStyle = '#fff';
       ctx.font = 'bold 20px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('All cargo delivered!', cx, cy + 30);
+      ctx.fillText('All cargo delivered!', cx, cy + 20);
       ctx.fillStyle = '#c8a96e';
       ctx.font = '14px monospace';
-      ctx.fillText('The wasteland couldn\'t stop this train.', cx, cy + 50);
+      ctx.fillText('The wasteland couldn\'t stop this train.', cx, cy + 40);
 
-      // Total gold
+      // Gold breakdown
+      ctx.fillStyle = '#aaa';
+      ctx.font = '14px monospace';
+      ctx.fillText(`World completion bonus`, cx, cy + 65);
+
       ctx.fillStyle = '#f5a623';
-      ctx.font = 'bold 28px monospace';
-      ctx.fillText(`Treasury: ${totalGold} Gold`, cx, cy + 85);
+      ctx.font = 'bold 24px monospace';
+      ctx.fillText(`+${goldEarned} Gold`, cx, cy + 90);
+
+      // Total treasury
+      ctx.fillStyle = '#c8a96e';
+      ctx.font = 'bold 18px monospace';
+      ctx.fillText(`Treasury: ${totalGold} Gold`, cx, cy + 118);
 
     } else if (gameOverType === 'zone') {
       // === ZONE WIN — delivered celebration ===
@@ -1560,7 +1569,7 @@ export class Renderer3D {
     }
 
     // Continue button (moved down for world complete)
-    const btnY = gameOverType === 'world' ? cy + 100 : cy + 70;
+    const btnY = gameOverType === 'world' ? cy + 140 : cy + 70;
     const btn = buttons.continue;
     const adjustedBtn = { ...btn, y: btnY };
     const hovered = input.hitRect(adjustedBtn.x, adjustedBtn.y, adjustedBtn.w, adjustedBtn.h);
@@ -2061,6 +2070,30 @@ export class Renderer3D {
       ctx.fillRect(-c.w / 2, -c.h / 2, c.w, c.h);
       ctx.globalAlpha = 1;
       ctx.restore();
+    }
+  }
+
+  spawnFirework() {
+    const colors = ['#f5a623', '#e74c3c', '#ff69b4', '#3498db', '#2ecc71', '#fff', '#f39c12'];
+    const cx = 100 + Math.random() * (CANVAS_WIDTH - 200);
+    const cy = 80 + Math.random() * (CANVAS_HEIGHT / 2);
+    const color = colors[Math.floor(Math.random() * colors.length)];
+    const sparks = 20 + Math.floor(Math.random() * 15);
+    for (let i = 0; i < sparks; i++) {
+      const angle = (i / sparks) * Math.PI * 2 + Math.random() * 0.3;
+      const speed = 80 + Math.random() * 120;
+      this.confetti.push({
+        x: cx,
+        y: cy,
+        vx: Math.cos(angle) * speed,
+        vy: Math.sin(angle) * speed - 40,
+        rot: 0,
+        rotV: 0,
+        w: 2 + Math.random() * 3,
+        h: 2 + Math.random() * 3,
+        color,
+        life: 0.8 + Math.random() * 0.6,
+      });
     }
   }
 
