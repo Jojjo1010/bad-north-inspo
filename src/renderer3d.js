@@ -983,16 +983,29 @@ export class Renderer3D {
       const alpha = Math.max(0, d.life / d.maxLife);
       // Float upward in screen space
       const yOff = t * -35;
-      // Pop-in scale: starts at 1.4x and settles to 1x
-      const scale = 1 + 0.4 * Math.max(0, 1 - t * 4);
-      const size = Math.round(18 * scale);
+      // Scale size and color by damage amount
+      const dmg = Math.round(d.damage);
+      const dmgScale = Math.min(2, 1 + dmg / 40); // bigger hits = bigger text
+      const popScale = 1 + 0.4 * Math.max(0, 1 - t * 4);
+      const size = Math.round(18 * dmgScale * popScale);
       ctx.font = `bold ${size}px monospace`;
-      // White outline for readability
+      // Color shifts from yellow (low) → orange (mid) → red (high)
+      let r, g, b;
+      if (dmg < 15) {
+        r = 255; g = 255; b = 100; // yellow
+      } else if (dmg < 30) {
+        const f = (dmg - 15) / 15;
+        r = 255; g = Math.round(255 - f * 130); b = Math.round(100 - f * 80); // → orange
+      } else {
+        const f = Math.min(1, (dmg - 30) / 30);
+        r = 255; g = Math.round(125 - f * 75); b = Math.round(20 + f * 20); // → red
+      }
+      // Outline for readability
       ctx.strokeStyle = `rgba(0, 0, 0, ${alpha * 0.8})`;
       ctx.lineWidth = 3;
-      ctx.strokeText(`-${Math.round(d.damage)}`, s.x, s.y + yOff);
-      ctx.fillStyle = `rgba(255, 255, 100, ${alpha})`;
-      ctx.fillText(`-${Math.round(d.damage)}`, s.x, s.y + yOff);
+      ctx.strokeText(`-${dmg}`, s.x, s.y + yOff);
+      ctx.fillStyle = `rgba(${r}, ${g}, ${b}, ${alpha})`;
+      ctx.fillText(`-${dmg}`, s.x, s.y + yOff);
     }
   }
 
