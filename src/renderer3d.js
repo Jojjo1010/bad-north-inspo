@@ -203,19 +203,28 @@ export class Renderer3D {
       this.flyingCoinPool.push(mesh);
     }
 
-    // Bandit pool — red figure (body + head)
+    // Bandit pool — bright red figure (body + head + arms)
     this.banditPool = [];
-    const banditMat = new THREE.MeshLambertMaterial({ color: 0xcc3333 });
+    const banditBodyMat = new THREE.MeshLambertMaterial({ color: 0xff2222 });
+    const banditHeadMat = new THREE.MeshLambertMaterial({ color: 0xffccaa });
     for (let i = 0; i < MAX_BANDITS; i++) {
       const group = new THREE.Group();
-      // Body
-      const body = new THREE.Mesh(new THREE.BoxGeometry(8, 10, 8), banditMat.clone());
-      body.position.y = 5;
+      // Body (torso)
+      const body = new THREE.Mesh(new THREE.BoxGeometry(12, 14, 10), banditBodyMat.clone());
+      body.position.y = 7;
       group.add(body);
       // Head
-      const head = new THREE.Mesh(new THREE.SphereGeometry(4, 8, 8), banditMat.clone());
-      head.position.y = 14;
+      const head = new THREE.Mesh(new THREE.SphereGeometry(5, 8, 8), banditHeadMat.clone());
+      head.position.y = 19;
       group.add(head);
+      // Left arm
+      const armL = new THREE.Mesh(new THREE.BoxGeometry(4, 12, 4), banditBodyMat.clone());
+      armL.position.set(-8, 7, 0);
+      group.add(armL);
+      // Right arm
+      const armR = new THREE.Mesh(new THREE.BoxGeometry(4, 12, 4), banditBodyMat.clone());
+      armR.position.set(8, 7, 0);
+      group.add(armR);
       group.visible = false;
       this.scene.add(group);
       this.banditPool.push(group);
@@ -483,6 +492,26 @@ export class Renderer3D {
         ctx.font = '12px serif';
         ctx.textAlign = 'center';
         ctx.fillText('\uD83D\uDC31', sx, sy + 4);
+
+        // Idle crew warning — crew on auto-weapon mount, no bandit (guarding after fight)
+        if (hasAuto && !mount._bandit) {
+          const warn = 0.5 + Math.sin(performance.now() * 0.008) * 0.5;
+          ctx.save();
+          // Orange pulsing circle
+          ctx.beginPath();
+          ctx.arc(sx, sy - 16, 10, 0, Math.PI * 2);
+          ctx.fillStyle = `rgba(255, 165, 0, ${warn * 0.4})`;
+          ctx.fill();
+          // Warning icon + text
+          ctx.font = 'bold 11px monospace';
+          ctx.textAlign = 'center';
+          ctx.strokeStyle = 'rgba(0,0,0,0.7)';
+          ctx.lineWidth = 2;
+          ctx.strokeText('⚠ IDLE', sx, sy - 13);
+          ctx.fillStyle = `rgba(255, 200, 50, ${warn})`;
+          ctx.fillText('⚠ IDLE', sx, sy - 13);
+          ctx.restore();
+        }
 
         // Project a point offset in the shooting direction to get screen-space angle
         const dirDist = 30; // 3D offset distance
@@ -944,19 +973,31 @@ export class Renderer3D {
           }
 
           if (!fighting && b.targetSlot?.autoWeaponId) {
-            // Disabled weapon — red pulsing X
+            // Disabled weapon — large red glow + big X
             const pulse = 0.6 + Math.sin(performance.now() * 0.008) * 0.4;
-            ctx.strokeStyle = `rgba(231, 76, 60, ${pulse})`;
-            ctx.lineWidth = 3;
+            // Red glow circle behind
+            const glowR = 22 + Math.sin(performance.now() * 0.01) * 4;
             ctx.beginPath();
-            ctx.moveTo(sx - 8, sy - 8); ctx.lineTo(sx + 8, sy + 8);
-            ctx.moveTo(sx + 8, sy - 8); ctx.lineTo(sx - 8, sy + 8);
+            ctx.arc(sx, sy, glowR, 0, Math.PI * 2);
+            ctx.fillStyle = `rgba(231, 50, 50, ${pulse * 0.35})`;
+            ctx.fill();
+            // Big X
+            ctx.strokeStyle = `rgba(255, 40, 40, ${pulse})`;
+            ctx.lineWidth = 5;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.moveTo(sx - 14, sy - 14); ctx.lineTo(sx + 14, sy + 14);
+            ctx.moveTo(sx + 14, sy - 14); ctx.lineTo(sx - 14, sy + 14);
             ctx.stroke();
-
-            ctx.fillStyle = '#e74c3c';
-            ctx.font = 'bold 9px monospace';
+            ctx.lineCap = 'butt';
+            // DISABLED label
+            ctx.strokeStyle = `rgba(0,0,0,0.8)`;
+            ctx.lineWidth = 3;
+            ctx.font = 'bold 13px monospace';
             ctx.textAlign = 'center';
-            ctx.fillText('DISABLED!', sx, sy - 18);
+            ctx.strokeText('DISABLED!', sx, sy - 24);
+            ctx.fillStyle = '#ff4444';
+            ctx.fillText('DISABLED!', sx, sy - 24);
           }
 
           // "Move crew here!" prompt — pulsing arrow
@@ -1355,12 +1396,82 @@ export class Renderer3D {
   drawAutoWeaponHUD(train) {
     const ctx = this.ctx;
     const startX = 16;
-    const slotW = 42;
-    const slotH = 30;
-    const gap = 8;
+    const slotW = 48;
+    const slotH = 34;
+    const gap = 6;
+    const crewNames = ['Orb', 'Davie', 'Punk'];
 
-    const defY = CANVAS_HEIGHT - 72;
-    ctx.fillStyle = '#aaa';
+    // --- CREW ROW (top) ---
+    const crewY = CANVAS_HEIGHT - 116;
+    ctx.fillStyle = '#ccc';
+    ctx.font = 'bold 8px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('CREW', startX, crewY - 3);
+
+    for (let i = 0; i < 3; i++) {
+      const x = startX + i * (slotW + gap);
+      const c = train.crew[i];
+      if (c) {
+        // Filled crew slot
+        ctx.fillStyle = 'rgba(0,0,0,0.5)';
+        this.roundRect(x, crewY, slotW, slotH, 4);
+        ctx.fill();
+        ctx.strokeStyle = c.color;
+        ctx.lineWidth = 1.5;
+        this.roundRect(x, crewY, slotW, slotH, 4);
+        ctx.stroke();
+        // Name
+        ctx.font = 'bold 8px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = c.color;
+        ctx.fillText(crewNames[i], x + slotW / 2, crewY + 10);
+        // Gun icon + level
+        ctx.font = '12px monospace';
+        ctx.fillText('\uD83D\uDD2B', x + slotW / 2, crewY + 23);
+        this._drawLevelPips(ctx, x + 2, crewY + 1, c.gunLevel, c.color);
+      } else {
+        // Locked crew slot
+        this._drawSlotBox(ctx, x, crewY, slotW, slotH, false, '#555');
+        ctx.font = 'bold 8px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = '#555';
+        ctx.fillText(crewNames[i], x + slotW / 2, crewY + 14);
+        ctx.font = '10px monospace';
+        ctx.fillText('🔒', x + slotW / 2, crewY + 26);
+      }
+    }
+
+    // --- WEAPONS ROW (middle, auto-weapons only) ---
+    const weapY = CANVAS_HEIGHT - 74;
+    ctx.fillStyle = '#ccc';
+    ctx.font = 'bold 8px monospace';
+    ctx.textAlign = 'left';
+    ctx.fillText('WEAPONS', startX, weapY - 3);
+
+    if (!train._autoWeaponEntries || train._autoWeaponEntriesLen !== train.autoWeaponCount) {
+      train._autoWeaponEntries = Object.entries(train.autoWeapons);
+      train._autoWeaponEntriesLen = train.autoWeaponCount;
+    }
+    const equippedAutos = train._autoWeaponEntries;
+    for (let i = 0; i < train.maxAutoWeapons; i++) {
+      const x = startX + i * (slotW + gap);
+      const entry = equippedAutos[i];
+      this._drawSlotBox(ctx, x, weapY, slotW, slotH, !!entry);
+      if (entry) {
+        const [id, w] = entry;
+        const def = AUTO_WEAPONS[id];
+        ctx.font = '14px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = def.color;
+        const autoIcon = id === 'turret' ? '\uD83E\uDD16' : def.icon;
+        ctx.fillText(autoIcon, x + slotW / 2, weapY + 16);
+        this._drawLevelPips(ctx, x + 2, weapY + 1, w.level, def.color);
+      }
+    }
+
+    // --- DEFENSE ROW (bottom) ---
+    const defY = CANVAS_HEIGHT - 36;
+    ctx.fillStyle = '#ccc';
     ctx.font = 'bold 8px monospace';
     ctx.textAlign = 'left';
     ctx.fillText('DEFENSE', startX, defY - 3);
@@ -1373,49 +1484,8 @@ export class Renderer3D {
         ctx.font = '14px monospace';
         ctx.textAlign = 'center';
         ctx.fillStyle = def.color;
-        ctx.fillText(def.icon, x + slotW / 2, defY + 15);
-        this._drawLevelPips(ctx, x, defY, def.level, def.color);
-      }
-    }
-
-    const weapY = CANVAS_HEIGHT - 36;
-    ctx.fillStyle = '#aaa';
-    ctx.font = 'bold 8px monospace';
-    ctx.textAlign = 'left';
-    ctx.fillText('WEAPONS', startX, weapY - 3);
-
-    // One slot per crew member showing their gun level
-    for (let i = 0; i < train.crew.length; i++) {
-      const c = train.crew[i];
-      const x = startX + i * (slotW + gap);
-      ctx.fillStyle = 'rgba(0,0,0,0.5)';
-      this.roundRect(x, weapY, slotW, slotH, 4);
-      ctx.fill();
-      ctx.font = '14px monospace';
-      ctx.textAlign = 'center';
-      ctx.fillStyle = c.color;
-      ctx.fillText(MANUAL_GUN.icon, x + slotW / 2, weapY + 15);
-      this._drawLevelPips(ctx, x, weapY, c.gunLevel, c.color);
-    }
-
-    // Cache to avoid Object.entries allocation per frame
-    if (!train._autoWeaponEntries || train._autoWeaponEntriesLen !== train.autoWeaponCount) {
-      train._autoWeaponEntries = Object.entries(train.autoWeapons);
-      train._autoWeaponEntriesLen = train.autoWeaponCount;
-    }
-    const equippedAutos = train._autoWeaponEntries;
-    for (let i = 0; i < train.maxAutoWeapons; i++) {
-      const x = startX + (train.crew.length + i) * (slotW + gap);
-      const entry = equippedAutos[i];
-      this._drawSlotBox(ctx, x, weapY, slotW, slotH, !!entry);
-      if (entry) {
-        const [id, w] = entry;
-        const def = AUTO_WEAPONS[id];
-        ctx.font = '14px monospace';
-        ctx.textAlign = 'center';
-        ctx.fillStyle = def.color;
-        ctx.fillText(def.icon, x + slotW / 2, weapY + 15);
-        this._drawLevelPips(ctx, x, weapY, w.level, def.color);
+        ctx.fillText(def.icon, x + slotW / 2, defY + 16);
+        this._drawLevelPips(ctx, x + 2, defY + 1, def.level, def.color);
       }
     }
   }
