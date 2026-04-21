@@ -585,7 +585,7 @@ export class Renderer3D {
 
       // Color by source
       if (mesh.material && mesh.material.color) {
-        mesh.material.color.set(p.source === 'auto' ? '#ff8800' : '#ffeeaa');
+        mesh.material.color.set(p.color);
       }
       idx++;
     }
@@ -1305,15 +1305,19 @@ export class Renderer3D {
     ctx.textAlign = 'left';
     ctx.fillText('WEAPONS', startX, weapY - 3);
 
-    const mgX = startX;
-    ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    this.roundRect(mgX, weapY, slotW, slotH, 4);
-    ctx.fill();
-    ctx.font = '14px monospace';
-    ctx.textAlign = 'center';
-    ctx.fillStyle = MANUAL_GUN.color;
-    ctx.fillText(MANUAL_GUN.icon, mgX + slotW / 2, weapY + 15);
-    this._drawLevelPips(ctx, mgX, weapY, train.manualGunLevel, MANUAL_GUN.color);
+    // One slot per crew member showing their gun level
+    for (let i = 0; i < train.crew.length; i++) {
+      const c = train.crew[i];
+      const x = startX + i * (slotW + gap);
+      ctx.fillStyle = 'rgba(0,0,0,0.5)';
+      this.roundRect(x, weapY, slotW, slotH, 4);
+      ctx.fill();
+      ctx.font = '14px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillStyle = c.color;
+      ctx.fillText(MANUAL_GUN.icon, x + slotW / 2, weapY + 15);
+      this._drawLevelPips(ctx, x, weapY, c.gunLevel, c.color);
+    }
 
     // Cache to avoid Object.entries allocation per frame
     if (!train._autoWeaponEntries || train._autoWeaponEntriesLen !== train.autoWeaponCount) {
@@ -1322,7 +1326,7 @@ export class Renderer3D {
     }
     const equippedAutos = train._autoWeaponEntries;
     for (let i = 0; i < train.maxAutoWeapons; i++) {
-      const x = startX + (i + 1) * (slotW + gap);
+      const x = startX + (train.crew.length + i) * (slotW + gap);
       const entry = equippedAutos[i];
       this._drawSlotBox(ctx, x, weapY, slotW, slotH, !!entry);
       if (entry) {

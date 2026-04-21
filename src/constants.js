@@ -133,7 +133,7 @@ export const SHOP_TUNING = {
   maxHp:    { cost: T('SHOP_MAXHP_COST', 30),    maxLevel: T('SHOP_MAXHP_MAX_LEVEL', 5),    perLevel: T('SHOP_MAXHP_PER_LEVEL', 15) },
   baseArea: { cost: T('SHOP_RANGE_COST', 40),    maxLevel: T('SHOP_RANGE_MAX_LEVEL', 5),    perLevel: T('SHOP_RANGE_PER_LEVEL', 15) },
   greed:    { cost: T('SHOP_GREED_COST', 60),    maxLevel: T('SHOP_GREED_MAX_LEVEL', 3),    perLevel: T('SHOP_GREED_PER_LEVEL', 20) },
-  crewSlots:{ cost: T('SHOP_CREW_COST', 100),    maxLevel: T('SHOP_CREW_MAX_LEVEL', 2) },
+  crewSlots:{ cost: T('SHOP_CREW_COST', 300),    maxLevel: T('SHOP_CREW_MAX_LEVEL', 2) },
 };
 
 // Run

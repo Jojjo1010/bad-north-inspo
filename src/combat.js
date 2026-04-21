@@ -15,10 +15,11 @@ export class Projectile {
     this.damage = 0;
     this.lifetime = 0;
     this.radius = PROJECTILE_RADIUS;
-    this.source = 'crew'; // 'crew' or 'auto'
+    this.source = 'crew';
+    this.color = '#ffeeaa';
   }
 
-  spawn(x, y, angle, damage, source = 'crew') {
+  spawn(x, y, angle, damage, source = 'crew', color = '#ffeeaa') {
     this.active = true;
     this.x = x;
     this.y = y;
@@ -27,6 +28,7 @@ export class Projectile {
     this.damage = damage;
     this.lifetime = PROJECTILE_LIFETIME;
     this.source = source;
+    this.color = color;
   }
 
   update(dt) {
@@ -196,7 +198,7 @@ export class CombatSystem {
       let damage = mount.damage * train.totalDamageMultiplier;
       if (hasDriver) damage *= DRIVER_DAMAGE_BUFF;
 
-      this.fireProjectile(mount.worldX, mount.worldY, angle, damage);
+      this.fireProjectile(mount.worldX, mount.worldY, angle, damage, 'crew', mount.crew.color);
       mount.cooldownTimer = (1 / mount.fireRate) * train.totalCooldownMultiplier;
       playShoot();
     }
@@ -255,9 +257,9 @@ export class CombatSystem {
     return closest;
   }
 
-  fireProjectile(x, y, angle, damage, source = 'crew') {
+  fireProjectile(x, y, angle, damage, source = 'crew', color = '#ffeeaa') {
     const proj = this.projectiles.find(p => !p.active);
-    if (proj) proj.spawn(x, y, angle, damage, source);
+    if (proj) proj.spawn(x, y, angle, damage, source, color);
   }
 
   checkProjectileHits(enemies, train) {
@@ -332,7 +334,7 @@ export class CombatSystem {
               const lx = closest.x + (closest.vx || 0) * t;
               const ly = closest.y + (closest.vy || 0) * t;
               const angle = Math.atan2(ly - my, lx - mx) + (s - (stats.shotsPerBurst - 1) / 2) * 0.08;
-              this.fireProjectile(mx, my, angle, dmg, 'auto');
+              this.fireProjectile(mx, my, angle, dmg, 'auto', '#ff8800');
             }
             m.coneDirection = Math.atan2(closest.y - my, closest.x - mx);
             playShoot();

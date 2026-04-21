@@ -153,16 +153,19 @@ function prepareForCombat() {
 function generateLevelUpCards(train) {
   const cards = [];
 
-  // Manual gun upgrade
-  if (train.manualGunLevel < MANUAL_GUN.maxLevel) {
-    const nextLv = train.manualGunLevel + 1;
-    const nextStats = MANUAL_GUN.levels[nextLv - 1];
-    cards.push({
-      type: 'upgradeManual',
-      name: `${MANUAL_GUN.name} Lv${nextLv}`, icon: MANUAL_GUN.icon, color: MANUAL_GUN.color,
-      desc: `DMG ${nextStats.damage} | Rate ${nextStats.fireRate.toFixed(1)}/s`,
-      apply(t) { t.upgradeManualGun(); },
-    });
+  // Per-crew manual gun upgrades
+  for (const c of train.crew) {
+    if (c.gunLevel < MANUAL_GUN.maxLevel) {
+      const nextLv = c.gunLevel + 1;
+      const nextStats = MANUAL_GUN.levels[nextLv - 1];
+      const crewId = c.id;
+      cards.push({
+        type: 'upgradeManual',
+        name: `Crew ${crewId + 1} Gun Lv${nextLv}`, icon: MANUAL_GUN.icon, color: c.color,
+        desc: `DMG ${nextStats.damage} | Rate ${nextStats.fireRate.toFixed(1)}/s`,
+        apply(t) { t.crew[crewId].gunLevel = nextLv; },
+      });
+    }
   }
 
   // Auto-weapon cards (max 2 auto weapons)
