@@ -202,6 +202,27 @@ export function playDefeat() {
   osc.stop(c.currentTime + 1.0);
 }
 
+// --- ONE-SHOT MP3 SFX ---
+const mp3Cache = {};
+
+async function playMp3(url, volume = 0.5) {
+  const c = getCtx();
+  if (!mp3Cache[url]) {
+    const resp = await fetch(url);
+    const arrayBuf = await resp.arrayBuffer();
+    mp3Cache[url] = await c.decodeAudioData(arrayBuf);
+  }
+  const source = c.createBufferSource();
+  source.buffer = mp3Cache[url];
+  const g = sfxGain(volume);
+  source.connect(g);
+  source.start();
+}
+
+export function playLevelUpMp3() { playMp3('assets/levelup.mp3', 0.6); }
+export function playZoneCompleteMp3() { playMp3('assets/zonecomplete.mp3', 0.7); }
+export function playWinWorldMp3() { playMp3('assets/winworld.mp3', 0.7); }
+
 // --- BACKGROUND MUSIC (MP3 file, looping) ---
 async function loadMusicBuffer() {
   if (musicBuffer) return musicBuffer;

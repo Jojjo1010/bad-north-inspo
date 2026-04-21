@@ -13,7 +13,7 @@ import { CombatSystem } from './combat.js';
 import { CoinSystem } from './coins.js';
 import { BanditSystem, BANDIT_STATES } from './bandits.js';
 import { Zone, STATION_TYPES } from './zone.js';
-import { playLevelUp, playPowerup, playVictory, playDefeat, startMusic, stopMusic, getMusicVolume, getSfxVolume, setMusicVolume, setSfxVolume } from './audio.js';
+import { playLevelUp, playPowerup, playVictory, playDefeat, startMusic, stopMusic, getMusicVolume, getSfxVolume, setMusicVolume, setSfxVolume, playLevelUpMp3, playZoneCompleteMp3, playWinWorldMp3 } from './audio.js';
 
 const STATES = { ZONE_MAP: 0, SETUP: 1, RUNNING: 2, LEVELUP: 3, PLACE_WEAPON: 4, GAMEOVER: 5, PAUSED: 6, SHOP: 7, SETTINGS: 8 };
 
@@ -477,7 +477,7 @@ function updateRun(dt) {
     state = STATES.LEVELUP;
     kbPowerupIndex = 0;
     hoveredPowerup = 0;
-    playLevelUp();
+    playLevelUpMp3();
     renderer.spawnConfetti();
   }
 }
@@ -818,7 +818,7 @@ function enterGameOver() {
   state = STATES.GAMEOVER;
   gameOverType = won ? 'zone' : 'death';
   if (won) {
-    playVictory();
+    playZoneCompleteMp3();
     for (let i = 0; i < 6; i++) {
       setTimeout(() => renderer.spawnConfetti(), i * 150);
     }
@@ -834,7 +834,7 @@ function enterWorldComplete() {
   save.gold += goldEarned;
   gameOverType = 'world';
   state = STATES.GAMEOVER;
-  playVictory();
+  playWinWorldMp3();
   // Massive confetti + fireworks bursts
   for (let i = 0; i < 15; i++) {
     setTimeout(() => renderer.spawnConfetti(), i * 150);
