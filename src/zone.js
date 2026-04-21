@@ -1,6 +1,8 @@
 // Zone map: a graph of stations connected by paths
 // Player starts at station 0, goal is to reach the final station
 
+import { STATION_MODIFIERS, MODIFIER_KEYS } from './constants.js';
+
 export const STATION_TYPES = {
   COMBAT: 'combat',
   EMPTY: 'empty',
@@ -145,6 +147,14 @@ export class Zone {
       if (longRoute.length >= 4 && Math.random() < 0.6) {
         const restIdx = 1 + Math.floor(Math.random() * (longRoute.length - 2));
         this.stations[longRoute[restIdx]].type = STATION_TYPES.EMPTY;
+      }
+    }
+
+    // Assign a random modifier to each combat station
+    for (const station of this.stations) {
+      if (station.type === STATION_TYPES.COMBAT) {
+        const key = MODIFIER_KEYS[Math.floor(Math.random() * MODIFIER_KEYS.length)];
+        station.modifier = STATION_MODIFIERS[key];
       }
     }
   }

@@ -98,7 +98,8 @@ export class CoinSystem {
         this.spawnMagnet();
       }
       this.spawnCoin();
-      this.spawnTimer = COIN_SPAWN_INTERVAL * (0.7 + Math.random() * 0.6);
+      const coinMult = this.modifier ? this.modifier.coinMult : 1;
+      this.spawnTimer = COIN_SPAWN_INTERVAL / coinMult * (0.7 + Math.random() * 0.6);
     }
 
     if (this.magnetFlash > 0) this.magnetFlash -= dt;
@@ -185,5 +186,6 @@ export class CoinSystem {
     this.spawnTimer = 2;
     this.goldCollected = 0;
     this.magnetFlash = 0;
+    this.modifier = null;
   }
 }

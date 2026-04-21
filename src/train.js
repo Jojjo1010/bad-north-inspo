@@ -202,6 +202,7 @@ export class Train {
     this.cargoBoxes = CARGO_BOXES_START;
     this.damageFlash = 0;
     this.shakeTimer = 0;
+    this.hpFlashTimer = 0;
     this.armorReduction = 0;
     this.greedMultiplier = 1;
     this._regenRate = 0;

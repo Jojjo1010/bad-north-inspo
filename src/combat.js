@@ -140,13 +140,21 @@ export class CombatSystem {
       this.damageNumbers.push(new DamageNumber());
     }
     this.pendingLevelUp = false;
+    // Kill effects: consumed each frame by the renderer
+    this.killEffects = []; // { x, y, color }
+    // Muzzle flashes: queued when a crew (manual) weapon fires, consumed each frame
+    this.muzzleFlashes = []; // { x, y }
+    // Hit sparks: queued when a projectile deals non-lethal damage, consumed each frame
+    this.hitSparks = []; // { x, y }
   }
 
-  handleEnemyDamageResult(e, train) {
+  handleEnemyDamageResult(e, train, ex = 0, ey = 0, ecolor = '#2d6a2e') {
     if (!e.active) {
       playEnemyKill();
       const leveled = train.addXP(XP_PER_KILL);
       if (leveled) this.pendingLevelUp = true;
+      // Queue a kill effect at the enemy's last position
+      this.killEffects.push({ x: ex, y: ey, color: ecolor });
     } else {
       playEnemyHit();
     }
@@ -201,6 +209,10 @@ export class CombatSystem {
 
       this.fireProjectile(mount.worldX, mount.worldY, angle, damage, 'crew', mount.crew.color);
       mount.cooldownTimer = (1 / mount.fireRate) * train.totalCooldownMultiplier;
+      // Queue muzzle flash at mount screen position (screenX/Y set by renderer each frame)
+      if (mount.screenX !== undefined && mount.screenY !== undefined) {
+        this.muzzleFlashes.push({ x: mount.screenX, y: mount.screenY });
+      }
       playShoot();
     }
 
@@ -274,9 +286,13 @@ export class CombatSystem {
         const minDist = p.radius + e.radius;
         if (dist <= minDist * minDist) {
           this.spawnDamageNumber(e.x, e.y, p.damage);
-          e.takeDamage(p.damage);
+          const ex = e.x, ey = e.y, ecolor = e.color;
+          const hitX = p.x, hitY = p.y;
+          e.takeDamage(p.damage, p.vx, p.vy);
           p.active = false;
-          this.handleEnemyDamageResult(e, train);
+          this.handleEnemyDamageResult(e, train, ex, ey, ecolor);
+          // Queue hit spark when enemy survives (non-lethal hit)
+          if (e.active) this.hitSparks.push({ x: hitX, y: hitY });
           break;
         }
       }
@@ -295,6 +311,7 @@ export class CombatSystem {
           train.hp -= Math.max(1, e.damage - train.totalShieldReduction);
           train.damageFlash = 0.25;
           train.shakeTimer = 0.2;
+          train.hpFlashTimer = 0.4;
           playTrainDamage();
           e.active = false;
           break;
@@ -364,8 +381,9 @@ export class CombatSystem {
             const dx = e.x - mx, dy = e.y - my;
             if (dx * dx + dy * dy <= r2) {
               this.spawnDamageNumber(e.x, e.y, dmg);
+              const ex = e.x, ey = e.y, ecolor = e.color;
               e.takeDamage(dmg);
-              this.handleEnemyDamageResult(e, train);
+              this.handleEnemyDamageResult(e, train, ex, ey, ecolor);
             }
           }
         }
@@ -400,9 +418,10 @@ export class CombatSystem {
         const dy = bolt.y - e.y;
         if (dx * dx + dy * dy <= (e.radius + 6) * (e.radius + 6)) {
           this.spawnDamageNumber(e.x, e.y, bolt.damage);
-          e.takeDamage(bolt.damage);
+          const ex = e.x, ey = e.y, ecolor = e.color;
+          e.takeDamage(bolt.damage, bolt.vx, bolt.vy);
           bolt.hitEnemies.add(e);
-          this.handleEnemyDamageResult(e, train);
+          this.handleEnemyDamageResult(e, train, ex, ey, ecolor);
           bolt.bouncesLeft--;
           if (bolt.bouncesLeft <= 0) {
             bolt.active = false;
@@ -432,5 +451,8 @@ export class CombatSystem {
     for (const b of this.ricochetBolts) b.active = false;
     for (const d of this.damageNumbers) d.active = false;
     this.pendingLevelUp = false;
+    this.killEffects.length = 0;
+    this.muzzleFlashes.length = 0;
+    this.hitSparks.length = 0;
   }
 }

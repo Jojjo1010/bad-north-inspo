@@ -157,6 +157,16 @@ export const WAVE_ESCALATION = T('WAVE_ESCALATION', 0.15);             // per-wa
 export const WAVE_WARNING_DURATION = T('WAVE_WARNING_DURATION', 3);    // seconds of warning before surge
 export const WAVE_BOSS_SURGE_MULT = T('WAVE_BOSS_SURGE_MULT', 3.5);   // extra intense boss wave multiplier
 
+// Station combat modifiers
+export const STATION_MODIFIERS = {
+  swarm:    { id: 'swarm',    name: 'Swarm',    spawnMult: 2.0, hpMult: 0.5, coinMult: 1,   goldMult: 1,   color: '#e74c3c' },
+  armored:  { id: 'armored',  name: 'Armored',  spawnMult: 0.5, hpMult: 2.5, coinMult: 1,   goldMult: 1,   color: '#3498db' },
+  ambush:   { id: 'ambush',   name: 'Ambush',   spawnMult: 1.5, hpMult: 1,   coinMult: 1,   goldMult: 1,   color: '#e67e22' },
+  bounty:   { id: 'bounty',   name: 'Bounty',   spawnMult: 1,   hpMult: 1,   coinMult: 2,   goldMult: 1,   color: '#f5a623' },
+  gauntlet: { id: 'gauntlet', name: 'Gauntlet', spawnMult: 1.5, hpMult: 1.5, coinMult: 1,   goldMult: 1.5, color: '#9b59b6' },
+};
+export const MODIFIER_KEYS = Object.keys(STATION_MODIFIERS);
+
 // Pools
 export const MAX_ENEMIES = 150;
 export const MAX_PROJECTILES = 300;

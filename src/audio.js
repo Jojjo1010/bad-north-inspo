@@ -165,6 +165,26 @@ export function playZoneCompleteMp3() { playMp3('assets/zonecomplete.mp3', 0.7);
 export function playWinWorldMp3() { playMp3('assets/winworld.mp3', 0.7); }
 export function playDefeatMp3() { playMp3('assets/loose.mp3', 0.7); }
 
+export function playWeaponAcquire() {
+  const c = getCtx();
+  // Three ascending tones: C5 → E5 → G5 (523Hz → 659Hz → 784Hz)
+  const tones = [523, 659, 784];
+  const noteDuration = 0.08;
+  tones.forEach((freq, i) => {
+    const osc = c.createOscillator();
+    const g = sfxGain(0.15);
+    osc.type = 'triangle';
+    osc.frequency.value = freq;
+    const start = c.currentTime + i * noteDuration;
+    const end = start + noteDuration;
+    g.gain.setValueAtTime(0.15, start);
+    g.gain.exponentialRampToValueAtTime(0.001, end + 0.05);
+    osc.connect(g);
+    osc.start(start);
+    osc.stop(end + 0.05);
+  });
+}
+
 export function playStealCoin() {
   // Try MP3 first, fallback to synth
   playMp3('assets/steal.mp3', 1.0).catch(() => {});

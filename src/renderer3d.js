@@ -71,6 +71,34 @@ export class Renderer3D {
     this._zoneGold = 0;
     this._kbHighlightStation = -1;
 
+    // --- Kill effect particles (pool of 50) ---
+    this._killParticles = [];
+    for (let i = 0; i < 50; i++) {
+      this._killParticles.push({ active: false, x: 0, y: 0, vx: 0, vy: 0, life: 0, maxLife: 0, color: '#fff', radius: 2 });
+    }
+    // Kill effect expanding rings
+    this._killRings = [];
+    for (let i = 0; i < 20; i++) {
+      this._killRings.push({ active: false, x: 0, y: 0, radius: 0, maxRadius: 0, life: 0, maxLife: 0, color: '#fff' });
+    }
+    // Kill effect white flash (small pool of 20)
+    this._killFlashes = [];
+    for (let i = 0; i < 20; i++) {
+      this._killFlashes.push({ active: false, x: 0, y: 0, radius: 0, life: 0, maxLife: 0 });
+    }
+
+    // --- Muzzle flash pool (max 20) ---
+    this._muzzleFlashes = [];
+    for (let i = 0; i < 20; i++) {
+      this._muzzleFlashes.push({ active: false, x: 0, y: 0, life: 0, maxLife: 0.08 });
+    }
+
+    // --- Hit spark pool (max 30) ---
+    this._hitSparks = [];
+    for (let i = 0; i < 30; i++) {
+      this._hitSparks.push({ active: false, x: 0, y: 0, life: 0, maxLife: 0.05 });
+    }
+
     // --- FBX Models ---
     this.models = {};
     this.modelsLoaded = false;
@@ -382,7 +410,8 @@ export class Renderer3D {
   applyShake(train, dt) {
     if (train.shakeTimer > 0) {
       train.shakeTimer -= dt;
-      const intensity = train.shakeTimer * 30;
+      const intensityMult = train.shakeIntensity !== undefined ? train.shakeIntensity : 1.0;
+      const intensity = train.shakeTimer * 30 * intensityMult;
       this.shakeX = (Math.random() - 0.5) * intensity;
       this.shakeY = (Math.random() - 0.5) * intensity;
       this.camera.position.copy(this.cameraBasePos);
@@ -396,6 +425,106 @@ export class Renderer3D {
       this.ctx.setTransform(1, 0, 0, 1, 0, 0);
     }
     if (train.damageFlash > 0) train.damageFlash -= dt;
+  }
+
+  // =============================================
+  // KILL EFFECTS
+  // =============================================
+  spawnKillEffect(x, y, color) {
+    // Spawn expanding ring
+    const ring = this._killRings.find(r => !r.active);
+    if (ring) {
+      ring.active = true;
+      ring.x = x;
+      ring.y = y;
+      ring.radius = 4;
+      ring.maxRadius = 40;
+      ring.life = 0.25;
+      ring.maxLife = 0.25;
+      ring.color = color;
+    }
+
+    // Spawn 6 outward particles with randomized sizes
+    for (let i = 0; i < 6; i++) {
+      const p = this._killParticles.find(p => !p.active);
+      if (!p) break;
+      const angle = (i / 6) * Math.PI * 2 + (Math.random() - 0.5) * 0.8;
+      const speed = 80 + Math.random() * 80;
+      p.active = true;
+      p.x = x;
+      p.y = y;
+      p.vx = Math.cos(angle) * speed;
+      p.vy = Math.sin(angle) * speed;
+      p.life = 0.3 + Math.random() * 0.15;
+      p.maxLife = p.life;
+      p.color = color;
+      p.radius = 1 + Math.random() * 2; // 1–3px
+    }
+
+    // Spawn white flash
+    const flash = this._killFlashes.find(f => !f.active);
+    if (flash) {
+      flash.active = true;
+      flash.x = x;
+      flash.y = y;
+      flash.radius = 12;
+      flash.life = 0.06;
+      flash.maxLife = 0.06;
+    }
+  }
+
+  updateAndDrawKillEffects(dt) {
+    const ctx = this.ctx;
+
+    // Update + draw white flashes (drawn first, behind particles)
+    for (const f of this._killFlashes) {
+      if (!f.active) continue;
+      f.life -= dt;
+      if (f.life <= 0) { f.active = false; continue; }
+      const t = 1 - f.life / f.maxLife; // 0→1
+      const radius = f.radius * (1 - t); // shrinks to 0
+      const alpha = f.life / f.maxLife;
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, Math.max(0, radius), 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.globalAlpha = alpha;
+      ctx.fill();
+    }
+
+    // Update + draw particles
+    for (const p of this._killParticles) {
+      if (!p.active) continue;
+      p.x += p.vx * dt;
+      p.y += p.vy * dt;
+      p.vx *= Math.max(0, 1 - 8 * dt);
+      p.vy *= Math.max(0, 1 - 8 * dt);
+      p.life -= dt;
+      if (p.life <= 0) { p.active = false; continue; }
+      const alpha = p.life / p.maxLife;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, p.radius ?? 2, 0, Math.PI * 2);
+      ctx.fillStyle = p.color;
+      ctx.globalAlpha = alpha;
+      ctx.fill();
+    }
+
+    // Update + draw rings
+    for (const r of this._killRings) {
+      if (!r.active) continue;
+      r.life -= dt;
+      if (r.life <= 0) { r.active = false; continue; }
+      const t = 1 - r.life / r.maxLife; // 0→1
+      r.radius = 4 + (r.maxRadius - 4) * t;
+      const alpha = (1 - t) * 0.8;
+      ctx.beginPath();
+      ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
+      ctx.strokeStyle = r.color;
+      ctx.lineWidth = 2;
+      ctx.globalAlpha = alpha;
+      ctx.stroke();
+    }
+
+    ctx.globalAlpha = 1;
   }
 
   drawTerrain(scrollOffset) {
@@ -486,6 +615,30 @@ export class Renderer3D {
         ctx.setLineDash([4, 3]);
         ctx.strokeRect(sx - boxSize / 2, sy - boxSize / 2, boxSize, boxSize);
         ctx.setLineDash([]);
+      }
+
+      // FEATURE 1: Auto-weapon mount glow — pulsing colored ring when occupied
+      if (hasAuto && !mount._bandit) {
+        const weaponDef = AUTO_WEAPONS[mount.autoWeaponId];
+        const glowColor = weaponDef ? weaponDef.color : '#ffffff';
+        const now = performance.now();
+        const pulse = 0.55 + Math.sin(now * 0.005 + i * 1.2) * 0.45;
+        const glowR = MOUNT_RADIUS + 5 + Math.sin(now * 0.007 + i) * 2;
+        ctx.save();
+        ctx.beginPath();
+        ctx.arc(sx, sy, glowR, 0, Math.PI * 2);
+        ctx.strokeStyle = glowColor;
+        ctx.lineWidth = 2;
+        ctx.globalAlpha = pulse * 0.7;
+        ctx.stroke();
+        // Inner fill tint
+        ctx.beginPath();
+        ctx.arc(sx, sy, MOUNT_RADIUS - 1, 0, Math.PI * 2);
+        ctx.fillStyle = glowColor;
+        ctx.globalAlpha = pulse * 0.2;
+        ctx.fill();
+        ctx.globalAlpha = 1;
+        ctx.restore();
       }
 
       if (mount.crew) {
@@ -672,6 +825,102 @@ export class Renderer3D {
     }
   }
 
+  // =============================================
+  // FEATURE 1: TRAIN POWER AURA
+  // Subtle glow behind the train that grows with active auto-weapons
+  // =============================================
+  drawTrainPowerAura(train) {
+    const weaponCount = train.autoWeaponCount; // 0, 1, or 2+
+    if (weaponCount === 0) return;
+
+    const ctx = this.ctx;
+    const now = performance.now();
+
+    // Find the screen-space bounding box of the train mounts to center the aura
+    // The train is centered near screen center; use a fixed approximate box
+    // Train runs from roughly x=300 to x=680 on screen at CANVAS_WIDTH=960
+    const trainCx = CANVAS_WIDTH / 2 - 20;
+    const trainCy = CANVAS_HEIGHT / 2;
+    const auraW = 420;
+    const auraH = 80;
+
+    // Intensity ramps: 1 weapon = faint, 2+ weapons = stronger
+    const maxAlpha = weaponCount >= 2 ? 0.18 : 0.10;
+    const pulse = 0.6 + Math.sin(now * 0.0025) * 0.4;
+    const alpha = maxAlpha * pulse;
+
+    // Color shifts from cool blue (1 weapon) to warm gold (2 weapons)
+    const color = weaponCount >= 2 ? `rgba(255, 200, 80, ${alpha})` : `rgba(100, 180, 255, ${alpha})`;
+
+    ctx.save();
+    // Soft glow: draw a few concentric ellipses fading outward
+    for (let layer = 3; layer >= 0; layer--) {
+      const expand = layer * 12;
+      const layerAlpha = alpha * (1 - layer * 0.22);
+      ctx.beginPath();
+      ctx.ellipse(trainCx, trainCy, auraW / 2 + expand, auraH / 2 + expand, 0, 0, Math.PI * 2);
+      ctx.fillStyle = weaponCount >= 2
+        ? `rgba(255, 200, 80, ${layerAlpha})`
+        : `rgba(100, 180, 255, ${layerAlpha})`;
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // =============================================
+  // FEATURE 1: PASSIVE BUFF PIPS ON TRAIN
+  // Small colored dots near the train indicating active shop passives
+  // =============================================
+  drawTrainPassivePips(train) {
+    const ctx = this.ctx;
+    const now = performance.now();
+
+    // Collect active passives (only ones with level > 0)
+    const PASSIVE_COLORS = {
+      damage:   '#ff5722',
+      shield:   '#3498db',
+      maxHp:    '#e74c3c',
+      coolOff:  '#00bcd4',
+      baseArea: '#9b59b6',
+    };
+
+    const activePips = [];
+    for (const [key, color] of Object.entries(PASSIVE_COLORS)) {
+      const lvl = train.passives[key] || 0;
+      if (lvl > 0) activePips.push({ key, color, level: lvl });
+    }
+    if (activePips.length === 0) return;
+
+    // Place pips as a small row just above-left of the train center
+    const startX = CANVAS_WIDTH / 2 - (activePips.length * 10) / 2 - 80;
+    const pipY = CANVAS_HEIGHT / 2 - 38;
+    const pipSpacing = 10;
+    const pipR = 3.5;
+
+    ctx.save();
+    for (let i = 0; i < activePips.length; i++) {
+      const pip = activePips[i];
+      const px = startX + i * pipSpacing;
+      // Subtle pulse per pip
+      const pulse = 0.7 + Math.sin(now * 0.004 + i * 0.8) * 0.3;
+      ctx.beginPath();
+      ctx.arc(px, pipY, pipR, 0, Math.PI * 2);
+      ctx.fillStyle = pip.color;
+      ctx.globalAlpha = pulse * 0.85;
+      ctx.fill();
+      // Inner bright dot for higher levels
+      if (pip.level >= 3) {
+        ctx.beginPath();
+        ctx.arc(px, pipY, pipR * 0.45, 0, Math.PI * 2);
+        ctx.fillStyle = '#fff';
+        ctx.globalAlpha = pulse * 0.6;
+        ctx.fill();
+      }
+    }
+    ctx.globalAlpha = 1;
+    ctx.restore();
+  }
+
   drawSteamBlastAura(train) {
     if (!train.autoWeapons.steamBlast) {
       this.steamRing.visible = false;
@@ -805,6 +1054,132 @@ export class Renderer3D {
       ctx.fillText('\uD83D\uDC31', sx, sy + 6);
       ctx.globalAlpha = 1;
     }
+  }
+
+  // =============================================
+  // FEATURE 2: BANDIT TELEGRAPHING
+  // =============================================
+
+  // Draw pulsing "!" above a bandit that has boarded the train, and a dashed
+  // guide arrow from the nearest unassigned crew member to that mount.
+  drawBanditTelegraphing(bandits, crew) {
+    const ctx = this.ctx;
+    const now = performance.now();
+
+    for (const b of bandits) {
+      if (!b.active) continue;
+      if (b.state !== 2 /* ON_TRAIN */ && b.state !== 3 /* FIGHTING */) continue;
+      if (!b.targetSlot) continue;
+
+      const sx = b.targetSlot.screenX ?? b.targetSlot.worldX;
+      const sy = b.targetSlot.screenY ?? b.targetSlot.worldY;
+
+      // --- Pulsing "!" exclamation above the mount ---
+      const excPulse = 0.4 + Math.abs(Math.sin(now * 0.009)) * 0.6;
+      const excBob = Math.sin(now * 0.009) * 3;
+      ctx.save();
+      ctx.textAlign = 'center';
+      ctx.font = 'bold 18px monospace';
+      ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+      ctx.lineWidth = 3;
+      ctx.strokeText('!', sx, sy - 30 + excBob);
+      ctx.fillStyle = `rgba(255, 50, 30, ${excPulse})`;
+      ctx.fillText('!', sx, sy - 30 + excBob);
+      ctx.restore();
+
+      // --- Crew-hint arrow: nearest unassigned crew → bandit mount ---
+      // Only show when bandit is stealing (not fighting — crew is already there)
+      if (b.state === 2 /* ON_TRAIN */) {
+        let nearestCrew = null;
+        let nearestDist = Infinity;
+        for (const c of crew) {
+          if (c.isMoving && c.moveTargetSlot === b.targetSlot) continue; // already going there
+          const cx = c.assignment
+            ? (c.assignment.screenX ?? c.assignment.worldX)
+            : c.panelX;
+          const cy = c.assignment
+            ? (c.assignment.screenY ?? c.assignment.worldY)
+            : c.panelY;
+          const dist = Math.hypot(cx - sx, cy - sy);
+          if (dist < nearestDist) {
+            nearestDist = dist;
+            nearestCrew = { cx, cy };
+          }
+        }
+
+        if (nearestCrew && nearestDist > 30) {
+          const { cx, cy } = nearestCrew;
+          const dx = sx - cx;
+          const dy = sy - cy;
+          const len = Math.hypot(dx, dy);
+          const ux = dx / len;
+          const uy = dy / len;
+          const startGap = 16;
+          const endGap = 14;
+          const x1 = cx + ux * startGap;
+          const y1 = cy + uy * startGap;
+          const x2 = sx - ux * endGap;
+          const y2 = sy - uy * endGap;
+
+          const arrowPulse = 0.3 + Math.abs(Math.sin(now * 0.006)) * 0.5;
+
+          ctx.save();
+          ctx.strokeStyle = `rgba(255, 220, 50, ${arrowPulse})`;
+          ctx.lineWidth = 1.5;
+          ctx.setLineDash([6, 5]);
+          ctx.lineDashOffset = -(now * 0.06) % 11; // animated marching ants
+          ctx.beginPath();
+          ctx.moveTo(x1, y1);
+          ctx.lineTo(x2, y2);
+          ctx.stroke();
+          ctx.setLineDash([]);
+          ctx.lineDashOffset = 0;
+
+          // Arrow head
+          const headLen = 7;
+          const headAngle = 0.45;
+          const angle = Math.atan2(y2 - y1, x2 - x1);
+          ctx.fillStyle = `rgba(255, 220, 50, ${arrowPulse})`;
+          ctx.beginPath();
+          ctx.moveTo(x2, y2);
+          ctx.lineTo(x2 - Math.cos(angle - headAngle) * headLen,
+                     y2 - Math.sin(angle - headAngle) * headLen);
+          ctx.lineTo(x2 - Math.cos(angle + headAngle) * headLen,
+                     y2 - Math.sin(angle + headAngle) * headLen);
+          ctx.closePath();
+          ctx.fill();
+          ctx.restore();
+        }
+      }
+    }
+  }
+
+  // Draw the "Drag crew to fight off bandits!" first-boarding tooltip.
+  // fadeTimer: seconds remaining (0-3 range, drawn while > 0).
+  drawBanditBoardingTooltip(fadeTimer) {
+    if (fadeTimer <= 0) return;
+    const ctx = this.ctx;
+    const alpha = Math.min(1, fadeTimer); // full alpha until last second, then fades
+    const tipW = 360;
+    const tipH = 40;
+    const tipX = CANVAS_WIDTH / 2 - tipW / 2;
+    const tipY = CANVAS_HEIGHT / 2 + 80;
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = 'rgba(20, 20, 40, 0.88)';
+    this.roundRect(tipX, tipY, tipW, tipH, 8);
+    ctx.fill();
+    ctx.strokeStyle = 'rgba(255, 200, 50, 0.9)';
+    ctx.lineWidth = 1.5;
+    this.roundRect(tipX, tipY, tipW, tipH, 8);
+    ctx.stroke();
+
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 13px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('Drag crew to fight off bandits!', CANVAS_WIDTH / 2, tipY + 26);
+    ctx.restore();
   }
 
   drawBandits(bandits, allMounts) {
@@ -1092,6 +1467,189 @@ export class Renderer3D {
     ctx.fillText('SELECTED', x, y - r - 8);
   }
 
+  // =============================================
+  // CREW INFO CARD
+  // =============================================
+  drawCrewInfoCard(crew) {
+    if (!crew) return;
+    const ctx = this.ctx;
+
+    // Resolve screen position of crew member
+    let cx, cy;
+    if (crew.isMoving) {
+      if (crew.moveScreenX !== undefined) {
+        cx = crew.moveScreenX;
+        cy = crew.moveScreenY;
+      } else {
+        const proj = this._project(crew.moveX - CANVAS_WIDTH / 2, crew.moveY - CANVAS_HEIGHT / 2, 16);
+        cx = proj.x;
+        cy = proj.y;
+      }
+    } else if (crew.assignment) {
+      cx = crew.assignment.screenX ?? crew.assignment.worldX;
+      cy = crew.assignment.screenY ?? crew.assignment.worldY;
+    } else {
+      cx = crew.panelX;
+      cy = crew.panelY;
+    }
+
+    // Role bonus text per role
+    const roleBonusMap = {
+      Gunner:   '+20% damage',
+      Engineer: '-15% cooldown',
+      Medic:    '+2 HP/s regen',
+    };
+    const roleBonus = roleBonusMap[crew.role] || '';
+
+    // Card dimensions
+    const cardW = 120;
+    const cardH = 62;
+
+    // Position: offset to the right and slightly above the crew circle
+    // Clamp so the card never goes off-screen
+    let cardX = cx + 20;
+    let cardY = cy - cardH - 8;
+    if (cardX + cardW > CANVAS_WIDTH - 4) cardX = cx - cardW - 20;
+    if (cardY < 4) cardY = cy + 20;
+
+    ctx.save();
+
+    // Background
+    ctx.fillStyle = 'rgba(10, 14, 22, 0.82)';
+    ctx.beginPath();
+    this.roundRect(cardX, cardY, cardW, cardH, 6);
+    ctx.fill();
+
+    // Border in crew colour
+    ctx.strokeStyle = crew.color;
+    ctx.lineWidth = 1.5;
+    ctx.beginPath();
+    this.roundRect(cardX, cardY, cardW, cardH, 6);
+    ctx.stroke();
+
+    ctx.textAlign = 'left';
+
+    // Name
+    ctx.fillStyle = crew.color;
+    ctx.font = 'bold 13px monospace';
+    ctx.fillText(crew.name || `Crew ${crew.id + 1}`, cardX + 8, cardY + 17);
+
+    // Role
+    ctx.fillStyle = 'rgba(255,255,255,0.65)';
+    ctx.font = '10px monospace';
+    ctx.fillText(crew.role ? crew.role.toUpperCase() : '', cardX + 8, cardY + 30);
+
+    // Role bonus
+    if (roleBonus) {
+      ctx.fillStyle = '#f5a623';
+      ctx.font = 'bold 10px monospace';
+      ctx.fillText(roleBonus, cardX + 8, cardY + 43);
+    }
+
+    // Gun level
+    ctx.fillStyle = 'rgba(255,255,255,0.5)';
+    ctx.font = '9px monospace';
+    ctx.fillText(`Gun Lv.${crew.gunLevel}`, cardX + 8, cardY + 56);
+
+    ctx.restore();
+  }
+
+  // Spawn + tick muzzle flash at world position (x, y in pixel/canvas coords)
+  spawnMuzzleFlash(x, y) {
+    const f = this._muzzleFlashes.find(f => !f.active);
+    if (!f) return;
+    f.active = true;
+    f.x = x;
+    f.y = y;
+    f.maxLife = 0.08;
+    f.life = f.maxLife;
+  }
+
+  updateAndDrawMuzzleFlashes(dt) {
+    const ctx = this.ctx;
+    for (const f of this._muzzleFlashes) {
+      if (!f.active) continue;
+      f.life -= dt;
+      if (f.life <= 0) { f.active = false; continue; }
+      const t = f.life / f.maxLife; // 1→0
+      const radius = 8 * t;
+      const alpha = t;
+      ctx.save();
+      ctx.globalAlpha = alpha;
+      // Outer glow — yellow
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, radius, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffe066';
+      ctx.fill();
+      // Inner core — white
+      ctx.beginPath();
+      ctx.arc(f.x, f.y, radius * 0.45, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // Spawn hit spark at world pixel position (same coord space as projectiles/enemies)
+  spawnHitSpark(pixelX, pixelY) {
+    const s = this._hitSparks.find(s => !s.active);
+    if (!s) return;
+    const w = toWorld(pixelX, pixelY);
+    const screen = this._project(w.x, w.z, 5);
+    s.active = true;
+    s.x = screen.x;
+    s.y = screen.y;
+    s.maxLife = 0.05;
+    s.life = s.maxLife;
+  }
+
+  updateAndDrawHitSparks(dt) {
+    const ctx = this.ctx;
+    for (const s of this._hitSparks) {
+      if (!s.active) continue;
+      s.life -= dt;
+      if (s.life <= 0) { s.active = false; continue; }
+      const t = s.life / s.maxLife; // 1→0
+      const radius = 5 * t;
+      ctx.save();
+      ctx.globalAlpha = t * 0.9;
+      ctx.beginPath();
+      ctx.arc(s.x, s.y, radius, 0, Math.PI * 2);
+      ctx.fillStyle = '#ffffff';
+      ctx.fill();
+      ctx.restore();
+    }
+  }
+
+  // Draw trajectory preview dashed line from mount screen pos toward mouse
+  drawTrajectoryPreview(mount, mouseX, mouseY) {
+    // mount must have screenX/screenY set (done by drawWeaponMounts)
+    if (mount.screenX === undefined || mount.screenY === undefined) return;
+    const sx = mount.screenX;
+    const sy = mount.screenY;
+    const dx = mouseX - sx;
+    const dy = mouseY - sy;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist < 1) return;
+    const nx = dx / dist;
+    const ny = dy / dist;
+    const lineLen = 150;
+    const ex = sx + nx * lineLen;
+    const ey = sy + ny * lineLen;
+    const ctx = this.ctx;
+    ctx.save();
+    ctx.globalAlpha = 0.3;
+    ctx.strokeStyle = '#ffffff';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([6, 5]);
+    ctx.beginPath();
+    ctx.moveTo(sx, sy);
+    ctx.lineTo(ex, ey);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    ctx.restore();
+  }
+
   drawDamageNumbers(numbers) {
     const ctx = this.ctx;
     ctx.textAlign = 'center';
@@ -1171,6 +1729,14 @@ export class Renderer3D {
       const green = hpRatio > 0.5 ? '#4f4' : hpRatio > 0.25 ? '#fa3' : '#f44';
       ctx.fillStyle = green;
       ctx.fillRect(hpX + 4 + i * (segW + segGap), hpY + 5, segW, hpBarH - 2);
+    }
+
+    // HP bar damage flash — bright red overlay over the entire bar
+    if (train.hpFlashTimer > 0) {
+      train.hpFlashTimer -= 0.016; // decremented here; renderer runs each frame
+      const flashAlpha = Math.min(0.9, (train.hpFlashTimer / 0.4) * 0.9);
+      ctx.fillStyle = `rgba(255, 40, 40, ${flashAlpha})`;
+      ctx.fillRect(hpX + 4, hpY + 4, hpBarW, hpBarH);
     }
 
     // === XP BAR — top-center ===
@@ -1277,6 +1843,26 @@ export class Renderer3D {
       ctx.fillText(`${waveInfo.waveNumber}`, waveX + 50, waveY + 20);
     }
 
+    // Active modifier badge — bottom-left, above wave counter
+    if (waveInfo.modifier) {
+      const mod = waveInfo.modifier;
+      const badgeX = 12;
+      const badgeY = CANVAS_HEIGHT - 88;
+      ctx.fillStyle = 'rgba(0,0,0,0.65)';
+      ctx.beginPath();
+      this.roundRect(badgeX, badgeY, 110, 22, 4);
+      ctx.fill();
+      ctx.strokeStyle = mod.color;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      this.roundRect(badgeX, badgeY, 110, 22, 4);
+      ctx.stroke();
+      ctx.fillStyle = mod.color;
+      ctx.font = 'bold 11px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText(mod.name.toUpperCase(), badgeX + 6, badgeY + 15);
+    }
+
     // Surge warning banner — top center
     if (waveInfo.isWarning) {
       const pulse = 0.5 + Math.sin(now * 0.01) * 0.5;
@@ -1304,6 +1890,35 @@ export class Renderer3D {
       ctx.textAlign = 'center';
       const nextWave = waveInfo.waveNumber + 1;
       ctx.fillText(`Wave ${nextWave} \u2014 ${waveInfo.warningLabel}`, CANVAS_WIDTH / 2, bannerY + 24);
+
+      // Direction indicator below warning banner
+      const dirLabels = {
+        right:  '\u2192 FROM AHEAD',
+        top:    '\u2193 FROM ABOVE',
+        bottom: '\u2191 FROM BELOW',
+        both:   '\u2195 PINCER ATTACK',
+      };
+      const dirLabel = dirLabels[waveInfo.direction] || dirLabels.right;
+      const dirBannerW = 260;
+      const dirBannerH = 28;
+      const dirBannerX = CANVAS_WIDTH / 2 - dirBannerW / 2;
+      const dirBannerY = bannerY + bannerH + 4;
+
+      ctx.fillStyle = `rgba(180, 120, 0, ${0.75 + pulse * 0.2})`;
+      ctx.beginPath();
+      this.roundRect(dirBannerX, dirBannerY, dirBannerW, dirBannerH, 5);
+      ctx.fill();
+
+      ctx.strokeStyle = `rgba(255, 200, 50, ${0.6 + pulse * 0.4})`;
+      ctx.lineWidth = 1.5;
+      ctx.beginPath();
+      this.roundRect(dirBannerX, dirBannerY, dirBannerW, dirBannerH, 5);
+      ctx.stroke();
+
+      ctx.fillStyle = `rgba(255, 230, 80, ${0.85 + pulse * 0.15})`;
+      ctx.font = 'bold 14px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(dirLabel, CANVAS_WIDTH / 2, dirBannerY + 19);
     }
 
     // Active surge indicator — pulsing red border overlay on edges
@@ -2293,6 +2908,15 @@ export class Renderer3D {
         ctx.fillStyle = '#e74c3c';
         ctx.font = '12px monospace';
         ctx.fillText('\uD83D\uDE82', x, y - bh / 2 - 12);
+      }
+
+      // Modifier label below combat stations (only if revealed)
+      if (station.modifier && station.revealed && station.type === 'combat') {
+        const mod = station.modifier;
+        ctx.font = 'bold 8px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillStyle = station.visited ? '#666' : mod.color;
+        ctx.fillText(mod.name.toUpperCase(), x, y + bh / 2 + 10);
       }
     }
 

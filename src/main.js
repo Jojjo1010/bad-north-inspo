@@ -13,7 +13,7 @@ import { CombatSystem } from './combat.js';
 import { CoinSystem } from './coins.js';
 import { BanditSystem, BANDIT_STATES } from './bandits.js';
 import { Zone, STATION_TYPES } from './zone.js';
-import { playPowerup, startMusic, stopMusic, getMusicVolume, getSfxVolume, setMusicVolume, setSfxVolume, playLevelUpMp3, playZoneCompleteMp3, playWinWorldMp3, playDefeatMp3, preloadSfx } from './audio.js';
+import { playPowerup, startMusic, stopMusic, getMusicVolume, getSfxVolume, setMusicVolume, setSfxVolume, playLevelUpMp3, playZoneCompleteMp3, playWinWorldMp3, playDefeatMp3, preloadSfx, playWeaponAcquire } from './audio.js';
 
 const STATES = { ZONE_MAP: 0, SETUP: 1, RUNNING: 2, LEVELUP: 3, PLACE_WEAPON: 4, GAMEOVER: 5, PAUSED: 6, SHOP: 7, SETTINGS: 8 };
 
@@ -93,6 +93,18 @@ const pauseButtons = {
 let zoneNumber = 1;
 let combatDifficulty = 1;
 
+// --- FEATURE 2: first-boarding tooltip state ---
+let banditBoardingTooltipShown = false; // resets each new run/world
+let banditBoardingTooltipTimer = 0;     // counts down from 3 seconds
+
+// --- Wave phase tracking (for surge shake) ---
+let prevWavePhase = -1; // -1 = uninitialized; compared each frame in updateRun
+
+// --- Weapon fanfare state ---
+let fanfareTimer = 0;   // seconds remaining in fanfare freeze
+let fanfareText = '';   // e.g. "TURRET ACQUIRED!"
+let fanfareColor = '#f5a623';
+
 function newZone() {
   zoneNumber++;
   if (zoneNumber > ZONES_PER_WORLD) {
@@ -135,19 +147,27 @@ function startNewWorld() {
   train.hp = train.maxHp;
 }
 
-function prepareForCombat(isBossStation = false) {
+function prepareForCombat(isBossStation = false, modifier = null) {
   state = STATES.SETUP;
   train.combatDifficulty = combatDifficulty;
   train.distance = 0;
   train.runGold = 0;
   train.damageFlash = 0;
   train.shakeTimer = 0;
+  train.hpFlashTimer = 0;
   selectedCrew = null;
   spawner.reset();
   spawner.isBossStation = isBossStation;
-  combat.reset();
+  spawner.modifier = modifier || null;
+  if (modifier && modifier.id === 'ambush') spawner.applyAmbush();
   coinSystem.reset();
+  coinSystem.modifier = modifier || null;
+  combat.reset();
   banditSystem.reset();
+  banditBoardingTooltipShown = false;
+  banditBoardingTooltipTimer = 0;
+  prevWavePhase = -1;
+  fanfareTimer = 0;
   won = false;
   applyShopUpgrades();
   train.hp = Math.min(train.hp, train.maxHp);
@@ -384,6 +404,7 @@ function renderSetup() {
   renderer.drawDepartButton(departBtn.x, departBtn.y, departBtn.w, departBtn.h,
     crewReady && input.hitRect(departBtn.x, departBtn.y, departBtn.w, departBtn.h), !crewReady);
   if (selectedCrew) renderer.drawSelectedIndicator(selectedCrew);
+  if (selectedCrew) renderer.drawCrewInfoCard(selectedCrew);
   renderer.flush();
 }
 
@@ -462,11 +483,37 @@ function updateRun(dt) {
     frontWeapon: { x: train.cars[2].worldX, y: train.cars[2].worldY, w: CAR_WIDTH, h: CAR_HEIGHT },
   };
   spawner.update(dt, train.distance, carBounds, train.combatDifficulty || 1);
+
+  // Wave phase transition detection → screen shake
+  const currentPhase = spawner.waveInfo.phase;
+  if (prevWavePhase !== -1 && currentPhase !== prevWavePhase) {
+    if (currentPhase === 2 /* SURGE */) {
+      // Surge start — strong shake
+      train.shakeTimer = 0.3;
+      train.shakeIntensity = 1.5; // slightly larger multiplier for surge
+    } else if (currentPhase === 1 /* WARNING */) {
+      // Warning start — mild shake
+      train.shakeTimer = 0.15;
+      train.shakeIntensity = 1.0;
+    }
+  }
+  prevWavePhase = currentPhase;
+
   for (const e of spawner.pool) e.update(dt);
   combat.update(dt, train, spawner.pool, selectedCrew);
 
   // Bandits
   banditSystem.update(dt, train, train.combatDifficulty || 1);
+
+  // FEATURE 2: detect first boarding and start tooltip timer
+  if (!banditBoardingTooltipShown) {
+    const anyOnTrain = banditSystem.pool.some(b => b.active && b.state === BANDIT_STATES.ON_TRAIN);
+    if (anyOnTrain) {
+      banditBoardingTooltipShown = true;
+      banditBoardingTooltipTimer = 3;
+    }
+  }
+  if (banditBoardingTooltipTimer > 0) banditBoardingTooltipTimer -= dt;
 
   // Coins — fly to gold HUD (top-right)
   const goldHudPos = { x: CANVAS_WIDTH - 50, y: 24 };
@@ -492,6 +539,8 @@ function renderRun() {
   train.updateWorldPositions(trainScreenX, trainScreenY);
   renderer.applyShake(train, 0.016);
   renderer.drawTerrain(train.distance);
+  // FEATURE 1: train power aura (behind everything else)
+  renderer.drawTrainPowerAura(train);
   renderer.drawSteamBlastAura(train);
   renderer.drawWorldCoins(coinSystem.coins);
   renderer.drawMagnets(coinSystem.magnets);
@@ -499,16 +548,38 @@ function renderRun() {
   renderer.drawDamageNumbers(combat.damageNumbers);
   renderer.drawProjectiles(combat.projectiles);
   renderer.drawRicochetBolts(combat.ricochetBolts);
+  // Spawn + draw kill effects (consume pending kills from combat this frame)
+  for (const ke of combat.killEffects) renderer.spawnKillEffect(ke.x, ke.y, ke.color);
+  combat.killEffects.length = 0;
+  renderer.updateAndDrawKillEffects(0.016);
+  // Muzzle flashes — queued by combat when a crew weapon fires
+  for (const mf of combat.muzzleFlashes) renderer.spawnMuzzleFlash(mf.x, mf.y);
+  combat.muzzleFlashes.length = 0;
+  renderer.updateAndDrawMuzzleFlashes(0.016);
+  // Hit sparks — queued by combat on non-lethal enemy hits
+  for (const hs of combat.hitSparks) renderer.spawnHitSpark(hs.x, hs.y);
+  combat.hitSparks.length = 0;
+  renderer.updateAndDrawHitSparks(0.016);
   renderer.drawTrain(train);
+  // FEATURE 1: passive buff pips
+  renderer.drawTrainPassivePips(train);
   renderer.drawWeaponMounts(train, getSelectedMount(), selectedCrew !== null);
   renderer.drawMovingCrew(train.crew);
   renderer.drawBandits(banditSystem.pool, train.allMounts);
+  // FEATURE 2: bandit telegraphing overlays
+  renderer.drawBanditTelegraphing(banditSystem.pool, train.crew);
+  renderer.drawBanditBoardingTooltip(banditBoardingTooltipTimer);
   renderer.drawFlyingCoins(coinSystem.flyingCoins);
   renderer.drawDamageFlash(train);
   renderer.drawMagnetFlash(coinSystem);
   // Show crew panel if any crew is unassigned (at bottom of screen, away from train)
   if (train.crew.some(c => !c.assignment && !c.isMoving)) {
     renderer.drawCrewPanel(train.crew, CANVAS_HEIGHT - 70);
+  }
+  // Trajectory preview — show when a crew member is selected and stationed at a mount
+  const aimMount = getSelectedMount();
+  if (aimMount && selectedCrew && !selectedCrew.isMoving) {
+    renderer.drawTrajectoryPreview(aimMount, input.mouseX, input.mouseY);
   }
   renderer.drawHUD(train);
   renderer.drawWaveHUD(spawner.waveInfo);
@@ -559,6 +630,7 @@ function renderRun() {
     }
   }
   if (selectedCrew) renderer.drawSelectedIndicator(selectedCrew);
+  if (selectedCrew) renderer.drawCrewInfoCard(selectedCrew);
   if (debugMode) drawDebugHitboxes();
   // Debug toggle button
   const dctx = renderer.ctx;
@@ -714,10 +786,16 @@ function updateLevelUp() {
   const confirmKey = input.keyPressed('Space') || input.keyPressed('Enter');
   if ((input.clicked && mouseHover >= 0) || (confirmKey && hoveredPowerup >= 0)) {
     pendingWeaponId = null;
-    levelUpChoices[hoveredPowerup].apply(train);
+    const chosenCard = levelUpChoices[hoveredPowerup];
+    chosenCard.apply(train);
     playPowerup();
     if (pendingWeaponId) {
-      // New weapon acquired — go to placement screen
+      // New weapon acquired — trigger fanfare then go to placement screen
+      const weaponDef = AUTO_WEAPONS[pendingWeaponId];
+      fanfareText = `${weaponDef ? weaponDef.name.toUpperCase() : pendingWeaponId.toUpperCase()} ACQUIRED!`;
+      fanfareColor = weaponDef ? weaponDef.color : '#f5a623';
+      fanfareTimer = 0.4;
+      playWeaponAcquire();
       state = STATES.PLACE_WEAPON;
     } else {
       state = STATES.RUNNING;
@@ -745,6 +823,9 @@ function renderLevelUp() {
 function updatePlaceWeapon() {
   if (!pendingWeaponId) { state = STATES.RUNNING; lastTime = performance.now(); return; }
 
+  // During fanfare freeze, block placement input
+  if (fanfareTimer > 0) return;
+
   if (input.clicked) {
     // Find which empty mount was clicked (not bandit-occupied)
     for (const mount of train.allMounts) {
@@ -769,6 +850,33 @@ function renderPlaceWeapon() {
   renderer.drawTrain(train);
   renderer.drawWeaponMounts(train, null, true);
   renderer.drawMovingCrew(train.crew);
+
+  // Tick fanfare timer here (during the freeze, update is skipped so we tick in render)
+  if (fanfareTimer > 0) {
+    fanfareTimer -= 0.016; // approximate per-frame decrement (~60fps)
+    // Draw fanfare overlay
+    const rctx = renderer.ctx;
+    const fadeStart = 0.2; // start fading at 0.2s remaining
+    let alpha = 1;
+    if (fanfareTimer < fadeStart) {
+      alpha = Math.max(0, fanfareTimer / fadeStart);
+    }
+    rctx.save();
+    rctx.globalAlpha = alpha;
+    // Dark backdrop strip
+    rctx.fillStyle = 'rgba(0,0,0,0.55)';
+    rctx.fillRect(0, CANVAS_HEIGHT / 2 - 50, CANVAS_WIDTH, 80);
+    // Glow / shadow
+    rctx.shadowColor = fanfareColor;
+    rctx.shadowBlur = 24;
+    rctx.fillStyle = fanfareColor;
+    rctx.font = 'bold 28px monospace';
+    rctx.textAlign = 'center';
+    rctx.textBaseline = 'middle';
+    rctx.fillText(fanfareText, CANVAS_WIDTH / 2, CANVAS_HEIGHT / 2 - 10);
+    rctx.shadowBlur = 0;
+    rctx.restore();
+  }
 
   // Highlight empty mounts (not bandit-occupied)
   const ctx = renderer.ctx;
@@ -816,8 +924,9 @@ let gameOverType = 'death'; // 'death' | 'combat' | 'zone' | 'world'
 
 function enterGameOver() {
   const cargoMultiplier = train.cargoMultiplier;
+  const modGoldMult = spawner.modifier ? spawner.modifier.goldMult : 1;
   if (won) {
-    goldEarned = Math.floor(train.runGold * cargoMultiplier);
+    goldEarned = Math.floor(train.runGold * cargoMultiplier * modGoldMult);
   } else {
     goldEarned = train.runGold;
   }
@@ -1345,7 +1454,7 @@ function updateStationArrival(dt) {
         combatDifficulty = 1 + (zoneNumber - 1) * ZONE_DIFFICULTY_SCALE;
         const isBoss = stationArrival?.isPreBoss || false;
         if (isBoss) combatDifficulty *= 1.6;
-        prepareForCombat(isBoss);
+        prepareForCombat(isBoss, s.modifier || null);
         break;
       }
       case STATION_TYPES.EXIT:

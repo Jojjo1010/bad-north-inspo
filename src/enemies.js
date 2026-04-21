@@ -22,6 +22,8 @@ export class Enemy {
     this.kind = 'zombie'; // 'zombie' or 'bug'
     this.damage = ENEMY_CONTACT_DAMAGE;
     this.flashTimer = 0;
+    this.knockbackVX = 0;
+    this.knockbackVY = 0;
   }
 
   spawn(x, y, hp, speed, targetBounds) {
@@ -34,6 +36,8 @@ export class Enemy {
     this.vx = 0;
     this.vy = 0;
     this.flashTimer = 0;
+    this.knockbackVX = 0;
+    this.knockbackVY = 0;
     this.targetBounds = targetBounds;
   }
 
@@ -50,21 +54,37 @@ export class Enemy {
     if (dist > 1) {
       this.vx = (dx / dist) * this.speed;
       this.vy = (dy / dist) * this.speed;
-      this.x += this.vx * dt;
-      this.y += this.vy * dt;
     } else {
       this.vx = 0;
       this.vy = 0;
     }
 
+    // Apply knockback on top of movement velocity
+    this.x += (this.vx + this.knockbackVX) * dt;
+    this.y += (this.vy + this.knockbackVY) * dt;
+
+    // Decay knockback
+    const KNOCKBACK_DECAY = 12;
+    this.knockbackVX *= Math.max(0, 1 - KNOCKBACK_DECAY * dt);
+    this.knockbackVY *= Math.max(0, 1 - KNOCKBACK_DECAY * dt);
+
     if (this.flashTimer > 0) this.flashTimer -= dt;
   }
 
-  takeDamage(amount) {
+  // pvx/pvy: projectile velocity direction (used for knockback impulse)
+  takeDamage(amount, pvx = 0, pvy = 0) {
     this.hp -= amount;
-    this.flashTimer = 0.1;
+    this.flashTimer = 0.05;
     if (this.hp <= 0) {
       this.active = false;
+    } else {
+      // Apply knockback in the direction the projectile was travelling
+      const pSpeed = Math.sqrt(pvx * pvx + pvy * pvy);
+      if (pSpeed > 0) {
+        const KNOCKBACK_STRENGTH = 80;
+        this.knockbackVX += (pvx / pSpeed) * KNOCKBACK_STRENGTH;
+        this.knockbackVY += (pvy / pSpeed) * KNOCKBACK_STRENGTH;
+      }
     }
   }
 }
@@ -133,6 +153,8 @@ export class Spawner {
       isBossStation: this.isBossStation,
       warningLabel,
       surgeLabel,
+      modifier: this.modifier || null,
+      direction: this.waveDirection || 'right',
     };
   }
 
@@ -141,9 +163,21 @@ export class Spawner {
       case WAVE_PHASE.CALM:
         this.waveCycleTimer -= dt;
         if (this.waveCycleTimer <= WAVE_WARNING_DURATION) {
-          // Transition to warning
+          // Transition to warning — assign direction for upcoming wave
           this.wavePhase = WAVE_PHASE.WARNING;
           this.wavePhaseTimer = this.waveCycleTimer;
+          // Waves 1-2 are tutorial: always from right
+          const upcomingWave = this.waveNumber + 1;
+          if (upcomingWave <= 2) {
+            this.waveDirection = 'right';
+          } else {
+            // Weighted random: right=30%, top=25%, bottom=25%, both=20%
+            const r = Math.random();
+            if (r < 0.30)      this.waveDirection = 'right';
+            else if (r < 0.55) this.waveDirection = 'top';
+            else if (r < 0.80) this.waveDirection = 'bottom';
+            else               this.waveDirection = 'both';
+          }
         }
         break;
 
@@ -195,13 +229,16 @@ export class Spawner {
     // Difficulty scales with distance AND station depth (unchanged)
     const distDiff = 1 + (distance / TARGET_DISTANCE) * 2;
     const difficulty = distDiff + (stationDifficulty - 1);
+    // Modifier spawn multiplier (swarm=2x faster, armored=0.5x, etc.)
+    const modSpawnMult = this.modifier ? this.modifier.spawnMult : 1;
+
     const interval = Math.max(
       ENEMY_SPAWN_INTERVAL_MIN / stationDifficulty,
       ENEMY_SPAWN_INTERVAL_START / stationDifficulty - difficulty * 0.2
     );
 
-    // Apply wave multiplier: lower interval = faster spawns
-    const waveInterval = interval / waveMult;
+    // Apply wave multiplier and modifier: lower interval = faster spawns
+    const waveInterval = interval / waveMult / modSpawnMult;
 
     this.spawnTimer -= dt;
     if (this.spawnTimer <= 0) {
@@ -223,34 +260,54 @@ export class Spawner {
     const hp = ENEMY_BASE_HP * (1 + difficulty * 0.15);
     const speed = ENEMY_BASE_SPEED * (1 + difficulty * 0.1);
 
-    // Spawn mostly from sides and behind (front has no weapons)
-    const edge = Math.random();
     let x, y;
     const margin = 30;
+    const dir = this.waveDirection || 'right';
 
-    if (edge < 0.30) {
-      // Top
-      x = Math.random() * CANVAS_WIDTH;
-      y = -margin;
-    } else if (edge < 0.60) {
-      // Bottom
-      x = Math.random() * CANVAS_WIDTH;
-      y = CANVAS_HEIGHT + margin;
-    } else if (edge < 0.85) {
-      // Left (behind train)
-      x = -margin;
-      y = Math.random() * CANVAS_HEIGHT;
+    if (dir === 'right') {
+      // Original multi-edge spawning (tutorial/right waves)
+      const edge = Math.random();
+      if (edge < 0.30) {
+        x = Math.random() * CANVAS_WIDTH;
+        y = -margin;
+      } else if (edge < 0.60) {
+        x = Math.random() * CANVAS_WIDTH;
+        y = CANVAS_HEIGHT + margin;
+      } else if (edge < 0.85) {
+        x = -margin;
+        y = Math.random() * CANVAS_HEIGHT;
+      } else {
+        x = CANVAS_WIDTH + margin;
+        y = Math.random() * CANVAS_HEIGHT;
+      }
     } else {
-      // Right (ahead) — rare, keeps some pressure
-      x = CANVAS_WIDTH + margin;
-      y = Math.random() * CANVAS_HEIGHT;
+      // Directional wave spawn
+      const trainX = CANVAS_WIDTH * 0.3;
+      const trainY = CANVAS_HEIGHT / 2;
+
+      let spawnSide;
+      if (dir === 'both') {
+        spawnSide = Math.random() < 0.5 ? 'top' : 'bottom';
+      } else {
+        spawnSide = dir; // 'top' or 'bottom'
+      }
+
+      if (spawnSide === 'top') {
+        x = Math.random() * CANVAS_WIDTH;
+        y = -margin;
+      } else {
+        // bottom
+        x = Math.random() * CANVAS_WIDTH;
+        y = CANVAS_HEIGHT + margin;
+      }
     }
 
     // Color, size and HP based on difficulty
     const colorIdx = Math.min(Math.floor(difficulty / 2), 2);
+    const modHpMult = this.modifier ? this.modifier.hpMult : 1;
     enemy.color = Spawner.COLORS[colorIdx];
     enemy.radius = ENEMY_RADIUS * ENEMY_RADIUS_MULT[colorIdx];
-    enemy.hp = hp * ENEMY_HP_MULT[colorIdx];
+    enemy.hp = hp * ENEMY_HP_MULT[colorIdx] * modHpMult;
     enemy.maxHp = enemy.hp;
     enemy.tier = colorIdx;
     enemy.name = ENEMY_TIER_NAMES[colorIdx];
@@ -279,5 +336,16 @@ export class Spawner {
     this.waveCycleTimer = WAVE_CYCLE_DURATION;
     this.wavePhaseTimer = 0;
     this.isBossStation = false;
+    this.modifier = null;
+    this.waveDirection = 'right';
+  }
+
+  /** Apply Ambush modifier — skip calm, start immediately in surge */
+  applyAmbush() {
+    this.waveNumber = 1;
+    this.wavePhase = WAVE_PHASE.SURGE;
+    this.wavePhaseTimer = WAVE_SURGE_DURATION * 0.7; // slightly shorter first surge
+    this.waveCycleTimer = WAVE_CYCLE_DURATION * 0.6;
+    this.spawnTimer = 0.2;
   }
 }
