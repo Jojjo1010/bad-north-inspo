@@ -925,16 +925,18 @@ export class Renderer3D {
 
           // Status labels and effects
           if (!fighting && !b.targetSlot?.autoWeaponId) {
-            // Gold coins flying away
-            const t = performance.now() * 0.004;
-            for (let i = 0; i < 5; i++) {
-              const age = (t + i * 0.7) % 2;
-              if (age > 1.2) continue;
-              const px = sx + Math.sin(i * 2.3) * 8 + Math.sin(t + i) * 4;
-              const py = sy - 10 - age * 30;
-              const alpha = Math.max(0, 1 - age / 1.2);
-              // Gold coin
-              ctx.globalAlpha = alpha;
+            // Gold coins flowing from gold counter to bandit
+            const goldHudX = CANVAS_WIDTH - 94;
+            const goldHudY = 26;
+            const t = performance.now() * 0.003;
+            for (let i = 0; i < 6; i++) {
+              const age = (t + i * 0.35) % 2;
+              if (age > 1.5) continue;
+              const progress = age / 1.5;
+              const px = goldHudX + (sx - goldHudX) * progress + Math.sin(progress * Math.PI * 2 + i) * 10;
+              const py = goldHudY + (sy - goldHudY) * progress + Math.sin(progress * Math.PI) * -20;
+              const alpha = progress < 0.1 ? progress / 0.1 : progress > 0.85 ? (1 - progress) / 0.15 : 1;
+              ctx.globalAlpha = alpha * 0.9;
               ctx.beginPath();
               ctx.arc(px, py, 3, 0, Math.PI * 2);
               ctx.fillStyle = '#f5a623';
