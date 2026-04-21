@@ -1486,7 +1486,7 @@ export class Renderer3D {
       ctx.fillText(`+${goldEarned} Gold`, cx, cy + 55);
 
       // Coal reward
-      ctx.fillStyle = '#8B6914';
+      ctx.fillStyle = '#555';
       ctx.font = 'bold 14px monospace';
       ctx.fillText('+2 Coal', cx, cy + 78);
 
@@ -1710,8 +1710,8 @@ export class Renderer3D {
     ctx.fillStyle = '#aaa';
     ctx.font = 'bold 14px monospace';
     ctx.textAlign = 'left';
-    const coalFull = '\uD83D\uDFEB'.repeat(zone.coal);
-    const coalEmpty = '\u2B1B'.repeat(zone.maxCoal - zone.coal);
+    const coalFull = '\u2B1B'.repeat(zone.coal);
+    const coalEmpty = '\u2B1C'.repeat(zone.maxCoal - zone.coal);
     ctx.fillText(`Coal ${coalFull}${coalEmpty} ${zone.coal}/${zone.maxCoal}`, 16, 32);
 
     // Gold display
@@ -1726,6 +1726,26 @@ export class Renderer3D {
 
     const sx = (s) => pad + s.x * mapW;
     const sy = (s) => mapY + s.y * mapH;
+
+    // Scattered zombie emojis across the wasteland
+    ctx.textAlign = 'center';
+    const zombieCount = 20 + zone.difficulty * 5;
+    const t = performance.now() * 0.001;
+    for (let i = 0; i < zombieCount; i++) {
+      // Deterministic pseudo-random positions from seed
+      const seed1 = (i * 7919 + 1301) % 9973;
+      const seed2 = (i * 6271 + 3571) % 9973;
+      const zx = 20 + (seed1 / 9973) * (W - 40);
+      const zy = 60 + (seed2 / 9973) * (H - 100);
+      // Subtle sway
+      const sway = Math.sin(t * 0.8 + i * 1.7) * 2;
+      const alpha = 0.25 + (i % 5) * 0.06;
+      const size = 10 + (i % 4) * 3;
+      ctx.globalAlpha = alpha;
+      ctx.font = `${size}px serif`;
+      ctx.fillText('\uD83E\uDDDF', zx + sway, zy);
+    }
+    ctx.globalAlpha = 1;
 
     // Draw rail tracks (connections)
     for (const station of zone.stations) {
@@ -1827,12 +1847,7 @@ export class Renderer3D {
       ctx.textAlign = 'center';
       if (isStart) ctx.fillText('DEP', x, y + 3);
       else if (isEnd) ctx.fillText('ARR', x, y + 3);
-      else if (station.type === 'combat' && !station.visited) {
-        const isPreBoss = station.connections.some(id => zone.stations[id].type === 'exit');
-        ctx.font = isPreBoss ? '14px serif' : '11px serif';
-        ctx.fillText(isPreBoss ? '\uD83D\uDC80' : '\uD83E\uDDDF', x, y + (isPreBoss ? 5 : 4));
-      } else if (station.type === 'empty' && !station.visited) {
-        ctx.font = '9px serif';
+      else if (station.type === 'empty' && !station.visited) {
         ctx.fillStyle = '#888';
         ctx.fillText('?', x, y + 3);
       }
