@@ -1845,8 +1845,12 @@ export class Renderer3D {
       for (let i = 0; i < count; i++) {
         const seed1 = (i * 7919 + 1301) % 9973;
         const seed2 = (i * 6271 + 3571) % 9973;
+        // Bias X toward the right (harder end) — more creatures near exit
+        const rawX = seed1 / 9973;
+        const biasedX = 1 - (1 - rawX) * (1 - rawX);
+        const xPos = 20 + biasedX * (W - 40);
         this._zombieCache.push({
-          x: 20 + (seed1 / 9973) * (W - 40),
+          x: xPos,
           y: 60 + (seed2 / 9973) * (H - 100),
           alpha: 0.6 + (i % 5) * 0.08,
           font: `${10 + (i % 4) * 3}px serif`,
