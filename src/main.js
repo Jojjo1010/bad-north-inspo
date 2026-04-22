@@ -90,13 +90,9 @@ const save = {
   coal: STARTING_COAL,
   maxCoal: MAX_COAL,
   upgrades: {
-    damage:    { level: 0, maxLevel: ST.damage.maxLevel,   cost: ST.damage.cost,    icon: '💥', color: '#ff5722', name: 'Damage',     desc: `+${ST.damage.perLevel}% weapon damage` },
-    shield:    { level: 0, maxLevel: ST.shield.maxLevel,   cost: ST.shield.cost,    icon: '🛡', color: '#3498db', name: 'Shield',     desc: `-${ST.shield.perLevel} damage per hit` },
-    coolOff:   { level: 0, maxLevel: ST.coolOff.maxLevel,  cost: ST.coolOff.cost,   icon: '❄', color: '#00bcd4', name: 'Cool-off',   desc: `-${ST.coolOff.perLevel}% cooldown` },
-    maxHp:     { level: 0, maxLevel: ST.maxHp.maxLevel,    cost: ST.maxHp.cost,     icon: '❤', color: '#e74c3c', name: 'Max HP',     desc: `+${ST.maxHp.perLevel} max HP` },
-    baseArea:  { level: 0, maxLevel: ST.baseArea.maxLevel,  cost: ST.baseArea.cost,  icon: '🎯', color: '#9b59b6', name: 'Range',      desc: `+${ST.baseArea.perLevel}% weapon range` },
-    greed:     { level: 0, maxLevel: ST.greed.maxLevel,    cost: ST.greed.cost,     icon: '💰', color: '#f5a623', name: 'Greed',      desc: `+${ST.greed.perLevel}% gold from coins` },
-    crewSlots: { level: 0, maxLevel: ST.crewSlots.maxLevel, cost: ST.crewSlots.cost, icon: '👤', color: '#2ecc71', name: 'Crew Slots', desc: 'Unlock crew member' },
+    damage:    { level: 0, maxLevel: ST.damage.maxLevel,    cost: ST.damage.cost,     icon: '\uD83D\uDC31', color: '#ffb74d', name: 'Gun Power',   desc: `+${ST.damage.perLevel}% gun damage` },
+    kickForce: { level: 0, maxLevel: ST.kickForce.maxLevel, cost: ST.kickForce.cost,  icon: '\u26C4\uFE0F', color: '#66bb6a', name: 'Kick Force',  desc: `+20 kick dmg, +15 radius` },
+    maxHp:     { level: 0, maxLevel: ST.maxHp.maxLevel,     cost: ST.maxHp.cost,      icon: '\u2764',       color: '#e74c3c', name: 'Train HP',    desc: `+${ST.maxHp.perLevel} max HP` },
   },
 };
 const UPGRADE_KEYS = Object.keys(save.upgrades);
@@ -157,12 +153,14 @@ function applyShopUpgrades() {
   while (train.crew.length < 2) train.recruitCrew();
   if (train.crew.length > 2) train.crew.length = 2;
   train.passives.damage = u.damage.level;
-  train.passives.shield = u.shield.level;
-  train.passives.coolOff = u.coolOff.level;
-  train.passives.baseArea = u.baseArea.level;
   train.passives.maxHp = u.maxHp.level;
   train.maxHp = TRAIN_MAX_HP + u.maxHp.level * ST.maxHp.perLevel;
-  train.greedMultiplier = 1 + u.greed.level * (ST.greed.perLevel / 100);
+  // Apply kick force to all crew (Brawlers use it, Gunners ignore it)
+  const kickLvl = u.kickForce.level;
+  for (const c of train.crew) {
+    c._shopKickDmgBonus = kickLvl * 20;
+    c._shopKickRadiusBonus = kickLvl * 15;
+  }
 }
 
 let garlicPlaced = false; // player must place garlic on a mount during setup
@@ -688,10 +686,12 @@ function updateRun(dt) {
     const kx = b._landX, ky = b._landY;
     const crew = b._kickCrew;
     if (!crew) continue;
-    const kickDmg = BRAWLER_KICK_DAMAGE + (crew._kickDmgBonus || 0);
-    const kickR = BRAWLER_KICK_RADIUS + (crew._kickRadiusBonus || 0);
+    const kickDmg = BRAWLER_KICK_DAMAGE + (crew._kickDmgBonus || 0) + (crew._shopKickDmgBonus || 0);
+    const kickR = BRAWLER_KICK_RADIUS + (crew._kickRadiusBonus || 0) + (crew._shopKickRadiusBonus || 0);
     const r2 = kickR * kickR;
     // Damage all enemies in radius of landing
+    let kickHits = 0;
+    let kickTotalDmg = 0;
     for (const e of spawner.pool) {
       if (!e.active) continue;
       const dx = e.x - kx, dy = e.y - ky;
@@ -700,8 +700,14 @@ function updateRun(dt) {
         const ex = e.x, ey = e.y, ec = e.color;
         e.takeDamage(kickDmg);
         combat.handleEnemyDamageResult(e, train, ex, ey, ec);
+        kickHits++;
+        kickTotalDmg += kickDmg;
       }
     }
+    // Track kick stats for HUD
+    crew._kickCount = (crew._kickCount || 0) + 1;
+    crew._kickTotalDmg = (crew._kickTotalDmg || 0) + kickTotalDmg;
+    crew._kickHits = (crew._kickHits || 0) + kickHits;
     // BIG impact on landing
     train.shakeTimer = Math.max(train.shakeTimer, 0.4);
     train.shakeIntensity = 3.0;

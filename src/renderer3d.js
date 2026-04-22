@@ -2919,11 +2919,27 @@ export class Renderer3D {
         ctx.fillText(c.role.toUpperCase(), x + slotW / 2, crewY + 18);
         ctx.globalAlpha = 1;
       }
-      // Gun icon + level
-      ctx.font = '10px monospace';
-      ctx.fillStyle = c.color;
-      ctx.fillText('\uD83D\uDD2B', x + slotW / 2, crewY + 28);
-      this._drawLevelPips(ctx, x + 2, crewY + 1, c.gunLevel, c.color);
+      if (c.role === 'Brawler') {
+        // Kick stats instead of gun
+        ctx.font = '10px monospace';
+        ctx.fillStyle = '#66bb6a';
+        ctx.fillText('\uD83E\uDD1C', x + slotW / 2, crewY + 28);
+        // Kick counter
+        const kicks = c._kickCount || 0;
+        if (kicks > 0) {
+          ctx.fillStyle = '#66bb6a';
+          ctx.font = 'bold 7px monospace';
+          ctx.fillText(`${kicks} kicks`, x + slotW / 2, crewY + slotH + 10);
+          ctx.fillStyle = '#999';
+          ctx.fillText(`${c._kickTotalDmg || 0} dmg`, x + slotW / 2, crewY + slotH + 19);
+        }
+      } else {
+        // Gun icon + level
+        ctx.font = '10px monospace';
+        ctx.fillStyle = c.color;
+        ctx.fillText('\uD83D\uDD2B', x + slotW / 2, crewY + 28);
+        this._drawLevelPips(ctx, x + 2, crewY + 1, c.gunLevel, c.color);
+      }
     }
 
     // --- WEAPONS ROW (middle, auto-weapons only) ---

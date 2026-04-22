@@ -128,13 +128,9 @@ export const COAL_SHOP_AMOUNT = T('COAL_SHOP_AMOUNT', 2);
 
 // Shop upgrade tuning
 export const SHOP_TUNING = {
-  damage:   { cost: T('SHOP_DAMAGE_COST', 40),   maxLevel: T('SHOP_DAMAGE_MAX_LEVEL', 5),   perLevel: T('SHOP_DAMAGE_PER_LEVEL', 15) },
-  shield:   { cost: T('SHOP_SHIELD_COST', 35),   maxLevel: T('SHOP_SHIELD_MAX_LEVEL', 5),   perLevel: T('SHOP_SHIELD_PER_LEVEL', 2) },
-  coolOff:  { cost: T('SHOP_COOLOFF_COST', 45),  maxLevel: T('SHOP_COOLOFF_MAX_LEVEL', 5),  perLevel: T('SHOP_COOLOFF_PER_LEVEL', 10) },
-  maxHp:    { cost: T('SHOP_MAXHP_COST', 30),    maxLevel: T('SHOP_MAXHP_MAX_LEVEL', 5),    perLevel: T('SHOP_MAXHP_PER_LEVEL', 15) },
-  baseArea: { cost: T('SHOP_RANGE_COST', 40),    maxLevel: T('SHOP_RANGE_MAX_LEVEL', 5),    perLevel: T('SHOP_RANGE_PER_LEVEL', 15) },
-  greed:    { cost: T('SHOP_GREED_COST', 60),    maxLevel: T('SHOP_GREED_MAX_LEVEL', 3),    perLevel: T('SHOP_GREED_PER_LEVEL', 20) },
-  crewSlots:{ cost: T('SHOP_CREW_COST', 300),    maxLevel: 0 }, // PROTOTYPE: 3rd crew disabled
+  damage:    { cost: T('SHOP_DAMAGE_COST', 40),    maxLevel: T('SHOP_DAMAGE_MAX_LEVEL', 5),    perLevel: T('SHOP_DAMAGE_PER_LEVEL', 15) },
+  kickForce: { cost: T('SHOP_KICK_COST', 40),      maxLevel: T('SHOP_KICK_MAX_LEVEL', 5),      perLevel: T('SHOP_KICK_PER_LEVEL', 1) },
+  maxHp:     { cost: T('SHOP_MAXHP_COST', 30),     maxLevel: T('SHOP_MAXHP_MAX_LEVEL', 5),     perLevel: T('SHOP_MAXHP_PER_LEVEL', 25) },
 };
 
 // Run
