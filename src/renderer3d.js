@@ -745,7 +745,7 @@ export class Renderer3D {
         group.visible = desiredType !== null;
 
         // DEBUG: show cone center (yellow) and gun rotation value
-        if (mount.isManned) {
+        if (mount.isManned && !(mount.crew && mount.crew.role === 'Brawler')) {
           try {
             const coneCenter = offset.z < 0 ? MD.upperConeAngle : MD.lowerConeAngle;
             const ccRad = coneCenter * Math.PI / 180;
@@ -820,7 +820,7 @@ export class Renderer3D {
       // Firing cone — perpendicular to the train edge this mount sits on
       // Upper side (z<0) → upper-left (-135°), Lower side (z>0) → lower-right (45°)
       const hasAuto = mount.hasAutoWeapon;
-      const showCone = mount.isManned;
+      const showCone = mount.isManned && !(mount.crew && mount.crew.role === 'Brawler');
       if (showCone) {
         const upperRad = MD.upperConeAngle * Math.PI / 180;
         const lowerRad = MD.lowerConeAngle * Math.PI / 180;
