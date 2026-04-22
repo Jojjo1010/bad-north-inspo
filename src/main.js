@@ -390,10 +390,12 @@ function updateSetup(dt) {
       // fall through to normal click handling
     }
 
-    // Check if clicked the garlic mount
+    // Check if clicked the garlic mount (use helper that falls back to worldX)
     const garlicMount = train.getAutoWeaponMount('steamBlast');
-    if (garlicMount && garlicMount.screenX !== undefined) {
-      if (input.hitCircle(slotScreenX(garlicMount), slotScreenY(garlicMount), 22)) {
+    if (garlicMount) {
+      const gsx = slotScreenX(garlicMount);
+      const gsy = slotScreenY(garlicMount);
+      if (input.hitCircle(gsx, gsy, MOUNT_RADIUS + 10)) {
         garlicSelected = true;
         selectedCrew = null;
         return;

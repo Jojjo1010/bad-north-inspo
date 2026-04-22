@@ -2149,17 +2149,20 @@ export class Renderer3D {
     const totalW = crew.length * spacing;
     const startX = CANVAS_WIDTH / 2 - totalW / 2;
 
+    const panelW = Math.max(totalW + 30, 200);
+    const panelX = CANVAS_WIDTH / 2 - panelW / 2;
     ctx.fillStyle = 'rgba(0,0,0,0.5)';
-    this.roundRect(startX - 20, panelY - 35, totalW + 30, 75, 10);
+    this.roundRect(panelX, panelY - 35, panelW, 75, 10);
     ctx.fill();
     ctx.strokeStyle = '#f5a623';
     ctx.lineWidth = 2;
+    this.roundRect(panelX, panelY - 35, panelW, 75, 10);
     ctx.stroke();
 
     ctx.fillStyle = '#f5a623';
-    ctx.font = 'bold 13px monospace';
+    ctx.font = 'bold 10px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('L-click select \u2022 R-click place', CANVAS_WIDTH / 2, panelY - 18);
+    ctx.fillText('L-CLICK \u2192 R-CLICK SLOT', CANVAS_WIDTH / 2, panelY - 20);
 
     for (let i = 0; i < crew.length; i++) {
       const c = crew[i];
@@ -2211,7 +2214,7 @@ export class Renderer3D {
     ctx.fillStyle = 'rgba(0,0,0,0.4)';
     ctx.fillRect(0, 0, CANVAS_WIDTH, 50);
     ctx.fillStyle = '#f5a623';
-    ctx.font = 'bold 20px monospace';
+    ctx.font = 'bold 16px monospace';
     ctx.textAlign = 'center';
     ctx.fillText('L-click select \u2022 R-click place', CANVAS_WIDTH / 2, 32);
   }
