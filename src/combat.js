@@ -238,10 +238,17 @@ export class CombatSystem {
       if (mount.cooldownTimer > 0) continue;
 
       if (manned) {
-        // --- Manned: full power, crew bonuses apply (rare — crew triggers fight) ---
-        const target = this.findTarget(mount, enemies, areaMult);
-        if (!target) continue;
-        const angle = this.leadAngle(mount, target);
+        // --- Manned: full power, crew bonuses apply ---
+        let angle;
+        if (mount.crew === selectedCrew && mount._fireAngle2D !== undefined) {
+          // Selected crew: fire where the mouse/gun is pointing
+          angle = mount._fireAngle2D;
+        } else {
+          // Unselected manned crew: auto-target nearest enemy in cone
+          const target = this.findTarget(mount, enemies, areaMult);
+          if (!target) continue;
+          angle = this.leadAngle(mount, target);
+        }
 
         let damage = mount.damage * train.totalDamageMultiplier * banditMult;
         if (hasDriver) damage *= DRIVER_DAMAGE_BUFF;

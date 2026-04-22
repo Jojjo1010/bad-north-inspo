@@ -469,7 +469,7 @@ function updateRun(dt) {
 
   // Aim selected crew's weapon — follows mouse
   // Clear aim state for all mounts first
-  for (const m of train.allMounts) { m._aimRotY = undefined; m.screenAimAngle = undefined; }
+  for (const m of train.allMounts) { m._aimRotY = undefined; m.screenAimAngle = undefined; m._fireAngle2D = undefined; }
   if (selectedCrew) {
     const mount = getSelectedMount();
     if (mount && mount.screenX !== undefined && renderer.screenToPixel) {
@@ -495,6 +495,8 @@ function updateRun(dt) {
       const mountWx = mount.worldX - CANVAS_WIDTH / 2;
       const mountWz = mount.worldY - CANVAS_HEIGHT / 2;
       mount._aimRotY = Math.atan2(twx - mountWx, twz - mountWz);
+      // 2D pixel-space firing angle (for projectiles in combat.js)
+      mount._fireAngle2D = Math.atan2(targetWorld.y - mount.worldY, targetWorld.x - mount.worldX);
     }
   }
 
