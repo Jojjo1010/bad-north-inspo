@@ -10,7 +10,8 @@ window.__mountDebug = window.__mountDebug || {
   enabled: false,
   upperConeAngle: -125,  // degrees
   lowerConeAngle: 35,    // degrees
-  gunOffset: -55,        // degrees
+  upperGunOffset: -55,   // degrees (gun offset for upper mounts)
+  lowerGunOffset: -55,   // degrees (gun offset for lower mounts)
   coneHalf: 90,          // degrees (half of total cone)
 };
 const MD = window.__mountDebug;
@@ -23,8 +24,10 @@ document.addEventListener('keydown', (e) => {
     case 'KeyW': MD.upperConeAngle += step; break;
     case 'KeyE': MD.lowerConeAngle -= step; break;
     case 'KeyR': MD.lowerConeAngle += step; break;
-    case 'KeyA': MD.gunOffset -= step; break;
-    case 'KeyS': MD.gunOffset += step; break;
+    case 'KeyA': MD.upperGunOffset -= step; break;
+    case 'KeyS': MD.upperGunOffset += step; break;
+    case 'KeyZ': MD.lowerGunOffset -= step; break;
+    case 'KeyX': MD.lowerGunOffset += step; break;
     case 'KeyD': MD.coneHalf -= step; break;
     case 'KeyF': MD.coneHalf += step; break;
   }
@@ -609,7 +612,8 @@ export class Renderer3D {
         const entry = this.mountGroups[mountIdx];
         const group = entry.group;
         group.position.set(offset.x, offset.y, offset.z);
-        group.rotation.y = -mount.coneDirection + MD.gunOffset * Math.PI / 180;
+        const gunOff = offset.z < 0 ? MD.upperGunOffset : MD.lowerGunOffset;
+        group.rotation.y = -mount.coneDirection + gunOff * Math.PI / 180;
 
         // Determine which model to show
         let desiredType = null;
@@ -1934,10 +1938,11 @@ export class Renderer3D {
     ctx.fillText('MOUNT DEBUG (F4 toggle, Shift=1\u00B0)', dx + 6, dy + 14);
     ctx.fillStyle = '#fff';
     ctx.font = '11px monospace';
-    ctx.fillText(`Q/W  Upper cone: ${MD.upperConeAngle}\u00B0`, dx + 6, dy + 32);
-    ctx.fillText(`E/R  Lower cone: ${MD.lowerConeAngle}\u00B0`, dx + 6, dy + 48);
-    ctx.fillText(`A/S  Gun offset: ${MD.gunOffset}\u00B0`, dx + 6, dy + 64);
-    ctx.fillText(`D/F  Cone half:  ${MD.coneHalf}\u00B0`, dx + 6, dy + 80);
+    ctx.fillText(`Q/W  Upper cone: ${MD.upperConeAngle}\u00B0`, dx + 6, dy + 30);
+    ctx.fillText(`E/R  Lower cone: ${MD.lowerConeAngle}\u00B0`, dx + 6, dy + 44);
+    ctx.fillText(`A/S  Upper gun:  ${MD.upperGunOffset}\u00B0`, dx + 6, dy + 58);
+    ctx.fillText(`Z/X  Lower gun:  ${MD.lowerGunOffset}\u00B0`, dx + 6, dy + 72);
+    ctx.fillText(`D/F  Cone half:  ${MD.coneHalf}\u00B0`, dx + 6, dy + 86);
     ctx.fillStyle = '#888';
     ctx.fillText('Copy these values when aligned!', dx + 6, dy + 100);
   }
