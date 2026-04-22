@@ -446,7 +446,7 @@ export class Renderer {
     ctx.fillStyle = '#8f8';
     ctx.font = 'bold 10px monospace';
     ctx.textAlign = 'left';
-    ctx.fillText('HULL', hpX + 4, hpY - 1);
+    ctx.fillText('HP', hpX + 4, hpY - 1);
 
     // Bar background
     ctx.fillStyle = '#222';
@@ -1364,7 +1364,7 @@ export class Renderer {
         `Crew: ${1 + u.crewSlots.level}/3`,
         `Dmg: +${u.damage.level * 15}%  Shield: ${u.shield.level}`,
         `Cool-off: -${u.coolOff.level * 10}%  Range: +${u.baseArea.level * 15}%`,
-        `Hull: +${u.maxHp.level * 15}  Greed: +${u.greed.level * 20}%`,
+        `HP: +${u.maxHp.level * 15}  Greed: +${u.greed.level * 20}%`,
       ];
       stats.forEach((s, i) => {
         ctx.fillText(s, panelX + 8, panelY + 28 + i * 14);

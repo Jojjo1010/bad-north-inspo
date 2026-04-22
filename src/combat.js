@@ -188,9 +188,9 @@ export class CombatSystem {
     const hasDriver = train.hasDriver;
     const areaMult = train.totalAreaMultiplier;
 
-    // Unmanned crew mounts: fire at reduced effectiveness (30% damage, 40% fire rate)
-    const UNMANNED_DAMAGE_MULT = 0.30;
-    const UNMANNED_RATE_MULT = 0.40;
+    // Unmanned crew mounts: near-useless without crew
+    const UNMANNED_DAMAGE_MULT = UNMANNED_EFFECTIVENESS;
+    const UNMANNED_RATE_MULT = UNMANNED_EFFECTIVENESS * 2;
 
     // Phase 1: rotate cones — manned crew, auto-weapons, AND unmanned crew mounts
     for (const mount of train.allMounts) {
@@ -221,16 +221,15 @@ export class CombatSystem {
       if (mount.hasAutoWeapon) continue; // auto-weapons handled separately
       const manned = mount.isManned;
 
-      // Bandit suppression: weakens over time instead of instant hard-lock
+      // Bandit suppression: fast degradation (PROTOTYPE timeline)
       let banditMult = 1.0;
       if (mount._bandit) {
-        // state 2 = ON_TRAIN; anything else (FIGHTING) = crew is busy, fully suppressed
         if (mount._bandit.state !== 2) { banditMult = 0; }
         else {
           const dwell = mount._bandit.dwellTime;
-          if (dwell < 4)       banditMult = 0.8;  // barely interfering yet
-          else if (dwell < 9)  banditMult = 0.3;  // actively disrupting
-          else                 banditMult = 0;     // fully jammed
+          if (dwell < 2)       banditMult = 0.75; // minor (0-2s)
+          else if (dwell < 5)  banditMult = 0.3;  // strong (2-5s)
+          else                 banditMult = 0;     // disabled (5s+)
         }
       }
       if (banditMult <= 0) continue;
@@ -509,14 +508,14 @@ export class CombatSystem {
     }
   }
 
-  // Returns 1.0 (no bandit) down to 0.0 (fully jammed) based on bandit dwell time
+  // Returns 1.0 (no bandit) down to 0.0 — PROTOTYPE timeline
   _banditMult(mount) {
     if (!mount._bandit) return 1.0;
-    if (mount._bandit.state !== 2) return 0.0; // FIGHTING = fully occupied
+    if (mount._bandit.state !== 2) return 0.0;
     const dwell = mount._bandit.dwellTime;
-    if (dwell < 4)  return 0.8;  // barely interfering
-    if (dwell < 9)  return 0.3;  // actively disrupting
-    return 0.0;                   // fully jammed
+    if (dwell < 2)  return 0.75;
+    if (dwell < 5)  return 0.3;
+    return 0.0;
   }
 
   reset() {

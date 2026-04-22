@@ -80,7 +80,7 @@ const save = {
     damage:    { level: 0, maxLevel: ST.damage.maxLevel,   cost: ST.damage.cost,    icon: '💥', color: '#ff5722', name: 'Damage',     desc: `+${ST.damage.perLevel}% weapon damage` },
     shield:    { level: 0, maxLevel: ST.shield.maxLevel,   cost: ST.shield.cost,    icon: '🛡', color: '#3498db', name: 'Shield',     desc: `-${ST.shield.perLevel} damage per hit` },
     coolOff:   { level: 0, maxLevel: ST.coolOff.maxLevel,  cost: ST.coolOff.cost,   icon: '❄', color: '#00bcd4', name: 'Cool-off',   desc: `-${ST.coolOff.perLevel}% cooldown` },
-    maxHp:     { level: 0, maxLevel: ST.maxHp.maxLevel,    cost: ST.maxHp.cost,     icon: '❤', color: '#e74c3c', name: 'Max Hull',   desc: `+${ST.maxHp.perLevel} max HP` },
+    maxHp:     { level: 0, maxLevel: ST.maxHp.maxLevel,    cost: ST.maxHp.cost,     icon: '❤', color: '#e74c3c', name: 'Max HP',     desc: `+${ST.maxHp.perLevel} max HP` },
     baseArea:  { level: 0, maxLevel: ST.baseArea.maxLevel,  cost: ST.baseArea.cost,  icon: '🎯', color: '#9b59b6', name: 'Range',      desc: `+${ST.baseArea.perLevel}% weapon range` },
     greed:     { level: 0, maxLevel: ST.greed.maxLevel,    cost: ST.greed.cost,     icon: '💰', color: '#f5a623', name: 'Greed',      desc: `+${ST.greed.perLevel}% gold from coins` },
     crewSlots: { level: 0, maxLevel: ST.crewSlots.maxLevel, cost: ST.crewSlots.cost, icon: '👤', color: '#2ecc71', name: 'Crew Slots', desc: 'Unlock crew member' },
@@ -211,26 +211,7 @@ function generateLevelUpCards(train) {
     }
   }
 
-  // Auto-weapon cards (max 2 auto weapons)
-  for (const [id, def] of Object.entries(AUTO_WEAPONS)) {
-    if (!train.hasAutoWeapon(id) && train.canAddAutoWeapon) {
-      const wid = id;
-      cards.push({
-        type: 'newWeapon', weaponId: wid,
-        name: `${def.name} — New!`, icon: def.icon, color: def.color,
-        desc: `${def.desc} (pick a slot)`,
-        apply(t) { pendingWeaponId = wid; },
-      });
-    } else if (train.hasAutoWeapon(id) && train.autoWeaponLevel(id) < MAX_AUTO_WEAPON_LEVEL) {
-      const nextLv = train.autoWeaponLevel(id) + 1;
-      cards.push({
-        type: 'upgradeWeapon', weaponId: id,
-        name: `${def.name} Lv${nextLv}`, icon: def.icon, color: def.color,
-        desc: def.desc,
-        apply(t) { t.upgradeAutoWeapon(id); },
-      });
-    }
-  }
+  // PROTOTYPE: auto-weapons disabled — cards removed from pool
 
   // Defense cards (max 2 defense slots)
   const DEFENSE_DEFS = [
@@ -516,7 +497,7 @@ function updateRun(dt) {
     } else if (currentPhase === 0 /* CALM */ && prevWavePhase === 2 /* was SURGE */) {
       playWaveClear();
       // Guarantee a bandit-free recovery window after each wave
-      banditSystem.spawnTimer = Math.max(banditSystem.spawnTimer, 4);
+      banditSystem.spawnTimer = Math.max(banditSystem.spawnTimer, 1.5); // PROTOTYPE: shorter
       // Green flash on HP bar — "survived" visual beat
       train.hpGreenFlashTimer = 0.5;
     }
@@ -629,21 +610,18 @@ function renderRun() {
     const bannerH = 38;
     const bannerX = CANVAS_WIDTH / 2 - bannerW / 2;
     const bannerY = 44;
-    // Color shifts: amber (grace) → orange (stealing ramp) → red (draining HP)
+    // Color shifts: amber (minor) → orange (strong) → red (disabled)
     let bgR = 180, bgG = 30, bgB = 20;
     let msg;
-    if (maxDwell < 2.5) {
-      // Grace period — amber, informational
+    if (maxDwell < 2) {
       bgR = 180; bgG = 130; bgB = 20;
       msg = banditCount === 1 ? '⚠ Bandit boarding!' : `⚠ ${banditCount} bandits boarding!`;
-    } else if (maxDwell < 10) {
-      // Stealing (ramping up) — orange/red
+    } else if (maxDwell < 5) {
       bgR = 190; bgG = 60; bgB = 20;
-      msg = banditCount === 1 ? '⚠ BANDIT STEALING!' : `⚠ ${banditCount} BANDITS STEALING!`;
+      msg = banditCount === 1 ? '⚠ WEAPON DISRUPTED!' : `⚠ ${banditCount} WEAPONS DISRUPTED!`;
     } else {
-      // HP drain active — bright red
       bgR = 220; bgG = 20; bgB = 20;
-      msg = banditCount === 1 ? '⚠ BANDIT DAMAGING HULL!' : `⚠ ${banditCount} BANDITS DAMAGING HULL!`;
+      msg = banditCount === 1 ? '⚠ WEAPON DISABLED!' : `⚠ ${banditCount} WEAPONS DISABLED!`;
     }
     dctx2.fillStyle = `rgba(${bgR}, ${bgG}, ${bgB}, ${0.85 * pulse})`;
     dctx2.fillRect(bannerX, bannerY, bannerW, bannerH);

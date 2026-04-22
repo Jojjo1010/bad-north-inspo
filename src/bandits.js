@@ -114,24 +114,12 @@ export class Bandit {
         this.x = this.targetSlot.worldX;
         this.y = this.targetSlot.worldY;
         this.timeOnSlot += dt;
-
-        // Track how long this bandit has been aboard
         this.dwellTime += dt;
 
-        // HP damage: starts late, ramps slowly, caps low per bandit
-        if (this.dwellTime >= BANDIT_HP_START) {
-          const hpFraction = Math.min(1, (this.dwellTime - BANDIT_HP_START) / BANDIT_HP_RAMP);
-          const hpDmg = BANDIT_MAX_HP_RATE * hpFraction * dt * train.lastStandDamageMultiplier;
-          train.hp -= hpDmg;
-          if (train.damageFlash <= 0) train.damageFlash = 0.1;
-          // Floating damage attribution (purple — bandit HP drain, throttled)
-          const drainRate = BANDIT_MAX_HP_RATE * hpFraction;
-          spawnAttribution(`-${drainRate.toFixed(1)}`, this.x, this.y - 20, '#cc66ff', `bandit-hp-${this.targetSlot?.worldX}`);
-        }
-
+        // PROTOTYPE: bandits ONLY degrade the mount (handled in combat.js).
+        // No gold stealing, no HP drain.
 
         if (this.stealFlash > 0) this.stealFlash -= dt;
-        // If slot has auto-weapon, it's degraded (checked in combat.js)
 
         // Check if crew just arrived at this slot
         if (this.targetSlot.crew) {
@@ -200,10 +188,10 @@ export class BanditSystem {
       if (b.active) b.update(dt, train);
     }
 
-    // Defeating a bandit earns a short spawn reprieve
+    // Defeating a bandit earns a brief spawn reprieve (PROTOTYPE: was 3)
     for (const b of this.pool) {
       if (b.justDied) {
-        this.spawnTimer = Math.max(this.spawnTimer, 3);
+        this.spawnTimer = Math.max(this.spawnTimer, 1.5);
         b.justDied = false;
       }
     }

@@ -272,16 +272,16 @@ export class Renderer3D {
     // 8 weapon mounts: 4 on rear weapon car, 4 on front weapon car
     // Train layout (along X): rear weapon (-80) | cargo (-27) | front weapon (27) | locomotive (80)
     this.mountOffsets3D = [
-      // Rear weapon car (4 mounts: corners)
-      { x: -95, y: 16, z: -15 },  // rear-left-back
-      { x: -65, y: 16, z: -15 },  // rear-right-back
-      { x: -95, y: 16, z: 15 },   // rear-left-front
-      { x: -65, y: 16, z: 15 },   // rear-right-front
+      // Rear weapon car (4 mounts: corners) — tighter to car body
+      { x: -90, y: 16, z: -8 },   // rear top-left
+      { x: -68, y: 16, z: -8 },   // rear top-right
+      { x: -90, y: 16, z: 8 },    // rear bottom-left
+      { x: -68, y: 16, z: 8 },    // rear bottom-right
       // Front weapon car (4 mounts: corners)
-      { x: 10, y: 16, z: -15 },   // front-left-back
-      { x: 40, y: 16, z: -15 },   // front-right-back
-      { x: 10, y: 16, z: 15 },    // front-left-front
-      { x: 40, y: 16, z: 15 },    // front-right-front
+      { x: 15, y: 16, z: -8 },    // front top-left
+      { x: 37, y: 16, z: -8 },    // front top-right
+      { x: 15, y: 16, z: 8 },     // front bottom-left
+      { x: 37, y: 16, z: 8 },     // front bottom-right
     ];
     // Driver seat on locomotive
     this.driverOffset3D = { x: 75, y: 16, z: 0 };
@@ -613,6 +613,19 @@ export class Renderer3D {
       const sx = screenPos.x;
       const sy = screenPos.y;
 
+      // DEBUG: bright mount position markers (remove after tuning)
+      ctx.save();
+      ctx.beginPath();
+      ctx.arc(sx, sy, 12, 0, Math.PI * 2);
+      ctx.fillStyle = i < 4 ? 'rgba(255,100,0,0.6)' : 'rgba(0,150,255,0.6)';
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 10px monospace';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(String(i), sx, sy);
+      ctx.restore();
+
       // --- Mount status glow ---
       {
         const hasBandit = mount._bandit && mount._bandit.active &&
@@ -654,50 +667,48 @@ export class Renderer3D {
         }
       }
 
-      // Firing cone visualization — single cone pointing outward from train
-      // Skip steam blast (area effect) and laser (random direction)
+      // Firing cone visualization — shows current aim direction
       const hasAuto = mount.hasAutoWeapon;
       const skipCone = mount.autoWeaponId === 'steamBlast' || mount.autoWeaponId === 'ricochetShot';
-      if ((mount.isManned || hasAuto) && !skipCone) {
-        const coneColor = mount.isManned && mount.crew
+      const showCone = (mount.isManned || hasAuto || !mount.isOccupied) && !skipCone;
+      if (showCone) {
+        const isManned = mount.isManned && mount.crew;
+        const coneColor = isManned
           ? mount.crew.color
-          : (hasAuto && AUTO_WEAPONS[mount.autoWeaponId] ? AUTO_WEAPONS[mount.autoWeaponId].color : '#ffffff');
+          : (hasAuto && AUTO_WEAPONS[mount.autoWeaponId] ? AUTO_WEAPONS[mount.autoWeaponId].color : '#888888');
 
-        const coneRadius = 56;
+        const coneRadius = isManned ? 70 : 42;
         const projDist = 50;
-
-        // Project the game's actual baseDirection into isometric screen space.
-        // In 2D pixel space: cos→X, sin→Y(down). Pixel X→world X, pixel Y→world Z.
-        // So a 2D direction (cos(a), sin(a)) maps to 3D offset (cos(a), sin(a)) on (X, Z).
+        // Use coneDirection (current aim) instead of baseDirection (fixed arc)
+        const aimDir = mount.coneDirection;
         const half = mount.coneHalfAngle;
 
-        // Project BOTH cone edges independently — isometric projection is NOT
-        // angle-preserving, so the two edges distort differently.
-        const edge1Px = mount.worldX + Math.cos(mount.baseDirection - half) * projDist;
-        const edge1Py = mount.worldY + Math.sin(mount.baseDirection - half) * projDist;
+        // Project both cone edges into isometric screen space
+        const edge1Px = mount.worldX + Math.cos(aimDir - half) * projDist;
+        const edge1Py = mount.worldY + Math.sin(aimDir - half) * projDist;
         const edge1W = toWorld(edge1Px, edge1Py);
         const edge1Scr = this._project(edge1W.x, edge1W.z);
         const screenEdge1 = Math.atan2(edge1Scr.y - sy, edge1Scr.x - sx);
 
-        const edge2Px = mount.worldX + Math.cos(mount.baseDirection + half) * projDist;
-        const edge2Py = mount.worldY + Math.sin(mount.baseDirection + half) * projDist;
+        const edge2Px = mount.worldX + Math.cos(aimDir + half) * projDist;
+        const edge2Py = mount.worldY + Math.sin(aimDir + half) * projDist;
         const edge2W = toWorld(edge2Px, edge2Py);
         const edge2Scr = this._project(edge2W.x, edge2W.z);
         const screenEdge2 = Math.atan2(edge2Scr.y - sy, edge2Scr.x - sx);
 
-        // Determine the correct arc direction (shortest path between edges)
-        // Normalize the angular span
         let arcStart = screenEdge1;
         let arcEnd = screenEdge2;
         let span = arcEnd - arcStart;
         while (span > Math.PI) span -= Math.PI * 2;
         while (span < -Math.PI) span += Math.PI * 2;
-        // If span is negative, swap so we always draw counterclockwise
         if (span < 0) {
           arcStart = screenEdge2;
           arcEnd = screenEdge1;
           span = -span;
         }
+
+        const fillAlpha = isManned ? 0.25 : 0.08;
+        const strokeAlpha = isManned ? 0.5 : 0.15;
 
         ctx.save();
         ctx.beginPath();
@@ -705,11 +716,11 @@ export class Renderer3D {
         ctx.arc(sx, sy, coneRadius, arcStart, arcEnd, false);
         ctx.closePath();
         ctx.fillStyle = coneColor;
-        ctx.globalAlpha = 0.12;
+        ctx.globalAlpha = fillAlpha;
         ctx.fill();
         ctx.strokeStyle = coneColor;
-        ctx.globalAlpha = 0.3;
-        ctx.lineWidth = 1;
+        ctx.globalAlpha = strokeAlpha;
+        ctx.lineWidth = isManned ? 2 : 1;
         ctx.stroke();
         ctx.restore();
       }
@@ -717,15 +728,15 @@ export class Renderer3D {
       // Slot indicator on overlay
       const active = mount.isManned || hasAuto;
       if (!hasAuto && !mount.isManned) {
-        // Empty box to show "weapon slot available"
-        const boxSize = MOUNT_RADIUS * 2;
-        ctx.fillStyle = 'rgba(60, 60, 60, 0.5)';
-        ctx.fillRect(sx - boxSize / 2, sy - boxSize / 2, boxSize, boxSize);
-        ctx.strokeStyle = showEmptySlots ? 'rgba(200,200,200,0.7)' : 'rgba(120,120,120,0.5)';
+        // Empty mount slot — visible circle
+        const slotR = 10;
+        ctx.beginPath();
+        ctx.arc(sx, sy, slotR, 0, Math.PI * 2);
+        ctx.fillStyle = 'rgba(80, 80, 80, 0.6)';
+        ctx.fill();
+        ctx.strokeStyle = showEmptySlots ? 'rgba(255,255,255,0.7)' : 'rgba(160,160,160,0.5)';
         ctx.lineWidth = 1.5;
-        ctx.setLineDash([4, 3]);
-        ctx.strokeRect(sx - boxSize / 2, sy - boxSize / 2, boxSize, boxSize);
-        ctx.setLineDash([]);
+        ctx.stroke();
       }
 
       if (mount.crew) {
@@ -733,26 +744,7 @@ export class Renderer3D {
         ctx.textAlign = 'center';
         ctx.fillText('\uD83D\uDC31', sx, sy + 4);
 
-        // Buddy bonus indicator — subtle "+" when adjacent crew member present
-        if (train.hasBuddyBonus(mount)) {
-          ctx.save();
-          const pulse = 0.6 + Math.sin(performance.now() * 0.005) * 0.3;
-          // Small glowing "+" above the crew icon
-          ctx.font = 'bold 10px monospace';
-          ctx.textAlign = 'center';
-          ctx.strokeStyle = 'rgba(0,0,0,0.6)';
-          ctx.lineWidth = 2;
-          ctx.strokeText('+', sx + 10, sy - 10);
-          ctx.fillStyle = `rgba(100, 255, 100, ${pulse})`;
-          ctx.fillText('+', sx + 10, sy - 10);
-          // Faint green ring around the mount
-          ctx.beginPath();
-          ctx.arc(sx, sy, MOUNT_RADIUS + 4, 0, Math.PI * 2);
-          ctx.strokeStyle = `rgba(100, 255, 100, ${pulse * 0.35})`;
-          ctx.lineWidth = 1.5;
-          ctx.stroke();
-          ctx.restore();
-        }
+        // PROTOTYPE: buddy bonus "+" removed for cleaner visuals
 
         // Idle crew warning — crew on auto-weapon mount, no bandit (guarding after fight)
         if (hasAuto && !mount._bandit) {
@@ -1838,7 +1830,7 @@ export class Renderer3D {
     ctx.fillStyle = '#8f8';
     ctx.font = 'bold 10px monospace';
     ctx.textAlign = 'left';
-    ctx.fillText('HULL', hpX + 4, hpY - 1);
+    ctx.fillText('HP', hpX + 4, hpY - 1);
 
     ctx.fillStyle = '#222';
     ctx.fillRect(hpX + 4, hpY + 4, hpBarW, hpBarH);
@@ -3113,7 +3105,7 @@ export class Renderer3D {
         `Crew: ${1 + u.crewSlots.level}`,
         `Dmg: +${u.damage.level * 15}%  Shield: ${u.shield.level}`,
         `Cool-off: -${u.coolOff.level * 10}%  Range: +${u.baseArea.level * 15}%`,
-        `Hull: +${u.maxHp.level * 15}  Greed: +${u.greed.level * 20}%`,
+        `HP: +${u.maxHp.level * 15}  Greed: +${u.greed.level * 20}%`,
       ];
       stats.forEach((s, i) => {
         ctx.fillText(s, panelX + 8, panelY + 28 + i * 14);

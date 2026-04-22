@@ -134,7 +134,7 @@ export const SHOP_TUNING = {
   maxHp:    { cost: T('SHOP_MAXHP_COST', 30),    maxLevel: T('SHOP_MAXHP_MAX_LEVEL', 5),    perLevel: T('SHOP_MAXHP_PER_LEVEL', 15) },
   baseArea: { cost: T('SHOP_RANGE_COST', 40),    maxLevel: T('SHOP_RANGE_MAX_LEVEL', 5),    perLevel: T('SHOP_RANGE_PER_LEVEL', 15) },
   greed:    { cost: T('SHOP_GREED_COST', 60),    maxLevel: T('SHOP_GREED_MAX_LEVEL', 3),    perLevel: T('SHOP_GREED_PER_LEVEL', 20) },
-  crewSlots:{ cost: T('SHOP_CREW_COST', 300),    maxLevel: T('SHOP_CREW_MAX_LEVEL', 2) },
+  crewSlots:{ cost: T('SHOP_CREW_COST', 300),    maxLevel: 0 }, // PROTOTYPE: 3rd crew disabled
 };
 
 // Run
@@ -142,7 +142,7 @@ export const TARGET_DISTANCE = T('TARGET_DISTANCE', 10000);
 
 // Bandits
 export const BANDIT_SPEED = T('BANDIT_SPEED', 110);
-export const BANDIT_SPAWN_INTERVAL = T('BANDIT_SPAWN_INTERVAL', 10);
+export const BANDIT_SPAWN_INTERVAL = T('BANDIT_SPAWN_INTERVAL', 8); // tighter overlap with waves
 export const BANDIT_JUMP_DURATION = T('BANDIT_JUMP_DURATION', 0.4);
 export const BANDIT_STEAL_RATE = T('BANDIT_STEAL_RATE', 0); // gold per second
 export const BANDIT_FIGHT_DURATION = T('BANDIT_FIGHT_DURATION', 0.5);
@@ -151,13 +151,13 @@ export const MAX_BANDITS = 10;
 // Wave system
 export const WAVE_CYCLE_DURATION = T('WAVE_CYCLE_DURATION', 7);       // seconds between surge starts
 export const WAVE_SURGE_DURATION = T('WAVE_SURGE_DURATION', 8);        // seconds a surge lasts
-export const WAVE_CALM_DURATION = T('WAVE_CALM_DURATION', 10);         // calm period after surge
+export const WAVE_CALM_DURATION = T('WAVE_CALM_DURATION', 4);          // brief recovery (was 10)
 export const WAVE_SURGE_SPAWN_MULT = T('WAVE_SURGE_SPAWN_MULT', 3.5);  // spawn rate multiplier during surge
 export const WAVE_CALM_SPAWN_MULT = T('WAVE_CALM_SPAWN_MULT', 0.1);    // spawn rate multiplier during calm
 export const WAVE_ESCALATION = T('WAVE_ESCALATION', 0.10);             // per-wave difficulty increase
 export const WAVE_WARNING_DURATION = T('WAVE_WARNING_DURATION', 3);    // seconds of warning before surge
 export const WAVE_BOSS_SURGE_MULT = T('WAVE_BOSS_SURGE_MULT', 3.5);   // extra intense boss wave multiplier
-export const UNMANNED_EFFECTIVENESS = T('UNMANNED_EFFECTIVENESS', 0.15);
+export const UNMANNED_EFFECTIVENESS = T('UNMANNED_EFFECTIVENESS', 0.10); // near-useless without crew
 
 // Station combat modifiers
 export const STATION_MODIFIERS = {
