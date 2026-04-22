@@ -211,7 +211,7 @@ export class CombatSystem {
         if (Math.abs(diff) < maxRot) {
           mount.coneDirection = desiredAngle;
         } else {
-          mount.coneDirection += Math.sign(diff) * maxRot;
+          mount.coneDirection = mount.clampAngle(mount.coneDirection + Math.sign(diff) * maxRot);
         }
       }
     }

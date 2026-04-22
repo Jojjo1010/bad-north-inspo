@@ -613,19 +613,6 @@ export class Renderer3D {
       const sx = screenPos.x;
       const sy = screenPos.y;
 
-      // DEBUG: bright mount position markers (remove after tuning)
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(sx, sy, 12, 0, Math.PI * 2);
-      ctx.fillStyle = i < 4 ? 'rgba(255,100,0,0.6)' : 'rgba(0,150,255,0.6)';
-      ctx.fill();
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 10px monospace';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      ctx.fillText(String(i), sx, sy);
-      ctx.restore();
-
       // --- Mount status glow ---
       {
         const hasBandit = mount._bandit && mount._bandit.active &&
@@ -670,14 +657,10 @@ export class Renderer3D {
       // Firing cone visualization — shows current aim direction
       const hasAuto = mount.hasAutoWeapon;
       const skipCone = mount.autoWeaponId === 'steamBlast' || mount.autoWeaponId === 'ricochetShot';
-      const showCone = (mount.isManned || hasAuto || !mount.isOccupied) && !skipCone;
+      const showCone = mount.isManned && !skipCone;
       if (showCone) {
-        const isManned = mount.isManned && mount.crew;
-        const coneColor = isManned
-          ? mount.crew.color
-          : (hasAuto && AUTO_WEAPONS[mount.autoWeaponId] ? AUTO_WEAPONS[mount.autoWeaponId].color : '#888888');
-
-        const coneRadius = isManned ? 70 : 42;
+        const coneColor = mount.crew.color;
+        const coneRadius = 70;
         const projDist = 30; // distance in 3D units to project cone edges
         const aimDir = mount.coneDirection;
         const half = mount.coneHalfAngle;
@@ -708,8 +691,8 @@ export class Renderer3D {
           span = -span;
         }
 
-        const fillAlpha = isManned ? 0.25 : 0.08;
-        const strokeAlpha = isManned ? 0.5 : 0.15;
+        const fillAlpha = 0.25;
+        const strokeAlpha = 0.5;
 
         ctx.save();
         ctx.beginPath();
