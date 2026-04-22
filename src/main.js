@@ -334,6 +334,10 @@ function updateSetup(dt) {
       state = STATES.RUNNING;
       lastTime = performance.now();
       selectedCrew = null;
+      // Auto-pause for debugging gun/cone alignment
+      if (window.__mountDebug && window.__mountDebug.enabled) {
+        state = STATES.RUN_PAUSE;
+      }
       return;
     }
 
