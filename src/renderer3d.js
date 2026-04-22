@@ -623,7 +623,7 @@ export class Renderer3D {
           while (diff < -Math.PI) diff += 2 * Math.PI;
           const maxDiff = MD.coneHalf * Math.PI / 180;
           if (Math.abs(diff) > maxDiff) diff = Math.sign(diff) * maxDiff;
-          group.rotation.y = defaultRot + diff;
+          group.rotation.y = defaultRot - diff;
         } else {
           group.rotation.y = defaultRot;
         }
