@@ -350,11 +350,19 @@ function updateSetup(dt) {
         hoveredRoleBtn = btn.key;
       }
     }
-    // Click to assign role
+    // Click handling
     if (input.leftClicked) {
       for (const btn of rolePickButtons) {
-        if (input.hitRect(btn.x, btn.y, btn.w, btn.h)) {
-          train.crew[btn.crewIdx].role = btn.roleId;
+        if (!input.hitRect(btn.x, btn.y, btn.w, btn.h)) continue;
+        if (btn.type === 'roster') {
+          // Click roster card → fill next empty crew slot with this role
+          const emptyIdx = train.crew.findIndex(c => c.role === null);
+          if (emptyIdx >= 0) {
+            train.crew[emptyIdx].role = btn.roleId;
+          }
+        } else if (btn.type === 'slot') {
+          // Click filled slot → clear it
+          train.crew[btn.crewIdx].role = null;
         }
       }
       // Check if all chosen
