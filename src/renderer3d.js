@@ -655,35 +655,27 @@ export class Renderer3D {
 
         group.visible = desiredType !== null;
 
-        // DEBUG: green line showing where gun 3D rotation actually points
+        // DEBUG: show cone center (yellow) and gun rotation value
         if (mount.isManned) {
-          const rotY = group.rotation.y;
-          // rotation.y in Three.js: 0=+Z, π/2=+X, π=-Z, -π/2=-X
-          const gunDirX = Math.sin(rotY); // world X component
-          const gunDirZ = Math.cos(rotY); // world Z component
-          const gunTargetScr = this._project(offset.x + gunDirX * 40, offset.z + gunDirZ * 40);
-          ctx.save();
-          ctx.beginPath();
-          ctx.moveTo(sx, sy);
-          ctx.lineTo(gunTargetScr.x, gunTargetScr.y);
-          ctx.strokeStyle = '#0f0';
-          ctx.lineWidth = 3;
-          ctx.stroke();
-          // Also draw cone center line (yellow)
-          const coneCenter = offset.z < 0 ? MD.upperConeAngle : MD.lowerConeAngle;
-          const ccRad = coneCenter * Math.PI / 180;
-          ctx.beginPath();
-          ctx.moveTo(sx, sy);
-          ctx.lineTo(sx + Math.cos(ccRad) * 60, sy + Math.sin(ccRad) * 60);
-          ctx.strokeStyle = '#ff0';
-          ctx.lineWidth = 2;
-          ctx.stroke();
-          // Show rotation value
-          ctx.fillStyle = '#0f0';
-          ctx.font = '10px monospace';
-          ctx.textAlign = 'left';
-          ctx.fillText(`rot=${Math.round(rotY * 180 / Math.PI)}°`, sx + 15, sy - 15);
-          ctx.restore();
+          try {
+            const coneCenter = offset.z < 0 ? MD.upperConeAngle : MD.lowerConeAngle;
+            const ccRad = coneCenter * Math.PI / 180;
+            ctx.save();
+            // Yellow line: cone center direction
+            ctx.beginPath();
+            ctx.moveTo(sx, sy);
+            ctx.lineTo(sx + Math.cos(ccRad) * 60, sy + Math.sin(ccRad) * 60);
+            ctx.strokeStyle = '#ff0';
+            ctx.lineWidth = 2;
+            ctx.stroke();
+            // Show rotation value
+            const rotDeg = Math.round(group.rotation.y * 180 / Math.PI);
+            ctx.fillStyle = '#ff0';
+            ctx.font = '10px monospace';
+            ctx.textAlign = 'left';
+            ctx.fillText(`rot=${rotDeg}° def=${Math.round((offset.z < 0 ? (135+MD.upperGunOffset) : (-45+MD.lowerGunOffset)))}°`, sx + 15, sy - 15);
+            ctx.restore();
+          } catch(e) { /* prevent crash */ }
         }
 
         mountIdx++;
