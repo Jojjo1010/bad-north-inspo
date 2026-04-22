@@ -1670,7 +1670,7 @@ export class Renderer3D {
     // Role bonus text per role
     const roleBonusMap = {
       Gunner:   '+60% dmg, slow bandit fight',
-      Brawler:  'Instant bandit kick, -40% dmg',
+      Brawler:  'No gun — AOE kick on bandit kill',
     };
     const roleBonus = roleBonusMap[crew.role] || '';
 
@@ -2262,9 +2262,10 @@ export class Renderer3D {
       {
         id: 'Brawler', avatar: '\u26C4\uFE0F',
         color: '#66bb6a', bg: 'rgba(80, 200, 90, 0.15)',
-        title: 'BRAWLER', tagline: 'AOE kick on bandit kill',
+        title: 'BRAWLER', tagline: 'No gun — AOE kick on bandit kill',
         statBars: [
           { label: 'KICK DMG', value: 4, max: 5, color: '#e57373' },
+          { label: 'KICK AOE', value: 4, max: 5, color: '#64b5f6' },
           { label: 'VS BANDIT', value: 5, max: 5, color: '#81c784' },
         ],
       },

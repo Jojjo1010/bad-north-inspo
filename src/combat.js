@@ -238,6 +238,9 @@ export class CombatSystem {
       if (mount.cooldownTimer > 0) continue;
 
       if (manned) {
+        // Brawler doesn't shoot — their value is the kick AOE
+        if (mount.crew.role === 'Brawler') continue;
+
         // --- Manned: full power, crew bonuses apply ---
         let angle;
         if (mount.crew === selectedCrew && mount._fireAngle2D !== undefined) {

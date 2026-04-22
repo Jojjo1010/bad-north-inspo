@@ -678,11 +678,20 @@ function updateRun(dt) {
         combat.handleEnemyDamageResult(e, train, ex, ey, ec);
       }
     }
-    // Visual: screen shake + kill effect at kick location
-    train.shakeTimer = Math.max(train.shakeTimer, 0.15);
-    train.shakeIntensity = 1.2;
-    renderer.spawnKillEffect(kx, ky, '#66bb6a');
-    renderer.spawnKillEffect(kx, ky, '#66bb6a');
+    // Big visual punch — this should feel like a moment
+    train.shakeTimer = Math.max(train.shakeTimer, 0.3);
+    train.shakeIntensity = 2.0;
+    hitStopTimer = 0.08; // brief freeze for impact
+    // Burst of green particles
+    for (let i = 0; i < 6; i++) {
+      renderer.spawnKillEffect(
+        kx + (Math.random() - 0.5) * 40,
+        ky + (Math.random() - 0.5) * 40,
+        '#66bb6a'
+      );
+    }
+    // Damage flash on train (green — positive)
+    train.hpGreenFlashTimer = 0.3;
   }
 
   // Floating damage attribution numbers
