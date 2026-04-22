@@ -9,8 +9,8 @@ import { toWorld, toWorldX, toWorldZ, toPixelX, toPixelZ } from './coordMap.js';
 window.__mountDebug = window.__mountDebug || {
   enabled: false,
   upperConeAngle: -125,  // degrees
-  lowerConeAngle: 45,    // degrees
-  gunOffset: 105,        // degrees
+  lowerConeAngle: 35,    // degrees
+  gunOffset: -55,        // degrees
   coneHalf: 90,          // degrees (half of total cone)
 };
 const MD = window.__mountDebug;
