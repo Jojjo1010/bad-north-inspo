@@ -433,9 +433,12 @@ function updateRun(dt) {
   }
 
   train.distance += TRAIN_SPEED * dt;
-  // Regen: defense regen + Medic role bonus (2 HP/s when stationed)
+  // Regen: defense regen + Medic role bonus (2 HP/s when stationary 3+ seconds)
   let regenRate = train._regenRate;
-  if (train.medicStationed) regenRate += 2;
+  const medic = train.crew.find(c => c.role === 'Medic');
+  if (medic && medic.assignment && !medic.isMoving && medic.stationaryTime >= 3) {
+    regenRate += 2;
+  }
   if (regenRate > 0) {
     train.hp = Math.min(train.hp + regenRate * dt, train.maxHp);
   }

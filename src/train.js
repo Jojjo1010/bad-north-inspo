@@ -148,6 +148,9 @@ export class CrewMember {
     this.movePath = [];      // array of {x, y, pause} waypoints
     this.moveTargetSlot = null;
     this.pauseTimer = 0;
+
+    // Medic stationary tracking — regen only after 3+ seconds stationary
+    this.stationaryTime = 0;
   }
 
   startMove(fromX, fromY, targetSlot, path) {
@@ -157,6 +160,7 @@ export class CrewMember {
     this.movePath = path;
     this.moveTargetSlot = targetSlot;
     this.pauseTimer = 0;
+    this.stationaryTime = 0; // reset Medic regen timer on movement
   }
 
   updateMove(dt) {
@@ -486,12 +490,17 @@ export class Train {
 
     // Update crew positions
     for (const c of this.crew) {
-      if (!c.isMoving) continue;
-      const arrived = c.updateMove(dt);
-      if (arrived && c.moveTargetSlot) {
-        // Assign to target
-        this.assignCrew(c, c.moveTargetSlot);
-        c.moveTargetSlot = null;
+      if (c.isMoving) {
+        c.stationaryTime = 0; // reset while moving
+        const arrived = c.updateMove(dt);
+        if (arrived && c.moveTargetSlot) {
+          // Assign to target
+          this.assignCrew(c, c.moveTargetSlot);
+          c.moveTargetSlot = null;
+        }
+      } else if (c.assignment) {
+        // Accumulate stationary time when assigned and not moving
+        c.stationaryTime += dt;
       }
     }
   }
