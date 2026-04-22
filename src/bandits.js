@@ -134,7 +134,7 @@ export class Bandit {
         // HP damage: starts late, ramps slowly, caps low per bandit
         if (this.dwellTime >= BANDIT_HP_START) {
           const hpFraction = Math.min(1, (this.dwellTime - BANDIT_HP_START) / BANDIT_HP_RAMP);
-          train.hp -= BANDIT_MAX_HP_RATE * hpFraction * dt;
+          train.hp -= BANDIT_MAX_HP_RATE * hpFraction * dt * train.lastStandDamageMultiplier;
           if (train.damageFlash <= 0) train.damageFlash = 0.1;
         }
 
