@@ -169,8 +169,9 @@
       <div class="sep"></div>
       <div class="tabs">
         <button class="tab active" onclick="switchTab('tuner')">Tuner</button>
+        <button class="tab" onclick="switchTab('gamedocs')">Game Docs</button>
+        <button class="tab" onclick="switchTab('ue5')">UE5 Blueprint Guide</button>
         <button class="tab" onclick="switchTab('changelog')">Changelog</button>
-        <button class="tab" onclick="switchTab('docs')">UE5 Port Guide</button>
       </div>
       <span class="status" id="status">Loading...</span>
       <div class="actions" id="tunerActions">
@@ -186,9 +187,39 @@
     </div>
   </div>
 
+  <div class="tab-content" id="tab-gamedocs">
+    <div class="docs-layout">
+      <nav class="docs-sidebar" id="gameDocsSidebar">
+        <div class="docs-sidebar-title">On this page</div>
+        <div class="docs-search">
+          <div class="docs-search-wrap">
+            <span class="docs-search-icon">⌕</span>
+            <input type="text" id="gameDocsSearchInput" placeholder="Search..." autocomplete="off">
+          </div>
+        </div>
+        <div id="gameDocsSidebarNav"></div>
+      </nav>
+      <div class="docs-main">
+        <div class="docs-content" id="gameDocsContent">
+          <div class="docs-loading">Loading game documentation...</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <div class="tab-content" id="tab-changelog">
     <div class="content" style="max-width:720px; margin:0 auto;">
       <h2 style="color:var(--accent); margin-bottom:24px;">Changelog</h2>
+
+      <div class="card" style="margin-bottom:16px; padding:16px; background:var(--bg-1); border:1px solid var(--border); border-radius:var(--radius-lg);">
+        <h3 style="color:var(--text); font-size:15px; margin-bottom:8px;">2026-04-22 — Documentation Restructure</h3>
+        <ul style="color:var(--text-muted); font-size:13px; line-height:1.8; padding-left:20px;">
+          <li>Separated game documentation (GAME_DOCS.md) from UE5 porting guide (UNREAL_PORT.md)</li>
+          <li>New <strong>Game Docs</strong> tab — complete reference for all game systems, mechanics, and UI</li>
+          <li>Rewrote <strong>UE5 Blueprint Guide</strong> as 20 sequential steps with Blueprint node names and verify checklists</li>
+          <li>Both docs now have independent sidebars with search and scroll-spy</li>
+        </ul>
+      </div>
 
       <div class="card" style="margin-bottom:16px; padding:16px; background:var(--bg-1); border:1px solid var(--border); border-radius:var(--radius-lg);">
         <h3 style="color:var(--text); font-size:15px; margin-bottom:8px;">2026-04-22 — Decision Quality &amp; Feel Refinement</h3>
@@ -221,41 +252,40 @@
     </div>
   </div>
 
-  <div class="tab-content" id="tab-docs">
+  <div class="tab-content" id="tab-ue5">
     <div class="docs-layout">
-      <nav class="docs-sidebar" id="docsSidebar">
+      <nav class="docs-sidebar" id="ue5Sidebar">
         <div class="docs-sidebar-title">On this page</div>
         <div class="docs-search">
           <div class="docs-search-wrap">
             <span class="docs-search-icon">⌕</span>
-            <input type="text" id="docsSearchInput" placeholder="Search..." autocomplete="off">
+            <input type="text" id="ue5SearchInput" placeholder="Search..." autocomplete="off">
           </div>
         </div>
-        <div id="docsSidebarNav"></div>
+        <div id="ue5SidebarNav"></div>
       </nav>
       <div class="docs-main">
-        <div class="docs-content" id="docsContent">
-          <div class="docs-loading">Loading documentation...</div>
+        <div class="docs-content" id="ue5Content">
+          <div class="docs-loading">Loading UE5 guide...</div>
         </div>
       </div>
     </div>
   </div>
 
   <script>
-    let _scrollSpyCleanup = null;
+    const _scrollSpyCleanups = {};
 
-    function buildSidebar() {
-      const content = document.getElementById('docsContent');
-      const nav = document.getElementById('docsSidebarNav');
+    function buildSidebar(contentId, navId, searchInputId) {
+      const content = document.getElementById(contentId);
+      const nav = document.getElementById(navId);
       const headings = content.querySelectorAll('h2, h3');
       nav.innerHTML = '';
 
-      // Group h3s under their preceding h2
       let currentSection = null;
       const sections = [];
 
       headings.forEach((h, i) => {
-        if (!h.id) h.id = 'heading-' + i;
+        if (!h.id) h.id = contentId + '-heading-' + i;
         if (h.tagName === 'H2') {
           currentSection = { h2: h, children: [] };
           sections.push(currentSection);
@@ -304,7 +334,7 @@
       });
 
       // Search
-      const searchInput = document.getElementById('docsSearchInput');
+      const searchInput = document.getElementById(searchInputId);
       searchInput.addEventListener('input', () => {
         const q = searchInput.value.toLowerCase().trim();
         nav.querySelectorAll('.docs-section').forEach(sec => {
@@ -344,20 +374,17 @@
       });
 
       // Scroll spy
-      if (_scrollSpyCleanup) _scrollSpyCleanup();
+      if (_scrollSpyCleanups[contentId]) _scrollSpyCleanups[contentId]();
 
       const observer = new IntersectionObserver((entries) => {
         for (const entry of entries) {
           if (!entry.isIntersecting) continue;
           const id = entry.target.id;
-          // Clear all active states
           nav.querySelectorAll('.docs-section-toggle, .docs-section-children a').forEach(el => el.classList.remove('active'));
 
-          // Find and activate the matching element
           const childLink = nav.querySelector(`.docs-section-children a[data-target="${id}"]`);
           if (childLink) {
             childLink.classList.add('active');
-            // Also activate parent section and expand it
             const sec = childLink.closest('.docs-section');
             if (sec) {
               sec.querySelector('.docs-section-toggle').classList.add('active', 'open');
@@ -372,7 +399,19 @@
       }, { rootMargin: '-60px 0px -70% 0px', threshold: 0 });
 
       headings.forEach(h => observer.observe(h));
-      _scrollSpyCleanup = () => observer.disconnect();
+      _scrollSpyCleanups[contentId] = () => observer.disconnect();
+    }
+
+    function loadMarkdownTab(mdPath, contentId, navId, searchInputId, errorMsg) {
+      fetch(mdPath)
+        .then(r => r.text())
+        .then(md => {
+          document.getElementById(contentId).innerHTML = marked.parse(md);
+          buildSidebar(contentId, navId, searchInputId);
+        })
+        .catch(() => {
+          document.getElementById(contentId).innerHTML = `<p style="color:var(--red)">${errorMsg}</p>`;
+        });
     }
 
     function switchTab(tabId) {
@@ -382,17 +421,16 @@
       document.querySelector(`.tab[onclick="switchTab('${tabId}')"]`).classList.add('active');
       document.getElementById('tunerActions').style.display = tabId === 'tuner' ? 'flex' : 'none';
 
-      if (tabId === 'docs' && !window._docsLoaded) {
-        window._docsLoaded = true;
-        fetch('docs/UNREAL_PORT.md')
-          .then(r => r.text())
-          .then(md => {
-            document.getElementById('docsContent').innerHTML = marked.parse(md);
-            buildSidebar();
-          })
-          .catch(() => {
-            document.getElementById('docsContent').innerHTML = '<p style="color:var(--red)">Failed to load documentation. Make sure docs/UNREAL_PORT.md exists.</p>';
-          });
+      if (tabId === 'gamedocs' && !window._gameDocsLoaded) {
+        window._gameDocsLoaded = true;
+        loadMarkdownTab('docs/GAME_DOCS.md', 'gameDocsContent', 'gameDocsSidebarNav', 'gameDocsSearchInput',
+          'Failed to load GAME_DOCS.md.');
+      }
+
+      if (tabId === 'ue5' && !window._ue5Loaded) {
+        window._ue5Loaded = true;
+        loadMarkdownTab('docs/UNREAL_PORT.md', 'ue5Content', 'ue5SidebarNav', 'ue5SearchInput',
+          'Failed to load UNREAL_PORT.md.');
       }
     }
   </script>

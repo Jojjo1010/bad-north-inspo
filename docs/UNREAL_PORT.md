@@ -1,39 +1,32 @@
-# Train Defense — Unreal Engine 5.7 Porting Guide
+# Train Defense — UE5 Blueprint Recreation Guide
 
-> Complete documentation for porting the web-based Train Defense game to Unreal Engine 5.7.
-> Generated 2026-04-21.
+> Step-by-step guide to recreating Train Defense in Unreal Engine 5.7 using Blueprints.
+> Game mechanics and tuning values live in GAME_DOCS.md — this guide covers UE5 implementation only.
+> Updated 2026-04-22.
 
 ---
 
 ## How to Use This Guide
 
-This document maps every concept from the existing web game to its Unreal Engine 5 equivalent. If you have never used UE5 before, start with Epic's official **"Your First Hour in Unreal Engine 5"** tutorial first, then come back here as your porting roadmap.
-
-**Reading order for beginners:**
-1. Read the **Glossary** below to learn the key UE5 terms
-2. Read the **Game Overview** to understand what we are building
-3. Read the **Prioritization Strategy** (Section 12) to understand what to build first
-4. Follow the **Phased Porting Plan** (Section 13) step by step
-5. Reference the other sections as needed during implementation
+- Each step is a self-contained task
+- Complete them in order — each builds on the previous
+- Game mechanics details are in GAME_DOCS.md — this guide covers UE5 implementation only
+- Every step ends with a **Verify** checklist
+- Blueprint node names are written in **bold** (e.g., **Set Projection Mode**)
+- When a step says "create a variable," that means adding a variable in the Blueprint's My Blueprint panel
 
 ---
 
-## UE5 Glossary for Beginners
-
-These terms appear throughout this document. Refer back here when you encounter something unfamiliar.
+## UE5 Glossary
 
 | Term | What It Means |
 |---|---|
 | **Actor** | Any object placed in the game world — enemies, the train, a camera, a light. The base building block of UE5. |
 | **Component** | A modular piece you attach to an Actor to give it abilities — a mesh (visual), collision (physics), audio, etc. |
 | **Blueprint (BP)** | UE5's visual scripting system. You connect nodes instead of writing code. Also a type of asset file. |
-| **C++** | Traditional programming. Faster than Blueprints but requires compiling. Most projects use both. |
-| **UCLASS / UPROPERTY / UENUM** | C++ macros (special keywords) that register your code with the UE5 engine so it can be used in the editor and Blueprints. |
 | **GameMode** | A special Actor that defines the rules of your game — win/lose conditions, what happens when a player spawns, which state the game is in. One per level. |
 | **GameInstance** | An object that persists even when you switch levels/maps. Good for storing save data and gold that carries between zones. |
-| **Subsystem** | A singleton service (only one exists) tied to a specific lifetime. A WorldSubsystem lives as long as the current level. |
 | **Widget / UMG** | UE5's UI system (Unreal Motion Graphics). Widgets are UI elements like buttons, text labels, and health bars. |
-| **Slate** | UE5's low-level UI framework underneath UMG. More performant but harder to use. You rarely need it directly. |
 | **CommonUI** | A plugin that manages which UI layer receives input, preventing gameplay actions while a menu is open. |
 | **DataAsset** | A simple data container you can edit in the UE5 editor without recompiling code. Great for tuning values. |
 | **Enhanced Input** | UE5's input system. It separates *what the player wants to do* (Input Action) from *which button does it* (Mapping Context). |
@@ -41,351 +34,36 @@ These terms appear throughout this document. Refer back here when you encounter 
 | **MetaSounds** | UE5's node-based audio system. You wire oscillators and filters together visually — similar to the Web Audio API. |
 | **Sound Cue** | An older, simpler audio system. Good for basic "play this sound with random pitch variation." |
 | **Socket** | A named attachment point on a 3D mesh. Like a "slot" where you can attach weapons or crew to a train car. |
-| **Raycast / Line Trace** | Projecting an invisible line from a point (like the camera) to detect what it hits. Used for mouse click detection in 3D. |
+| **Line Trace** | Projecting an invisible line from a point (like the camera) to detect what it hits. Used for mouse click detection in 3D. |
 | **Static Mesh** | A 3D model that does not animate (a crate, a coin, a train car). |
-| **Skeletal Mesh** | A 3D model with a skeleton for animation (a walking character, a waving flag). |
-| **LOD (Level of Detail)** | Simplified versions of a mesh that swap in when the object is far away, saving performance. |
 | **FVector** | UE5's type for a 3D point or direction (X, Y, Z coordinates). |
 | **FRotator** | UE5's type for a rotation in degrees (Pitch, Yaw, Roll). |
 | **Tick** | The per-frame update function. Every Actor and Component can have one. Runs once per frame. |
 | **Dynamic Material Instance** | A runtime copy of a material whose colors/properties can be changed in real-time (e.g., flashing an enemy white when hit). |
-| **FBX** | A 3D model file format. UE5 imports FBX files as Static or Skeletal Meshes. |
+| **Timeline** | A Blueprint node that interpolates values over time — used for smooth animations like movement, fading, and scaling. |
+| **UProjectileMovementComponent** | A built-in component that handles velocity, gravity, and bouncing for projectiles without writing movement code. |
 
 ---
 
-## 1. Game Overview
-
-**Genre:** Top-down isometric train defense / tower defense hybrid
-**Core Fantasy:** Deliver cargo across a zombie-infested wasteland by managing crew on a moving train
-**Camera:** Orthographic isometric — the camera has no perspective distortion, so objects look the same size regardless of distance. This is standard for isometric games.
-
-**Core Loop:**
-```
-Zone Map → Setup Crew → Combat Run (with level-ups) → Game Over → Shop → Next Zone
-```
-
-**Meta Loop:**
-```
-World (3 zones) → Persistent upgrades (gold) → Next World (harder)
-```
-
-**Players manage:**
-- 3 crew members (Orb, Davie, Punk) on 8 weapon mounts + 1 driver seat
-- Manual aiming + auto-weapons
-- Coal resource for zone travel
-- Gold for permanent upgrades
-- Level-up cards during combat
-
----
-
-## 2. Architecture Translation Map
-
-> **Key concept for beginners:** In the web version, we wrote one big game loop that updates everything each frame. In UE5, this works differently — every object in the world is an **Actor** that updates itself via its own **Tick** function. You don't write the outer loop; the engine runs it for you. Your job is to create Actors and Components and let UE5 manage them.
-
-### Core Patterns
-
-| Web (JS/Three.js) | UE5 Equivalent | Notes |
-|---|---|---|
-| `requestAnimationFrame` game loop | `AActor::Tick(float DeltaTime)` | Engine manages the loop; actors tick themselves |
-| ES module classes | C++ UCLASS / Blueprint | C++ for core systems, BP for tuning/iteration |
-| State machine (string enum) | `UENUM` + GameMode states | 9 states: ZONE_MAP, SETUP, RUNNING, LEVELUP, PLACE_WEAPON, GAMEOVER, PAUSED, SHOP, SETTINGS |
-| Object pooling (active flag arrays) | `UWorldSubsystem`-based pool | Must disable tick, collision, visibility on return |
-| `canvas.addEventListener('click')` | Enhanced Input System | Input Actions + Mapping Contexts, swappable per state |
-| Canvas 2D overlay | UMG Widgets | `UUserWidget` for HUD, `UWidgetComponent` for world-space bars |
-| Three.js `OrthographicCamera` | `UCameraComponent` with `Orthographic` mode | Set `OrthoWidth` ≈ frustumSize |
-| Web Audio API oscillators | MetaSounds | Node-based DSP graphs, nearly identical mental model |
-| MP3 via `AudioBufferSource` | `USoundWave` + `UAudioComponent` | Import MP3/WAV as assets |
-| `localStorage` | `USaveGame` + `SaveGameToSlot` | Structured UPROPERTY serialization |
-| `toWorld(x, y)` coord mapping | Engine camera projection | Replace custom projection with `UGameplayStatics::ProjectWorldToScreen` |
-
-### Class Hierarchy Translation
-
-| JS Class | UE5 Class | Type |
-|---|---|---|
-| Game loop (main.js) | `ATrainGameMode` | GameMode |
-| Save state | `UTrainSaveGame : USaveGame` | SaveGame |
-| Persistent state | `UTrainGameInstance : UGameInstance` | GameInstance |
-| `Train` | `ATrain : AActor` | Actor (with child car actors) |
-| `TrainCar` | `ATrainCar : AActor` | Actor (attached to train) |
-| `WeaponMount` | `UWeaponMountComponent` | ActorComponent |
-| `CrewMember` | `ACrewMember : AActor` | Actor (attached to mount socket) |
-| `Enemy` | `AEnemy : AActor` | Actor (pooled) |
-| `Projectile` | `AProjectile : AActor` | Actor (pooled, use `UProjectileMovementComponent`) |
-| `Bandit` | `ABandit : AActor` | Actor (pooled) |
-| `Coin` | `ACoin : AActor` | Actor (pooled) |
-| `Magnet` | `AMagnet : AActor` | Actor (pooled) |
-| `CoinSystem` | `UCoinSubsystem : UWorldSubsystem` | Subsystem |
-| `BanditSystem` | `UBanditSubsystem : UWorldSubsystem` | Subsystem |
-| `Renderer3D` | Engine rendering + UMG | No equivalent needed |
-| `Zone` | `UZoneData : UDataAsset` | Data-only |
-
----
-
-## 3. Core Game Mechanics
-
-### 3.1 Train System
-
-**Structure:** 4 cars in sequence (rear weapon → cargo → front weapon → locomotive)
-
-| Property | Value | UE5 Implementation |
-|---|---|---|
-| Car dimensions | 32×14px, 6px gap | Scale to UE5 units (×100 → 3200×1400cm) or redesign to fit art |
-| Max HP | 100 (upgradeable +15/level, max 175) | Store as a `UPROPERTY` variable on ATrain (makes it editable in the UE5 editor) |
-| Speed | 167 px/sec (constant) | `FVector` velocity on train actor |
-| Distance to win | 10,000px | Track length or timer-based |
-| Cargo boxes | 4 start, multiplier: 1 + boxes × 0.25 | `UPROPERTY`, affects gold calculation |
-
-**Damage Formula:**
-```
-actual_damage = max(1, enemy_contact_damage - totalShieldReduction)
-totalShieldReduction = armorReduction + passives.shield × 2
-```
-
-**Regeneration:** `+3 HP/sec per regen level` (from defense slot)
-
-### 3.2 Crew System
-
-**3 Crew Members:**
-
-| ID | Name | Color | Starting |
-|---|---|---|---|
-| 0 | Orb | #e74c3c (red) | Yes |
-| 1 | Davie | #3498db (blue) | Unlockable (300g) |
-| 2 | Punk | #2ecc71 (green) | Unlockable (300g) |
-
-**Personal Weapon (Manual Gun) per crew — 5 levels:**
-
-| Level | Damage | Fire Rate | Range |
-|---|---|---|---|
-| 1 | 12 | 5.0/sec | 220px |
-| 2 | 16 | 5.8/sec | 235px |
-| 3 | 20 | 6.6/sec | 250px |
-| 4 | 24 | 7.4/sec | 265px |
-| 5 | 28 | 8.2/sec | 280px |
-
-**Crew States:**
-- Idle (unassigned, in panel)
-- Assigned (at mount, firing or guarding)
-- Moving (animated walk through car doors, 120px/sec, 0.35s door pause)
-
-**Driver Buff:** Crew in locomotive driver seat → all weapons deal 1.5× damage
-
-**Reassign Cooldown:** 1 second between moves
-
-### 3.3 Weapon Mounts
-
-**8 mounts total** (4 per weapon car, positioned at corners)
-
-**Mount States:**
-- Empty (dashed border indicator)
-- Manned (crew firing manual gun)
-- Auto-weapon (turret/steam/laser)
-- Bandit-occupied (disabled)
-
-**Targeting (Crew):**
-- Selected crew: aims at mouse position
-- Unselected crew: auto-targets closest enemy in cone
-- Cone: 45° half-angle from aim direction
-- Lead calculation: predicts enemy position based on projectile travel time
-
-**Targeting (Auto Turret):** Nearest enemy in range, burst fire with slight spread (±0.08 rad)
-
-### 3.4 Auto-Weapons (max 2 equipped)
-
-**Turret:**
-
-| Level | Shots/Burst | Damage | Interval | Range |
-|---|---|---|---|---|
-| 1 | 1 | 10 | 1.2s | 250px |
-| 2 | 2 | 12 | 1.1s | 270px |
-| 3 | 3 | 14 | 1.0s | 290px |
-| 4 | 4 | 16 | 0.9s | 310px |
-| 5 | 5 | 18 | 0.8s | 330px |
-
-**Steam Blast (Aura):**
-
-| Level | Radius | Damage | Tick Rate |
-|---|---|---|---|
-| 1 | 80px | 4 | 0.50s |
-| 2 | 105px | 7 | 0.45s |
-| 3 | 130px | 10 | 0.40s |
-| 4 | 155px | 13 | 0.35s |
-| 5 | 180px | 16 | 0.30s |
-
-**Laser (Ricochet):**
-
-| Level | Bounces | Damage | Interval | Speed |
-|---|---|---|---|---|
-| 1 | 2 | 8 | 2.5s | 300px/s |
-| 2 | 3 | 11 | 2.2s | 325px/s |
-| 3 | 4 | 14 | 1.9s | 350px/s |
-| 4 | 5 | 17 | 1.6s | 375px/s |
-| 5 | 6 | 20 | 1.3s | 400px/s |
-
-### 3.5 Defense Slots (max 2)
-
-| Type | Icon | Per Level | Max Level |
-|---|---|---|---|
-| Shield | 🛡️ | -2 damage taken | 5 |
-| Regen | 💚 | +3 HP/sec | 5 |
-| Repair | 🔧 | Instant +30 HP | N/A (one-time use) |
-
-### 3.6 Enemies
-
-**Base Stats:**
-- HP: 20, Speed: 50px/s, Radius: 6px, Contact Damage: 6
-
-**Tiers:**
-
-| Tier | HP Mult | Radius Mult | Visual |
-|---|---|---|---|
-| 0 (Green) | 1× | 1.5× | 🧟 Zombie |
-| 1 (Brown) | 4× | 5× | 🧟 Zombie |
-| 2 (Dark) | 6× | 5× | 🧟 Zombie |
-
-**Kind:** 60% zombie, 40% bug (🦟) — cosmetic only
-
-**Difficulty Scaling:**
-```
-distanceDiff = 1 + (trainDistance / 10000) × 2
-stationDiff = 1 + (zoneNumber - 1) × 0.2
-combatDifficulty = distanceDiff + (stationDiff - 1)
-enemyHP = baseHP × (1 + difficulty × 0.15) × tierMult
-enemySpeed = baseSpeed × (1 + difficulty × 0.1)
-spawnInterval = max(0.25, 1.5 / stationDiff - difficulty × 0.2)
-```
-
-**Behavior:** Move toward random train car target (70% cargo, 15% rear, 15% front). Deal contact damage, then deactivate.
-
-### 3.7 Bandits
-
-| Property | Value |
-|---|---|
-| Speed | 110px/s (±10%) |
-| Spawn interval | max(4, 15 - difficulty × 1.5) seconds |
-| Steal rate | 5 gold/sec |
-| Fight duration | 0.5s (crew always wins) |
-| Jump duration | 0.4s |
-| Max active | 10 |
-
-**State Machine:** RUNNING → JUMPING → ON_TRAIN → FIGHTING → DEAD
-
-**Behavior:**
-- Spawn from right, run to random unmanned mount
-- On mount without auto-weapon: steal gold
-- On mount with auto-weapon: weapon disabled
-- Crew placed on mount → fight → bandit dies
-
-### 3.8 Coins & Economy
-
-**Coin Spawning:**
-- Every 3s (±30% random)
-- 8% chance → magnet instead of coin
-- Max 30 coins, 30 flying coins, 3 magnets
-
-**Magnet:** Any projectile hit → collect ALL coins on screen (fly to HUD)
-
-**Gold Sources:**
-
-| Source | Amount |
-|---|---|
-| Coin pickup | 10g × (1 + greed% bonus) |
-| Station completion | 25g per visited station |
-| World completion | 200g + runGold × 0.5 |
-| Combat win | runGold × cargoMultiplier |
-
-### 3.9 Level-Up System
-
-**Trigger:** XP ≥ level × 80 (12 XP per kill)
-
-**3 random cards from pool:**
-- Per-crew gun upgrade (if gunLevel < 5)
-- New auto-weapon (if not owned and slots available)
-- Upgrade existing auto-weapon (if level < 5)
-- Shield defense (if defense slots available)
-- Regen defense (if defense slots available)
-- Repair (always available, no slot cost)
-
-**Constraints:** Max 2 auto-weapons, max 2 defense slots
-
-### 3.10 Zone & World Progression
-
-**Structure:** 3 zones per world, 2-3 routes per zone
-
-**Station Types:** START, COMBAT (⚔), EMPTY (—), EXIT (★)
-
-**Coal:** 4 starting, 1 per hop, +2 per combat win, buyable (30g → 2 coal)
-
-**Route Generation:**
-- Short route: 2 stations (fast, less XP)
-- Long route: 4-5 stations (more XP/gold, costs coal)
-- Cross-connections at similar X positions (35% chance)
-
----
-
-## 4. Systems Dependency Graph
-
-```
-Build order: bottom → top
-
-                        ┌──────────┐
-                        │ Zone Map │
-                        └────┬─────┘
-                   ┌─────────┴─────────┐
-                   │                   │
-             ┌─────▼─────┐      ┌─────▼─────┐
-             │   Shop    │      │  Combat   │
-             │(persistent│      │   Run     │
-             │ upgrades) │      └─────┬─────┘
-             └─────┬─────┘    ┌───────┼───────┐
-                   │          │       │       │
-                   ▼    ┌─────▼──┐ ┌──▼───┐ ┌─▼──────┐
-             ┌────────┐ │Weapons │ │Enemy │ │ Coins  │
-             │  Save  │ │(manual │ │Spawn │ │ & Gold │
-             │  State │ │+ auto) │ └──┬───┘ └────────┘
-             └────────┘ └───┬────┘    │
-                            │    ┌────▼────┐
-                       ┌────▼──┐ │ Bandits │
-                       │ Crew  │ └─────────┘
-                       │Assign │
-                       └───┬───┘
-                      ┌────▼────┐
-                      │  Train  │
-                      │(cars,   │
-                      │ mounts, │
-                      │ HP)     │
-                      └────┬────┘
-                      ┌────▼────────┐
-                      │ Constants / │
-                      │   Tuning    │
-                      └─────────────┘
-```
-
-**Implementation Order:** Constants → Train → Crew → Weapons → Enemies → Combat → Coins → Bandits → Level-Up → Zone Map → Shop → Save
-
----
-
-## 5. UE5 Project Setup
+## Prerequisites & Project Setup
 
 ### Template
-When creating a new project in the Unreal Editor, choose the **Blank** template and select **C++** instead of Blueprint. This gives you a clean slate with full engine API access.
+Create a new project using the **Third Person** template (Blueprint). This gives you a working character, camera, and Enhanced Input setup to cannibalize.
 
 ### Required Plugins
-- **Enhanced Input** (enabled by default in 5.7) — the modern input system that separates "what the player wants to do" from "which button does it"
-- **CommonUI** — helps manage which UI screen receives input, so pressing a button in a menu does not accidentally fire a weapon
-- **Niagara** (enabled by default) — UE5's visual effects system for explosions, sparks, confetti, and steam
+Enable these in Edit > Plugins:
+- **Enhanced Input** (enabled by default in 5.7)
+- **CommonUI** — manages input routing between gameplay and menus
+- **Niagara** (enabled by default) — particle/VFX system
 
 ### Blueprint vs C++ Decision
 
-| System | Approach | Reason |
-|---|---|---|
-| Game flow / state machine | C++ base, Blueprint transitions | Write the core logic in C++ for performance, but let designers trigger state changes visually in Blueprint |
-| Enemy AI | Blueprint Behavior Tree | Behavior Trees are UE5's visual AI system — easy to design enemy behaviors without code |
-| Weapon/combat logic | C++ base, Blueprint tuning | Combat runs every frame for 150+ enemies — needs C++ speed. Expose damage/range values to Blueprint for easy tweaking |
-| Object pooling | C++ Subsystem | Pooling manages hundreds of actors per frame — must be as fast as possible |
-| UI/HUD | Blueprint + UMG Widgets | UI layout is inherently visual — drag and drop in the UMG editor |
-| Save system | C++ | Structured save data benefits from C++ type safety |
-| Input | Blueprint + data assets | Enhanced Input uses editor-created assets, not code — naturally Blueprint-friendly |
+This guide is 100% Blueprint. If you later find performance bottlenecks (especially with 150 pooled enemies), consider moving these specific systems to C++:
+- Object pool manager
+- Projectile collision checks
+- Enemy spawning
+
+Everything else (state machine, UI, weapons, crew, economy) works fine as Blueprints.
 
 ### Folder Structure
 
@@ -395,21 +73,18 @@ When creating a new project in the Unreal Editor, choose the **Blank** template 
 Content/
   TrainDefense/
     Core/
-      GameModes/          GM_Combat, GM_ZoneMap
-      DataAssets/          DA_ZoneConfig, DA_EnemyTier, DA_WeaponStats
+      GameModes/          GM_TrainDefense
+      DataAssets/          DA_WeaponStats, DA_EnemyTiers, DA_ShopUpgrades
       SaveGame/            BP_TrainSaveGame
-      Subsystems/          BP_ActorPoolSubsystem, BP_CoinSubsystem
-    Characters/
-      Train/
-        Meshes/            SM_Locomotive, SM_WeaponCar, SM_CargoCar
-        Materials/
-        Blueprints/        BP_Train, BP_TrainCar
-      Crew/
-        Blueprints/        BP_CrewMember
-      Enemies/
-        Zombie/            BP_EnemyZombie, SM_Zombie
-        Bug/               BP_EnemyBug, SM_Bug
-        Bandit/            BP_Bandit, SM_Bandit
+    Train/
+      Meshes/              SM_Locomotive, SM_WeaponCar, SM_CargoCar
+      Materials/
+      Blueprints/          BP_Train
+    Crew/
+      Blueprints/          BP_CrewMember
+    Enemies/
+      Blueprints/          BP_Enemy, BP_Bandit
+      Meshes/              SM_Zombie, SM_Bug
     Weapons/
       Blueprints/          BP_Projectile, BP_RicochetBolt
       Meshes/              SM_ManualGun, SM_AutoTurret, SM_SteamBlast, SM_Laser
@@ -422,13 +97,14 @@ Content/
       Props/               SM_Cactus, SM_Rock
       Materials/           M_Sand, M_Track
     UI/
-      HUD/                 WBP_GameHUD, WBP_CrewPanel, WBP_WeaponHUD
-      Menus/               WBP_ZoneMap, WBP_Shop, WBP_LevelUp, WBP_Pause, WBP_Settings
-      Shared/              WBP_Button, WBP_Slider, WBP_SlotBox
+      HUD/                 WBP_GameHUD, WBP_CrewPanel
+      Menus/               WBP_ZoneMap, WBP_Shop, WBP_LevelUp, WBP_Pause
+      Menus/               WBP_Settings, WBP_GameOver, WBP_StartScreen
+      Shared/              WBP_Button, WBP_Slider
     Audio/
       Music/               SC_BackgroundMusic
-      SFX/                 SC_Shoot, SC_EnemyHit, SC_CoinPickup, SC_Steal
-      MetaSounds/          MS_TrainEngine (reactive to speed)
+      SFX/                 SC_Shoot, SC_EnemyHit, SC_CoinPickup
+      MetaSounds/          MS_TrainEngine
     VFX/
       Niagara/             NS_Confetti, NS_Fireworks, NS_DamageFlash
     Input/
@@ -438,217 +114,1536 @@ Content/
 
 ---
 
-## 6. System-by-System Porting Guide
+## Step 1: Camera & Scene Setup
 
-### 6.1 Game State Machine
+**Goal:** Orthographic isometric camera looking at the origin, matching the web game's view.
 
-**Source:** `main.js` — 9 states with `switch(state)` in update/render
+### What to Create
+- A **CameraActor** placed in the level (or a Blueprint with a CameraComponent)
 
-**UE5 Approach:** In UE5, you define a set of named states using an **enum** (a list of labels). The `UENUM` macro tells the engine about your enum so it can be used in the visual Blueprint editor. The **GameMode** actor checks the current state each frame and decides what systems are active.
+### Blueprint Instructions
 
-```cpp
-// UENUM(BlueprintType) = make this list of states usable in Blueprints
-// uint8 = store as a small number (0-255), saves memory
-UENUM(BlueprintType)
-enum class ETrainGameState : uint8 {
-    ZoneMap,       // Selecting which station to travel to
-    Setup,         // Placing crew before combat
-    Running,       // Active combat
-    LevelUp,       // Choosing a level-up card
-    PlaceWeapon,   // Placing a new auto-weapon on a mount
-    GameOver,      // Win or lose screen
-    Paused,        // Pause menu
-    Shop,          // Buying upgrades between zones
-    Settings       // Audio and debug settings
-};
-```
+1. In your level, Place Actors > Camera Actor. Name it `IsometricCamera`.
+2. Select it and in the Details panel:
+   - **Projection Mode:** Set to `Orthographic`
+   - **Ortho Width:** `30000` (this is the frustum size — 300 web units x 100 cm)
+3. Set the camera transform:
+   - **Location:** X = `-18000`, Y = `-18000`, Z = `22000`
+   - **Rotation:** Pitch = `-35`, Yaw = `45`, Roll = `0`
+4. In your **GM_TrainDefense** GameMode Blueprint, on **Event BeginPlay**:
+   - **Get Player Controller** (index 0)
+   - **Set View Target with Blend** → target = reference to IsometricCamera
 
-**State → UE5 Mapping:**
+### Key Blueprint Nodes
+- **Set Projection Mode** (on CameraComponent)
+- **Set Ortho Width** (on CameraComponent)
+- **Set World Location** / **Set World Rotation**
+- **Set View Target with Blend** (on PlayerController)
 
-| State | UE5 Behavior |
-|---|---|
-| ZONE_MAP | Show WBP_ZoneMap widget, disable gameplay input |
-| SETUP | Show train + crew panel, IMC_Placement input |
-| RUNNING | Full gameplay tick, IMC_Gameplay input |
-| LEVELUP | Pause world, show WBP_LevelUp modal, IMC_Menu |
-| PLACE_WEAPON | Pause world, highlight mounts, IMC_Placement |
-| GAMEOVER | Show WBP_GameOver, IMC_Menu |
-| PAUSED | `UGameplayStatics::SetGamePaused(true)`, show WBP_Pause |
-| SHOP | Show WBP_Shop, IMC_Menu |
-| SETTINGS | Show WBP_Settings, IMC_Menu |
+### Web-to-UE5 Translation
+The web game uses `THREE.OrthographicCamera` at position (-180, 220, 180) with frustum 300. In UE5:
+- Three.js Y-up becomes UE5 Z-up: position (-180, 220, 180) becomes (-18000, -18000, 22000) in cm
+- Frustum size 300 becomes OrthoWidth 30000
+- The isometric look-at angle translates to roughly Pitch=-35, Yaw=45
 
-### 6.2 Object Pooling
+### Screen Shake Setup
+Create a **CameraShakeBase** Blueprint (right-click Content Browser > Blueprint Class > search "Camera Shake Base"):
+- Duration: `0.2` seconds
+- Location amplitude: `(5, 5, 5)`
+- Rotation amplitude: `(1, 1, 1)`
+- Name it `CS_TrainDamage`
 
-**Source:** Pre-allocated arrays with `active` flag (enemies: 150, projectiles: 300, coins: 30, bandits: 10)
-
-**UE5 Approach:** Create a pool manager as a **WorldSubsystem** (a singleton service that lives as long as the level). In the web version, we just set `active = false` to "remove" an entity. In UE5, you must explicitly disable three things — otherwise the actor still costs performance even when invisible:
-
-```cpp
-// IPoolable = an interface (a contract) that all poolable actors must follow
-// The "I" prefix is UE5's naming convention for interfaces
-class IPoolable {
-    virtual void OnActivated() = 0;    // Called when taken from pool
-    virtual void OnDeactivated() = 0;  // Called when returned to pool
-};
-
-// When returning an actor to the pool, disable all three:
-Actor->SetActorHiddenInGame(true);    // Hide the 3D model
-Actor->SetActorEnableCollision(false); // Stop physics/collision checks
-Actor->SetActorTickEnabled(false);     // Stop updating every frame
-// When taking an actor from the pool, re-enable all three
-```
-
-> **Why all three?** In the web version, skipping an inactive entity in the game loop is free. In UE5, each of these systems runs independently — a hidden actor with collision enabled will still block bullets, and a hidden actor with tick enabled will still waste CPU.
-
-**Pool Sizes:**
-
-| Type | Count | Priority |
-|---|---|---|
-| Projectiles | 300 | Critical (highest frequency) |
-| Enemies | 150 | Critical |
-| Damage Numbers | 80 | High |
-| Coins | 30 | Medium |
-| Flying Coins | 30 | Medium |
-| Ricochet Bolts | 10 | Low |
-| Bandits | 10 | Low |
-| Magnets | 3 | Low |
-
-### 6.3 Input System
-
-**Source:** Mouse events (click, move) + keyboard (WASD, Escape, 1-3)
-
-**UE5 Approach:** UE5's Enhanced Input system separates "what the player wants to do" (**Input Actions** like Select, Aim, Pause) from "which button does it" (**Mapping Contexts**). You can swap Mapping Contexts based on game state — for example, switching from gameplay controls to menu-only controls when a popup appears.
-
-**Input Actions to create:**
-
-| Action | Trigger | Gameplay Use |
-|---|---|---|
-| IA_Select | LMB Pressed | Select crew, click UI buttons |
-| IA_PlaceCrew | RMB Pressed | Assign crew to mount |
-| IA_Aim | Mouse XY | Aim selected crew's weapon |
-| IA_Pause | Escape | Toggle pause |
-| IA_SelectCrew1/2/3 | Keys 1/2/3 | Quick-select crew member |
-
-**Context Switching:**
-- RUNNING: IMC_Gameplay (full controls)
-- SETUP/PLACE_WEAPON: IMC_Placement (click-to-place)
-- LEVELUP/SHOP/SETTINGS: IMC_Menu (UI navigation only)
-
-### 6.4 Camera System
-
-**Source:** Three.js OrthographicCamera at (-180, 220, 180), frustum 300, looking at origin
-
-**UE5 Approach:** Create a camera Actor and set it to orthographic mode. The values below convert the web game's camera setup to UE5 units (centimeters).
-
-```cpp
-// Set camera to orthographic (no perspective distortion)
-CameraComponent->ProjectionMode = ECameraProjectionMode::Orthographic;
-// OrthoWidth controls how much of the world is visible (like "zoom level")
-CameraComponent->OrthoWidth = 30000.f;  // 300 web units × 100 = 30,000 cm
-// FVector = a 3D point (X, Y, Z). Position the camera above and to the side.
-CameraComponent->SetWorldLocation(FVector(-18000, -18000, 22000));
-// FRotator = rotation in degrees (Pitch, Yaw, Roll). Approximate isometric angle.
-CameraComponent->SetWorldRotation(FRotator(-35, 45, 0));
-```
-
-**Screen Shake:** Use `UCameraShakeBase` (create a Blueprint subclass) with 0.2s duration, triggered on train damage. A **Spring Arm** component can also add subtle camera sway.
-
-### 6.5 Combat / Projectiles
-
-**Source:** `combat.js` — `fireProjectile()`, collision in `updateCombat()`
-
-**UE5 Approach:**
-- `AProjectile` Actor with **UProjectileMovementComponent** — a built-in component that handles velocity, gravity, and bouncing for projectiles (no need to write movement code!)
-- **USphereComponent** — a sphere-shaped invisible collision volume attached to the projectile
-- **OnComponentBeginOverlap** — an event that fires automatically when the sphere touches an enemy's collision → apply damage, return projectile to pool
-
-**Lead Targeting** (predicting where the enemy will be when the bullet arrives):
-```cpp
-// Calculate how long the bullet will take to reach the enemy's current position
-float TimeToHit = FVector::Dist(MountLoc, EnemyLoc) / ProjectileSpeed;
-// Predict where the enemy will be by then (current position + velocity × time)
-FVector PredictedLoc = EnemyLoc + EnemyVelocity * TimeToHit;
-// Calculate the direction to aim (normalized = length of 1, just direction)
-FVector AimDir = (PredictedLoc - MountLoc).GetSafeNormal();
-```
-
-### 6.6 Save System
-
-**Source:** `localStorage` for audio, in-memory `save` object for progression
-
-**UE5 Approach:** UE5 has a built-in save system. You create a class that extends **USaveGame**, list the variables you want to save using `UPROPERTY`, and call `SaveGameToSlot` / `LoadGameFromSlot`. The engine handles writing everything to a file on disk.
-
-```cpp
-// UCLASS() = register this class with the engine
-// USaveGame = UE5's base class for saveable data
-UCLASS()
-class UTrainSaveGame : public USaveGame {
-    UPROPERTY() int32 Gold;           // int32 = a whole number
-    UPROPERTY() int32 Coal;
-    UPROPERTY() int32 MaxCoal;
-    UPROPERTY() TMap<FName, int32> UpgradeLevels;  // TMap = a dictionary/map
-    UPROPERTY() float MusicVolume;    // float = a decimal number
-    UPROPERTY() float SfxVolume;
-};
-
-// Save: UGameplayStatics::SaveGameToSlot(SaveObject, "Slot1", 0);
-// Load: UGameplayStatics::LoadGameFromSlot("Slot1", 0);
-```
-
-Store the save object reference in your **GameInstance** — this persists across level loads, so your gold and upgrades survive when moving between zones.
+### Verify
+- [ ] Camera is orthographic (no perspective distortion — parallel lines stay parallel)
+- [ ] You can see the origin point in the viewport
+- [ ] Objects at different distances appear the same size
+- [ ] The view angle matches isometric (roughly 35 degrees down, 45 degrees rotated)
 
 ---
 
-## 7. Asset Pipeline
+## Step 2: Train Actor & Movement
 
-### 3D Models
+**Goal:** A 4-car train that moves at constant speed through the scene.
 
-| Asset | Source | UE5 Format | Notes |
+### What to Create
+- **BP_Train** Actor Blueprint with 4 Static Mesh Components as children
+
+### Blueprint Instructions
+
+1. Create a new Actor Blueprint: `BP_Train`
+2. Add a **Scene Component** as root (named `TrainRoot`)
+3. Add 4 **Static Mesh Components** as children of TrainRoot:
+   - `LocomotiveMesh` (front)
+   - `FrontWeaponCarMesh`
+   - `CargoCarMesh`
+   - `RearWeaponCarMesh`
+4. Position each car along the X-axis with gaps:
+   - CAR_WIDTH = 32 web units = 3200 cm, CAR_GAP = 6 web units = 600 cm
+   - Locomotive: X = 0
+   - FrontWeaponCar: X = -3800 (3200 + 600)
+   - CargoCar: X = -7600
+   - RearWeaponCar: X = -11400
+5. Import `Train.fbx` and assign meshes (or use placeholder cubes scaled to 3200 x 1400 x 1400)
+
+### Variables (on BP_Train)
+| Variable | Type | Default |
+|---|---|---|
+| `CurrentHP` | Float | 100.0 |
+| `MaxHP` | Float | 100.0 |
+| `TrainSpeed` | Float | 16700.0 (167 x 100 cm/s) |
+| `DistanceTraveled` | Float | 0.0 |
+| `TargetDistance` | Float | 1000000.0 (10000 x 100) |
+
+### Movement (Event Tick)
+1. **Event Tick** → get `Delta Seconds`
+2. **Float x Float**: `TrainSpeed` x `Delta Seconds` = `FrameDistance`
+3. **Add** `FrameDistance` to `DistanceTraveled`
+4. **Add Actor World Offset**: X = `FrameDistance`, Y = 0, Z = 0
+
+### HP System — Custom Events
+Create these custom events on BP_Train:
+
+**TakeDamage(Amount: Float):**
+1. Subtract `Amount` from `CurrentHP`
+2. **Clamp** to min 0
+3. **Branch**: if `CurrentHP` <= 0 → call `OnTrainDestroyed` event
+4. **Play Camera Shake** using `CS_TrainDamage`
+
+**HealTrain(Amount: Float):**
+1. Add `Amount` to `CurrentHP`
+2. **Clamp** to max `MaxHP`
+
+### Key Blueprint Nodes
+- **Event Tick** + **Delta Seconds**
+- **Add Actor World Offset**
+- **Set Actor Location**
+- **Clamp (Float)**
+- **Play World Camera Shake** (for damage feedback)
+
+### Web-to-UE5 Translation
+The web game updates train position each frame in the central game loop. In UE5, the train Actor handles its own movement in its own Tick. The key difference: UE5 uses centimeters, so multiply all web pixel values by 100.
+
+### Verify
+- [ ] Train appears in the level with 4 visible car meshes
+- [ ] Train moves smoothly along X-axis at constant speed
+- [ ] `DistanceTraveled` increments correctly
+- [ ] TakeDamage reduces HP; HealTrain restores HP
+- [ ] HP never goes below 0 or above MaxHP
+- [ ] Train reaches TargetDistance in roughly 60 seconds (10000 / 167)
+
+---
+
+## Step 3: Game State Machine
+
+**Goal:** A central state machine that controls which systems are active and which UI is visible.
+
+### What to Create
+- **ETrainGameState** Enum
+- State logic inside **GM_TrainDefense** GameMode Blueprint
+
+### Blueprint Instructions
+
+1. Right-click Content Browser > Blueprints > Enumeration. Name it `ETrainGameState`.
+2. Add these enumerators (in order):
+   - `StartScreen`
+   - `WorldSelect`
+   - `WorldMap`
+   - `ZoneMap`
+   - `Setup`
+   - `Running`
+   - `RunPause`
+   - `LevelUp`
+   - `PlaceWeapon`
+   - `GameOver`
+   - `Shop`
+   - `Settings`
+3. Open `GM_TrainDefense`. Add variables:
+   - `CurrentState` (type: ETrainGameState, default: `StartScreen`)
+   - `PreviousState` (type: ETrainGameState)
+   - Widget references for each screen (type: User Widget, one per screen)
+
+### State Transition — Custom Event: ChangeState(NewState)
+1. Set `PreviousState` = `CurrentState`
+2. Set `CurrentState` = `NewState`
+3. Call `HideAllWidgets` (custom event that sets visibility to Hidden on all widget refs)
+4. **Switch on ETrainGameState** (pin = `NewState`):
+   - `StartScreen` → Show WBP_StartScreen, add IMC_Menu
+   - `WorldSelect` → Show WBP_WorldSelect, add IMC_Menu
+   - `WorldMap` → Show WBP_WorldMap, add IMC_Menu
+   - `ZoneMap` → Show WBP_ZoneMap, add IMC_Menu
+   - `Setup` → Show WBP_GameHUD + crew panel, add IMC_Placement
+   - `Running` → Show WBP_GameHUD, add IMC_Gameplay, unpause
+   - `RunPause` → Show WBP_Pause overlay, keep WBP_GameHUD, pause world
+   - `LevelUp` → Show WBP_LevelUp over WBP_GameHUD, add IMC_Menu, pause world
+   - `PlaceWeapon` → Highlight empty mounts, add IMC_Placement, pause world
+   - `GameOver` → Show WBP_GameOver, add IMC_Menu
+   - `Shop` → Show WBP_Shop, add IMC_Menu
+   - `Settings` → Show WBP_Settings, add IMC_Menu
+
+### Pausing the World
+For states that pause gameplay (LevelUp, PlaceWeapon, RunPause):
+- **Set Game Paused** = `true` (stops all Tick and physics)
+- When returning to Running: **Set Game Paused** = `false`
+
+### Key Blueprint Nodes
+- **Switch on Enum** (ETrainGameState)
+- **Set Game Paused**
+- **Create Widget** (once at BeginPlay, store references)
+- **Add to Viewport** / **Remove from Parent** (or use **Set Visibility**)
+- **Get Player Controller** > **Add Mapping Context** / **Remove Mapping Context**
+
+### Web-to-UE5 Translation
+The web game uses a `switch(state)` in both `update()` and `render()`. In UE5, the GameMode Blueprint handles state transitions, and each state shows/hides the appropriate UMG widgets and swaps Enhanced Input mapping contexts.
+
+### Verify
+- [ ] Enum has all 12 states
+- [ ] Calling ChangeState shows the correct widget and hides others
+- [ ] Running state unpauses the game; LevelUp/PlaceWeapon/RunPause pause it
+- [ ] Input only works in the current context (can't fire weapons during menus)
+- [ ] PreviousState tracks correctly for "back" navigation (Settings back to whatever was before)
+
+---
+
+## Step 4: Input System (Enhanced Input)
+
+**Goal:** All player input routed through Enhanced Input with context switching per game state.
+
+### What to Create
+- 6 **Input Action** assets
+- 3 **Input Mapping Context** assets
+- Input handling in the Player Controller Blueprint
+
+### Input Actions (right-click > Input > Input Action)
+
+| Asset Name | Value Type | Description |
+|---|---|---|
+| `IA_Select` | Digital (Bool) | Left mouse button — select crew, click UI |
+| `IA_Aim` | Axis2D (Vector2D) | Mouse XY position — aim weapon |
+| `IA_Pause` | Digital (Bool) | Escape key — toggle pause |
+| `IA_Navigate` | Axis2D (Vector2D) | Arrow keys / WASD — menu navigation |
+| `IA_Confirm` | Digital (Bool) | Enter / Space — confirm selection |
+| `IA_SelectCrew` | Digital (Bool) | Keys 1, 2, 3 — quick-select crew (create 3 separate actions or use one with a modifier) |
+
+### Mapping Contexts (right-click > Input > Input Mapping Context)
+
+**IMC_Gameplay:**
+| Action | Key | Trigger |
+|---|---|---|
+| IA_Select | Left Mouse Button | Pressed |
+| IA_Aim | Mouse XY | Every frame |
+| IA_Pause | Escape | Pressed |
+| IA_SelectCrew (x3) | 1, 2, 3 | Pressed |
+
+**IMC_Menu:**
+| Action | Key | Trigger |
+|---|---|---|
+| IA_Navigate | WASD / Arrows | Pressed |
+| IA_Confirm | Enter / Space | Pressed |
+| IA_Pause | Escape | Pressed |
+| IA_Select | Left Mouse Button | Pressed |
+
+**IMC_Placement:**
+| Action | Key | Trigger |
+|---|---|---|
+| IA_Select | Left Mouse Button | Pressed |
+| IA_Aim | Mouse XY | Every frame |
+| IA_Pause | Escape | Pressed |
+| IA_SelectCrew (x3) | 1, 2, 3 | Pressed |
+
+### Context Switching (in GM_TrainDefense ChangeState event)
+Each state transition removes all contexts then adds the appropriate one:
+1. **Get Player Controller** > **Get Enhanced Input Local Player Subsystem**
+2. **Clear All Mappings**
+3. **Add Mapping Context** with the context for the new state + priority 0
+
+### Mouse World Position (for aiming)
+In your Player Controller Blueprint:
+1. **Get Hit Result Under Cursor by Channel** (Trace Channel: Visibility)
+2. If hit → **Break Hit Result** → get `Location` (this is the world position the mouse points at)
+3. Store as `MouseWorldPosition` (FVector variable)
+4. Update every frame in Tick (only when IMC_Gameplay is active)
+
+### Key Blueprint Nodes
+- **Get Enhanced Input Local Player Subsystem**
+- **Add Mapping Context** / **Remove Mapping Context** / **Clear All Mappings**
+- **Enhanced Input Action** event nodes (drag IA_Select into Event Graph)
+- **Get Hit Result Under Cursor by Channel**
+- **Break Hit Result**
+- **Convert Mouse Location to World Space**
+
+### Web-to-UE5 Translation
+The web game uses `addEventListener('click')` and `addEventListener('mousemove')` directly. In UE5, Enhanced Input decouples the physical button from the game action. The mouse-to-world conversion replaces the web game's custom `toWorld(x, y)` projection function — UE5 does the math for you via line traces.
+
+### Verify
+- [ ] In Running state: left click fires, mouse position aims, Escape pauses, 1/2/3 selects crew
+- [ ] In Menu state: WASD navigates, Enter confirms, mouse clicks buttons, number keys do nothing
+- [ ] In Placement state: mouse position highlights mounts, click places crew/weapon
+- [ ] Context switching is clean — no input leaks between states
+- [ ] Mouse world position updates correctly (place a debug sphere at the hit location to visualize)
+
+---
+
+## Step 5: Enemy Pooling & Spawning
+
+**Goal:** Pre-spawn 150 enemy actors, activate/deactivate them as needed, no runtime spawning or destroying.
+
+### What to Create
+- **BP_Enemy** Actor Blueprint
+- **BP_EnemyPool** Actor (or a component on GameMode) to manage the pool
+- Enemy spawner logic
+
+### BP_Enemy — Components
+1. **Sphere Component** (root) — collision, radius = 600 cm (6 web px x 100)
+2. **Static Mesh Component** — visual (placeholder sphere mesh)
+3. **Widget Component** (optional, for world-space HP bar — but see Step 10 for batched approach)
+
+### BP_Enemy — Variables
+| Variable | Type | Default |
+|---|---|---|
+| `IsActive` | Bool | false |
+| `CurrentHP` | Float | 20.0 |
+| `MaxHP` | Float | 20.0 |
+| `MoveSpeed` | Float | 5000.0 (50 x 100) |
+| `ContactDamage` | Float | 6.0 |
+| `Tier` | Integer | 0 |
+| `TargetLocation` | FVector | (0,0,0) |
+
+### BP_Enemy — Custom Events
+
+**ActivateEnemy(SpawnLoc: FVector, EnemyTier: Integer, HP: Float, Speed: Float):**
+1. **Set Actor Location** to `SpawnLoc`
+2. Set `Tier`, `CurrentHP`, `MaxHP`, `MoveSpeed` from parameters
+3. Set `IsActive` = true
+4. **Set Actor Hidden in Game** = false
+5. **Set Actor Enable Collision** = true
+6. **Set Actor Tick Enabled** = true
+7. Set mesh scale and color based on tier:
+   - Tier 0: scale 1.5, green
+   - Tier 1: scale 5.0, brown
+   - Tier 2: scale 5.0, dark gray
+
+**DeactivateEnemy():**
+1. Set `IsActive` = false
+2. **Set Actor Hidden in Game** = true
+3. **Set Actor Enable Collision** = false
+4. **Set Actor Tick Enabled** = false
+
+### BP_Enemy — Event Tick (Movement)
+1. **Get Actor Location**
+2. **Find Look at Rotation** toward `TargetLocation`
+3. **Move Toward** `TargetLocation` at `MoveSpeed * Delta Seconds`
+4. If distance to target < 100 → deal `ContactDamage` to train → call `DeactivateEnemy`
+
+### BP_EnemyPool — Pool Manager
+
+**Variables:**
+- `EnemyPool` (Array of BP_Enemy references), size 150
+- `ProjectilePool` (Array of BP_Projectile references), size 300
+- `CoinPool` (Array of BP_Coin), size 30
+- `BanditPool` (Array of BP_Bandit), size 10
+
+**Event BeginPlay — Pre-spawn:**
+1. **For Loop** 0 to 149:
+   - **Spawn Actor from Class** (BP_Enemy) at location (0, 0, -10000) — off-screen
+   - Call `DeactivateEnemy` on the spawned actor
+   - **Add** to `EnemyPool` array
+
+**AcquireEnemy() → returns BP_Enemy reference:**
+1. **For Each Loop** on `EnemyPool`
+2. **Branch**: if `IsActive` == false → call `ActivateEnemy` on it → **Return** the reference
+3. If no inactive enemy found → return null (pool exhausted)
+
+### Spawner Logic (on GameMode or separate BP_Spawner)
+1. Use a **Set Timer by Event** with the spawn interval (starts at 1.5s, decreases with difficulty)
+2. On timer fire:
+   - Calculate spawn position: random point outside camera view
+   - Calculate tier: weighted random (see GAME_DOCS.md for tier distribution)
+   - Calculate HP and speed using difficulty formulas (see GAME_DOCS.md)
+   - Call `AcquireEnemy` with calculated values
+3. Difficulty scaling recalculates spawn interval each wave
+
+### Key Blueprint Nodes
+- **Spawn Actor from Class** (only at BeginPlay for pool creation)
+- **Set Actor Hidden in Game** / **Set Actor Enable Collision** / **Set Actor Tick Enabled**
+- **For Each Loop** (to find inactive pool members)
+- **Set Timer by Event** (for spawn intervals)
+- **Move Component To** or manual location interpolation
+- **Create Dynamic Material Instance** (to change enemy color per tier)
+
+### Web-to-UE5 Translation
+The web game pre-allocates arrays with an `active` flag and skips inactive entries in the update loop. In UE5, you must explicitly disable three things on inactive actors: visibility, collision, and tick. Forgetting any one of these causes bugs — invisible enemies blocking bullets (collision), or wasted CPU (tick).
+
+### Verify
+- [ ] 150 BP_Enemy actors exist in the world after BeginPlay (check World Outliner)
+- [ ] All 150 start hidden, no-collision, no-tick
+- [ ] AcquireEnemy returns an enemy and it becomes visible/active
+- [ ] DeactivateEnemy hides it and stops tick/collision
+- [ ] Enemies move toward the train and deal contact damage
+- [ ] Tier 0/1/2 enemies have correct scale and color
+- [ ] Stable 60fps with 100+ active enemies (open stat fps console command)
+- [ ] No "ghost" collisions from inactive enemies
+
+---
+
+## Step 6: Projectile System
+
+**Goal:** Pooled projectiles that fire from weapon mounts, travel to targets, and damage enemies on overlap.
+
+### What to Create
+- **BP_Projectile** Actor Blueprint
+- Pool of 300 (managed by BP_EnemyPool or its own pool manager)
+
+### BP_Projectile — Components
+1. **Sphere Component** (root) — collision radius 300 cm (3 web px x 100)
+   - Collision preset: OverlapAllDynamic
+   - Generate Overlap Events: true
+2. **Static Mesh Component** — small sphere or bullet mesh
+3. **Projectile Movement Component**
+   - Initial Speed: 35000 (350 x 100)
+   - Max Speed: 35000
+   - Gravity Scale: 0 (we want straight-line travel)
+   - Rotation Follows Velocity: true
+
+### BP_Projectile — Variables
+| Variable | Type | Default |
+|---|---|---|
+| `IsActive` | Bool | false |
+| `Damage` | Float | 12.0 |
+| `KnockbackForce` | Float | 500.0 |
+| `OwnerCrewIndex` | Integer | -1 |
+
+### Fire Function — Custom Event: FireProjectile(Origin: FVector, Direction: FVector, Dmg: Float)
+1. **Set Actor Location** to `Origin`
+2. Set `Damage` = `Dmg`, `IsActive` = true
+3. **Set Actor Hidden in Game** = false
+4. **Set Actor Enable Collision** = true
+5. **Set Actor Tick Enabled** = true
+6. On the Projectile Movement Component: **Set Velocity in Local Space** = `Direction * 35000`
+7. **Set Timer by Function Name** → `DeactivateProjectile`, time = 2.0s (lifetime limit)
+
+### On Component Begin Overlap (Sphere Component)
+1. **Cast to BP_Enemy** (the other actor)
+2. If valid and enemy `IsActive`:
+   - Call enemy's `TakeDamage` event with `Damage`
+   - Apply knockback: **Add Impulse** on enemy in the projectile's forward direction x `KnockbackForce`
+   - Call `DeactivateProjectile`
+
+### DeactivateProjectile()
+Same pattern as enemy: set hidden, disable collision, disable tick, set `IsActive` = false.
+
+### Lead Targeting (for auto-aim)
+When calculating where to fire, predict enemy position:
+1. `Distance` = **Vector Length** of (EnemyLocation - MountLocation)
+2. `TimeToHit` = `Distance / ProjectileSpeed`
+3. `PredictedLoc` = EnemyLocation + (EnemyVelocity * `TimeToHit`)
+4. `AimDirection` = **Normalize** (PredictedLoc - MountLocation)
+
+### Key Blueprint Nodes
+- **UProjectileMovementComponent** settings in Details panel
+- **Set Velocity in Local Space** (on ProjectileMovement)
+- **On Component Begin Overlap** (event on SphereComponent)
+- **Cast To** (BP_Enemy)
+- **Add Impulse** (for knockback)
+- **Set Timer by Function Name** (lifetime auto-deactivate)
+- **Get Unit Direction Vector** / **Normalize**
+
+### Web-to-UE5 Translation
+The web game manually updates projectile positions each frame. UE5's **ProjectileMovementComponent** handles all of that — you just set velocity and let the component do the work. Overlap events replace the manual distance-check collision loop.
+
+### Verify
+- [ ] 300 projectiles pre-spawned and inactive
+- [ ] FireProjectile makes a projectile appear at the origin and fly in the given direction
+- [ ] Projectiles deactivate after 2 seconds if they hit nothing
+- [ ] Overlapping an enemy deals damage and deactivates the projectile
+- [ ] Enemy takes correct damage amount
+- [ ] Knockback pushes enemy away from impact direction
+- [ ] No projectiles "leak" (all return to pool)
+- [ ] Lead targeting hits moving enemies reliably
+
+---
+
+## Step 7: Crew System
+
+**Goal:** 3 crew members that can be selected, assigned to mounts, and move between car doors.
+
+### What to Create
+- **BP_CrewMember** Actor Blueprint
+- Crew management logic (in GameMode or a separate BP_CrewManager)
+
+### BP_CrewMember — Components
+1. **Capsule Component** (root) — collision
+2. **Static Mesh Component** — colored sphere placeholder (or character mesh)
+
+### BP_CrewMember — Variables
+| Variable | Type | Default |
+|---|---|---|
+| `CrewName` | String | "Orb" |
+| `CrewColor` | Linear Color | Red |
+| `CrewIndex` | Integer | 0 |
+| `IsUnlocked` | Bool | true (Orb), false (Davie, Punk) |
+| `CurrentMount` | Object Ref (WeaponMount) | null |
+| `IsMoving` | Bool | false |
+| `WeaponLevel` | Integer | 1 |
+| `IsSelected` | Bool | false |
+| `ReassignCooldownRemaining` | Float | 0.0 |
+
+### Crew Data (3 instances)
+| Index | Name | Color (Linear) | Unlocked By Default |
 |---|---|---|---|
-| Train (4 cars) | Train.fbx (existing) | Static Mesh | Re-import, check scale (×100) |
-| Enemy zombie | enemy.fbx (existing) | Static Mesh | Need LOD for 150 on-screen |
-| Weapons | Gun.fbx, AutoGun.fbx, Laser.fbx, Garlic.fbx | Static Mesh | Mount socket attachment |
-| Rail/track | Rail.fbx (existing) | Static Mesh | Tiling/instanced |
-| Bandit | New asset needed | Skeletal or Static | Current: procedural box geometry |
-| Crew | New asset needed | Skeletal or Static | Current: colored spheres |
-| Coins | Procedural cylinder → SM_Coin | Static Mesh | Simple gold disc |
+| 0 | Orb | (0.91, 0.30, 0.24) Red | Yes |
+| 1 | Davie | (0.20, 0.60, 0.86) Blue | No (300g) |
+| 2 | Punk | (0.18, 0.80, 0.44) Green | No (300g) |
 
-### Audio Files (ready to import)
+### Movement Between Mounts
+Crew moves through car doors, not teleporting. Implementation:
 
-| File | Type | Usage |
-|---|---|---|
-| music.mp3 | Background loop | `UAudioComponent` on persistent actor |
-| coin.mp3 | One-shot SFX | Coin pickup |
-| steal.mp3 | Looping SFX | Bandit stealing (start/stop) |
-| levelup.mp3 | One-shot SFX | Level-up trigger |
-| zonecomplete.mp3 | One-shot SFX | Zone cleared |
-| winworld.mp3 | One-shot SFX | World beaten |
-| loose.mp3 | One-shot SFX | Player death |
+1. Build a **waypoint array** (Array of FVector) representing door positions between cars
+2. When assigned to a new mount:
+   - Calculate path: current position → nearest door → through intermediate doors → destination mount
+   - Store path as `MovementPath` (Array of FVector)
+3. Use a **Timeline** node:
+   - Play rate matches 12000 cm/s (120 web px/s)
+   - Each segment: **Lerp** between current waypoint and next
+   - At each door waypoint: **Delay** 0.35 seconds (door pause)
+4. On arrival: set `CurrentMount`, begin firing
 
-### Synthesized Sounds → MetaSounds
+### Key Blueprint Nodes
+- **Timeline** (for smooth interpolation between waypoints)
+- **Lerp (Vector)** (interpolate position)
+- **Delay** (0.35s door pause)
+- **Set Actor Location** (each frame during movement)
+- **Create Dynamic Material Instance** → **Set Vector Parameter** "Color" (to apply crew color)
 
-| Current SFX | Synth Type | MetaSound Approach |
-|---|---|---|
-| Shoot | Square wave 800→200Hz, 60ms | Oscillator + pitch envelope |
-| Enemy Hit | Sine 300→80Hz, 100ms | Oscillator + ADSR |
-| Enemy Kill | Noise burst + square 600→100Hz | Noise generator + oscillator mix |
-| Train Damage | Sine 120→30Hz + noise, 300ms | Low oscillator + noise layer |
-| Powerup | Triangle 800→1200Hz, 300ms | Oscillator + pitch step |
+### Web-to-UE5 Translation
+The web game interpolates crew position directly in the game loop with a speed constant. In UE5, use a Timeline for the smooth movement — it automatically handles delta time and gives you a clean animation curve. The door pause uses a Delay node between path segments.
 
-### UI Assets
-
-All UI is currently code-drawn (canvas 2D). For UE5:
-- Create UMG widget blueprints for each screen
-- Use `UProgressBar` for HP/XP/distance bars
-- Use `UTextBlock` for labels and values
-- Use `UImage` for icons (import emoji-style sprites)
-- Use `UButton` with custom styles for interactive elements
+### Verify
+- [ ] 3 crew members exist (Orb visible, Davie/Punk hidden until unlocked)
+- [ ] Each crew member has the correct color
+- [ ] Selecting a crew member highlights them (glow, outline, or scale up slightly)
+- [ ] Assigning to a mount starts movement through doors
+- [ ] 0.35s pause at each door
+- [ ] Movement speed is approximately 12000 cm/s
+- [ ] Reassign cooldown prevents instant re-placement (1 second)
+- [ ] Crew arrives at mount and stops moving
 
 ---
 
-## 8. Coordinate System & Scale
+## Step 8: Weapon Mount System
 
-> **Important for beginners:** UE5 uses centimeters and a different axis orientation than Three.js. Don't blindly multiply everything by 100 — you may end up with a 960-meter-wide game world! We recommend using a scale factor of **×10** (1 web pixel = 10 cm) which keeps things manageable. Whatever you choose, be **consistent everywhere**.
+**Goal:** 8 mount positions on the weapon cars where crew or auto-weapons can be placed.
+
+### What to Create
+- **WeaponMount** as a custom component or child Actor on each weapon car
+- 4 mounts per weapon car, positioned at corners
+
+### Mount Positions (relative to each weapon car)
+Each weapon car has 4 corner positions:
+```
+Top-Left:     (-HalfWidth, +HalfHeight, 0)  → (-1600, +700, 0)
+Top-Right:    (+HalfWidth, +HalfHeight, 0)  → (+1600, +700, 0)
+Bottom-Left:  (-HalfWidth, -HalfHeight, 0)  → (-1600, -700, 0)
+Bottom-Right: (+HalfWidth, -HalfHeight, 0)  → (+1600, -700, 0)
+```
+
+### Mount Data — Variables (per mount)
+| Variable | Type | Default |
+|---|---|---|
+| `MountIndex` | Integer | 0-7 |
+| `AimDirection` | FVector | outward from train |
+| `ConeHalfAngle` | Float | 45.0 (degrees) |
+| `OccupantType` | Enum (Empty/Crew/AutoWeapon/Bandit) | Empty |
+| `AssignedCrew` | Object Ref | null |
+| `AutoWeaponType` | Enum (None/Turret/Steam/Laser) | None |
+| `AutoWeaponLevel` | Integer | 0 |
+| `Cooldown` | Float | 0.0 |
+
+### Mount Interaction (click to assign crew)
+1. Player selects a crew member (IA_SelectCrew or click on crew panel)
+2. Player clicks a mount (IA_Select → line trace → hit mount collision)
+3. If mount is Empty or has a bandit:
+   - Set mount's `OccupantType` = Crew
+   - Set `AssignedCrew` = selected crew
+   - Tell crew to move to this mount's world position
+4. If mount already has crew, swap them
+
+### Auto-Weapon Assignment (from level-up)
+1. Player picks "new turret" card → enters PlaceWeapon state
+2. Empty mounts highlight with a pulsing outline
+3. Player clicks a mount → set `OccupantType` = AutoWeapon, `AutoWeaponType` = Turret, `AutoWeaponLevel` = 1
+4. Return to Running state
+
+### Firing Logic (on Event Tick, per active mount)
+**If occupied by Crew:**
+- If this crew is selected by player → aim at `MouseWorldPosition` (from Step 4)
+- If not selected → auto-target closest enemy within cone
+- Fire projectile at fire rate interval (check cooldown timer)
+
+**Cone check** (is enemy within firing arc?):
+1. `DirectionToEnemy` = **Normalize**(EnemyLocation - MountLocation)
+2. `DotProduct` = **Dot Product**(AimDirection, DirectionToEnemy)
+3. `AngleDeg` = **Acos**(DotProduct) in degrees
+4. **Branch**: AngleDeg <= ConeHalfAngle → enemy is in cone
+
+### Key Blueprint Nodes
+- **Line Trace by Channel** (from camera through mouse → detect mount click)
+- **Dot Product** + **Acos** (cone angle check)
+- **Get All Actors of Class** or **Sphere Overlap Actors** (find enemies in range)
+- **Set Timer by Event** (fire rate cooldown)
+- **Draw Debug Cone** (visualization during development — remove for ship)
+
+### Web-to-UE5 Translation
+The web game stores mounts as data objects with position offsets. In UE5, each mount is a Scene Component (or child Actor) physically attached to the weapon car. The cone check uses the same dot-product math, just with UE5's built-in vector functions.
+
+### Verify
+- [ ] 8 mounts visible on the two weapon cars (4 each)
+- [ ] Clicking a mount with a selected crew assigns them there
+- [ ] Empty mounts show a visual indicator (dashed border or glow)
+- [ ] Occupied mounts show the crew member or weapon icon
+- [ ] Bandit-occupied mounts show as disabled
+- [ ] Cone angle check correctly filters targets (enemy outside cone is not shot at)
+- [ ] Selected crew aims at mouse; unselected crew auto-targets
+- [ ] Driver seat (locomotive) exists as a special 9th position
+
+---
+
+## Step 9: Auto-Weapons
+
+**Goal:** 3 types of auto-weapons that fire independently when placed on mounts.
+
+### What to Create
+- Auto-weapon logic on weapon mounts (or as child components)
+- Data-driven stats using a **DataAsset** or **DataTable**
+
+### DA_WeaponStats (Data Asset)
+Create a **Primary Data Asset** Blueprint with arrays for each weapon type's per-level stats. Or use a **DataTable** with rows:
+
+| WeaponType | Level | Damage | FireInterval | Range | Special |
+|---|---|---|---|---|---|
+| Turret | 1 | 10 | 1.2 | 25000 | Shots: 1 |
+| Turret | 2 | 12 | 1.1 | 27000 | Shots: 2 |
+| ... | ... | ... | ... | ... | ... |
+
+(See GAME_DOCS.md for all 15 rows of weapon stats.)
+
+### Turret Implementation
+On mount Tick (when `AutoWeaponType` == Turret):
+1. Check cooldown timer. If not ready, skip.
+2. **Sphere Overlap Actors** centered on mount position, radius = weapon range
+3. Filter to active BP_Enemy actors
+4. Pick nearest enemy
+5. **For Loop** from 0 to `ShotsPerBurst - 1`:
+   - Calculate aim direction toward enemy with slight spread: `BaseDirection` + **Random Unit Vector** x 0.08
+   - Call pool's `AcquireProjectile` → `FireProjectile` with aim direction
+   - **Delay** 0.08s between shots in burst
+6. Reset cooldown timer
+
+### Steam Blast Implementation
+On mount Tick (when `AutoWeaponType` == Steam):
+1. Check tick rate timer. If not ready, skip.
+2. **Sphere Overlap Actors** centered on mount, radius = steam radius (e.g., 8000 cm at Lv1)
+3. **For Each** overlapping BP_Enemy:
+   - Apply `SteamDamage` directly (no projectile)
+4. Reset tick timer
+5. Visual: a Niagara system (NS_SteamAura) with radius matching the weapon's current level
+
+### Laser / Ricochet Implementation
+On mount fire timer:
+1. Find nearest enemy in range
+2. Spawn a **BP_RicochetBolt** (pooled, max 10):
+   - Set initial target = nearest enemy
+   - Set `BouncesRemaining` = level-dependent (2 at Lv1, up to 6 at Lv5)
+3. BP_RicochetBolt Tick:
+   - Move toward current target at bolt speed
+   - On overlap with enemy:
+     - Deal damage
+     - Decrement `BouncesRemaining`
+     - If bounces > 0: find next nearest enemy (excluding already-hit enemies) → retarget
+     - If bounces == 0: deactivate bolt
+
+### Key Blueprint Nodes
+- **Sphere Overlap Actors** (for finding enemies in range)
+- **Get Distance To** (for nearest-enemy selection)
+- **Set Timer by Event** (fire interval / tick rate)
+- **Spawn Emitter at Location** or **Activate Niagara Component** (for steam visual)
+- **Random Unit Vector** (for turret spread)
+- **For Loop** (burst fire)
+- **Delay** (between burst shots)
+
+### Web-to-UE5 Translation
+The web game checks weapon cooldowns each frame and manually iterates enemies to find targets. In UE5, use **Set Timer by Event** for cooldowns (more efficient than checking every frame) and **Sphere Overlap Actors** for range detection (the physics engine does the distance math).
+
+### Verify
+- [ ] Turret auto-fires at nearest enemy in bursts matching its level
+- [ ] Turret spread is visible but small (shots don't go wildly off-target)
+- [ ] Steam Blast damages all enemies in radius without spawning projectiles
+- [ ] Steam Blast visual ring matches the damage radius
+- [ ] Laser bolt bounces between enemies the correct number of times per level
+- [ ] Laser bolt does not bounce to the same enemy twice
+- [ ] All weapons respect their fire intervals (not firing too fast)
+- [ ] Max 2 auto-weapons can be equipped at once
+- [ ] Weapon stats match GAME_DOCS.md values at every level
+
+---
+
+## Step 10: Combat & Hit Detection
+
+**Goal:** Complete damage pipeline from projectile impact to visual feedback.
+
+### Damage Application
+When a projectile overlaps an enemy (from Step 6's OnComponentBeginOverlap):
+
+1. Calculate final damage:
+   ```
+   FinalDamage = BaseDamage
+     * DriverBuff (1.5 if any crew on driver seat, else 1.0)
+     * ShopDamageMultiplier (1.0 + shopDamageLevel * 0.15)
+   ```
+2. Apply to enemy: subtract from `CurrentHP`
+3. If `CurrentHP` <= 0 → kill enemy
+
+### Train Damage (when enemy reaches train)
+1. Calculate actual damage:
+   ```
+   ShieldReduction = shopShieldLevel * 2 + passiveShieldSlots * 2
+   ActualDamage = Max(1, EnemyContactDamage - ShieldReduction)
+   ```
+2. Call `BP_Train.TakeDamage(ActualDamage)`
+
+### Damage Numbers — Floating Text
+Create a **WBP_DamageNumber** widget:
+1. Contains one **Text Block** (shows damage value)
+2. Pool 80 of these (using Widget Component or spawning to viewport)
+
+**On damage dealt:**
+1. Acquire damage number from pool
+2. Set text to damage value, color by context (white = normal, yellow = crit, red = train damage)
+3. Scale text size: `BaseSize * (1 + Damage / 50)` — bigger hits = bigger numbers
+4. Animate upward: **Timeline** over 0.8s
+   - Position: float up 500 cm
+   - Opacity: fade from 1.0 to 0.0
+5. On Timeline finished: deactivate / return to pool
+
+### Hitstop (2-frame pause)
+On significant hits (kills, high damage):
+1. **Set Global Time Dilation** to `0.01` (near-freeze)
+2. **Delay** 0.033s (roughly 2 frames at 60fps)
+3. **Set Global Time Dilation** back to `1.0`
+
+### Screen Shake
+On train damage or surge start:
+1. **Get Player Camera Manager**
+2. **Start Camera Shake** with `CS_TrainDamage` (created in Step 1)
+
+### Enemy Hit Flash
+When an enemy takes damage:
+1. **Get Dynamic Material Instance** on the enemy's mesh
+2. **Set Scalar Parameter** "FlashAmount" = 1.0 (white overlay)
+3. **Delay** 0.1s
+4. **Set Scalar Parameter** "FlashAmount" = 0.0
+
+This requires a material with a "FlashAmount" parameter that lerps between the base color and white.
+
+### Key Blueprint Nodes
+- **Set Global Time Dilation** (hitstop)
+- **Start Camera Shake** (screen shake)
+- **Create Dynamic Material Instance** + **Set Scalar Parameter** (hit flash)
+- **Timeline** (damage number float-up animation)
+- **Project World to Screen** (if positioning damage numbers in screen space)
+
+### Web-to-UE5 Translation
+The web game draws damage numbers directly on the canvas each frame. In UE5, you either use world-space Widget Components (expensive at scale) or a single batched UMG widget that draws all numbers. The hitstop effect uses Time Dilation instead of the web game's frame-skip approach.
+
+### Verify
+- [ ] Enemies take correct final damage (with all multipliers applied)
+- [ ] Train takes damage reduced by shield
+- [ ] Minimum damage is 1 (never 0)
+- [ ] Damage numbers appear at the hit location and float upward
+- [ ] Bigger hits show bigger text
+- [ ] Hitstop briefly pauses the game on kills
+- [ ] Screen shakes when train takes damage
+- [ ] Enemy flashes white for 0.1s on hit
+- [ ] Kill triggers XP gain (12 XP per kill, see GAME_DOCS.md)
+
+---
+
+## Step 11: Bandit System
+
+**Goal:** Bandits run toward the train, jump onto unmanned mounts, steal gold, and can be defeated by crew.
+
+### What to Create
+- **BP_Bandit** Actor Blueprint
+- Pool of 10 bandits
+
+### BP_Bandit — State Machine Enum
+Create `EBanditState` enumeration:
+- `Inactive`
+- `Running`
+- `Jumping`
+- `OnTrain`
+- `Fighting`
+- `Dead`
+
+### BP_Bandit — Variables
+| Variable | Type | Default |
+|---|---|---|
+| `BanditState` | EBanditState | Inactive |
+| `TargetMount` | Object Ref | null |
+| `MoveSpeed` | Float | 11000 (110 x 100, +/- 10% random on activate) |
+| `StealTimer` | Float | 0.0 |
+| `FightTimer` | Float | 0.0 |
+| `JumpProgress` | Float | 0.0 |
+| `JumpStartLoc` | FVector | - |
+| `JumpEndLoc` | FVector | - |
+
+### Event Tick — Switch on EBanditState
+
+**Running:**
+1. Move toward `TargetMount` world position at `MoveSpeed * DeltaSeconds`
+2. When within jump range (500 cm): transition to `Jumping`
+
+**Jumping:**
+1. Increment `JumpProgress` by `DeltaSeconds / 0.4` (0.4s jump duration)
+2. Interpolate position using a parabolic curve:
+   - Horizontal: **Lerp** from `JumpStartLoc` to `JumpEndLoc` by `JumpProgress`
+   - Vertical: add `Sin(JumpProgress * PI) * 2000` (arc height of 2000 cm)
+3. When `JumpProgress` >= 1.0: land on mount, transition to `OnTrain`
+   - Set mount's `OccupantType` = Bandit
+   - If mount has auto-weapon → disable it
+
+**OnTrain:**
+1. Accumulate `StealTimer` += `DeltaSeconds`
+2. Every 0.2s of accumulated time: deduct gold (`5 gold/sec = 1 gold per 0.2s`)
+3. Spawn floating "-1g" text at bandit position
+4. Check: has crew been assigned to this mount? If yes → transition to `Fighting`
+
+**Fighting:**
+1. Accumulate `FightTimer` += `DeltaSeconds`
+2. Play a brief fight animation (shake both bandit and crew)
+3. When `FightTimer` >= 0.5: crew wins
+   - Transition to `Dead`
+   - Re-enable mount (set `OccupantType` back to Crew or Empty)
+
+**Dead:**
+1. Fling bandit off train: **Launch Character** or **Add Impulse** upward + outward
+2. After 1s flight: deactivate bandit (same hide/disable pattern)
+
+### Spawner Logic
+On the GameMode, a timer spawns bandits:
+- Interval: `Max(4, 15 - difficulty * 1.5)` seconds
+- Spawn from the right side of the screen
+- Pick a random unmanned mount as target
+- If no unmanned mounts → skip spawn
+
+### Key Blueprint Nodes
+- **Switch on Enum** (EBanditState in Tick)
+- **Lerp** + **Sin** (parabolic jump arc)
+- **Timeline** (alternative to manual jump interpolation)
+- **Add Impulse** (fling on death)
+- **Set Timer by Event** (spawn interval)
+
+### Web-to-UE5 Translation
+The web game uses a state machine with string states checked in the update loop. The UE5 version uses an enum with a Switch node in Event Tick — same logic, visual instead of code. The parabolic jump uses the same `sin(progress * PI)` formula.
+
+### Verify
+- [ ] Bandits spawn from the right and run toward a random unmanned mount
+- [ ] Jump animation follows a smooth parabolic arc over 0.4 seconds
+- [ ] Landing on a mount changes its state to Bandit-occupied
+- [ ] Auto-weapon on occupied mount stops firing
+- [ ] Stealing deducts gold at 5g/sec with visible "-gold" numbers
+- [ ] Placing crew on the mount triggers the fight
+- [ ] Fight lasts 0.5s, crew always wins
+- [ ] Bandit flings off the train on death
+- [ ] Max 10 bandits active simultaneously
+- [ ] No bandits target mounts that already have bandits
+
+---
+
+## Step 12: Wave System
+
+**Goal:** Combat runs cycle through CALM, WARNING, and SURGE phases with escalating difficulty.
+
+### What to Create
+- Wave management logic on the GameMode (or a separate BP_WaveManager)
+
+### Phase Enum
+Create `EWavePhase`:
+- `Calm`
+- `Warning`
+- `Surge`
+
+### Variables
+| Variable | Type | Default |
+|---|---|---|
+| `CurrentPhase` | EWavePhase | Calm |
+| `PhaseTimer` | Float | 0.0 |
+| `WaveNumber` | Integer | 0 |
+| `CalmDuration` | Float | 30.0 |
+| `WarningDuration` | Float | 3.0 |
+| `SurgeDuration` | Float | 8.0 |
+| `SpawnRateMultiplier` | Float | 1.0 |
+
+### Phase Logic (Event Tick or Timer)
+
+**Calm Phase (30s):**
+1. Normal spawn rate
+2. Increment `PhaseTimer`
+3. When timer >= `CalmDuration`: transition to Warning, reset timer
+
+**Warning Phase (3s):**
+1. Show warning UI banner ("SURGE INCOMING!" with pulsing red)
+2. Briefly increase spawn rate slightly
+3. Play warning sound
+4. When timer >= `WarningDuration`: transition to Surge, reset timer
+
+**Surge Phase (8s):**
+1. Multiply spawn rate by 3-5x
+2. Screen shake active (subtle constant rumble)
+3. Tint screen edge red (post-process or UI overlay)
+4. When timer >= `SurgeDuration`: transition to Calm, increment `WaveNumber`, reset timer
+
+### Escalation
+After each full cycle (Calm → Warning → Surge), increase difficulty:
+```
+SpawnRateMultiplier = 1.0 + WaveNumber * 0.3
+EnemyHPMultiplier = 1.0 + WaveNumber * 0.15
+```
+
+Station modifiers (from GAME_DOCS.md) can be stored in a **DataTable** and looked up at combat start to adjust base values.
+
+### Key Blueprint Nodes
+- **Switch on Enum** (EWavePhase)
+- **Set Timer by Event** (phase transitions, or use Tick + timer variable)
+- **Start Camera Shake** (low-intensity constant shake during surge)
+- **Play Sound 2D** (warning sound)
+
+### Web-to-UE5 Translation
+The web game manages phases with timer variables in the update loop. The UE5 version can use either Tick-based timers or UE5's built-in timer system. The escalation formulas are identical.
+
+### Verify
+- [ ] Calm phase lasts 30 seconds with normal spawn rate
+- [ ] Warning banner appears and persists for 3 seconds
+- [ ] Surge phase dramatically increases enemy spawn rate
+- [ ] Screen feedback during surge (shake, red tint)
+- [ ] Cycle repeats: Calm → Warning → Surge → Calm
+- [ ] Each cycle is harder than the last
+- [ ] Wave number displays correctly on HUD
+
+---
+
+## Step 13: Level-Up & Card System
+
+**Goal:** When XP threshold is reached, pause combat and present 3 upgrade cards.
+
+### What to Create
+- **WBP_LevelUp** Widget Blueprint
+- Card generation logic (on GameMode)
+
+### Trigger
+In combat Tick or on enemy kill:
+1. Check: `CurrentXP >= CurrentLevel * 80`
+2. If true: increment `CurrentLevel`, call `ChangeState(LevelUp)`
+
+### Card Generation — GenerateCards() returns Array of Structs
+Define a **S_LevelUpCard** struct:
+| Field | Type |
+|---|---|
+| `CardType` | Enum (CrewGunUpgrade, NewAutoWeapon, UpgradeAutoWeapon, Shield, Regen, Repair) |
+| `TargetCrewIndex` | Integer |
+| `WeaponType` | Enum |
+| `DisplayName` | String |
+| `Description` | String |
+| `IconTexture` | Texture2D |
+
+**Logic:**
+1. Build eligible card pool:
+   - For each crew: if `WeaponLevel < 5` → add CrewGunUpgrade card
+   - If auto-weapon count < 2 → add NewAutoWeapon cards (Turret, Steam, Laser)
+   - For each equipped auto-weapon: if level < 5 → add UpgradeAutoWeapon card
+   - If defense slots < 2 → add Shield, Regen cards
+   - Always add Repair card
+2. Shuffle pool, pick first 3 (or fewer if pool is small)
+
+### WBP_LevelUp Widget Layout
+- Dark semi-transparent overlay
+- 3 card slots horizontally centered
+- Each card: icon on top, name in bold, description below
+- Hover: card scales up 10%
+- Click: apply upgrade, play confetti, return to Running
+
+### Weapon Acquire Fanfare
+When a new auto-weapon is acquired (not an upgrade):
+1. Don't return to Running immediately
+2. Show black bars (cinematic letterbox) + weapon name text centered
+3. Play powerup sound
+4. **Delay** 1.5s
+5. Then transition to `PlaceWeapon` state (not Running)
+
+### Apply Upgrade — Custom Event: ApplyCard(Card: S_LevelUpCard)
+Switch on CardType:
+- **CrewGunUpgrade:** increment crew's `WeaponLevel` by 1
+- **NewAutoWeapon:** set `PendingWeaponType`, go to PlaceWeapon state
+- **UpgradeAutoWeapon:** increment the mount's `AutoWeaponLevel` by 1
+- **Shield:** occupy a defense slot with Shield, increment shield level
+- **Regen:** occupy a defense slot with Regen, increment regen level
+- **Repair:** add 30 HP to train immediately
+
+### Key Blueprint Nodes
+- **Create Widget** (WBP_LevelUp, once, reuse)
+- **Set Game Paused** = true (freeze combat)
+- **Shuffle** (array randomization)
+- **Play Animation** (UMG animation for card hover/select)
+- **Delay** (fanfare timing)
+- **Spawn Emitter at Location** (confetti on card select)
+
+### Web-to-UE5 Translation
+The web game generates cards as plain objects and renders them on canvas. In UE5, cards are structs displayed via a UMG widget. The pause uses SetGamePaused. The card pool filtering logic is identical.
+
+### Verify
+- [ ] Level-up triggers at correct XP thresholds (level 1→2 at 80 XP, ~7 kills)
+- [ ] 3 cards displayed with correct names and descriptions
+- [ ] Cards respect constraints (no gun upgrade if already Lv5, no 3rd auto-weapon)
+- [ ] Clicking a card applies the upgrade immediately
+- [ ] Repair instantly heals 30 HP
+- [ ] New weapon acquisition shows fanfare then transitions to PlaceWeapon
+- [ ] Confetti plays on card selection
+- [ ] Game unpauses after selection (or after weapon placement)
+- [ ] Repair card is always available as an option
+
+---
+
+## Step 14: Zone Map & World Structure
+
+**Goal:** A zone map showing stations connected by routes, where players spend coal to travel.
+
+### What to Create
+- **WBP_ZoneMap** Widget Blueprint
+- **UZoneData** struct and generation logic
+- **WBP_WorldMap** Widget Blueprint (for world selection)
+
+### Data Structures
+
+**S_Station struct:**
+| Field | Type |
+|---|---|
+| `StationType` | Enum (Start, Combat, Empty, Exit) |
+| `Position` | Vector2D (for map layout) |
+| `IsVisited` | Bool |
+| `IsRevealed` | Bool |
+| `ConnectedStations` | Array of Integer (indices) |
+
+**S_Zone struct:**
+| Field | Type |
+|---|---|
+| `Stations` | Array of S_Station |
+| `ZoneNumber` | Integer |
+| `DifficultyMultiplier` | Float |
+
+### Zone Generation (on GameMode or a function library)
+1. Create START station at left
+2. Create 2-3 route branches:
+   - Short route: 2 combat stations
+   - Long route: 4-5 combat/empty stations
+3. Cross-connect stations at similar X positions (35% chance)
+4. Create EXIT station at right
+5. Reveal START and its neighbors
+
+### WBP_ZoneMap Widget
+1. **Canvas Panel** as root (allows absolute positioning of station icons)
+2. For each station: create a **Button** widget at the station's position
+   - Visited: solid icon
+   - Revealed but unvisited: outlined icon, clickable
+   - Unrevealed: hidden or fog
+3. Draw connection lines between stations using **Paint** event or **Line** widgets
+4. Top bar: coal counter, gold counter, zone/world indicator
+
+### Travel Logic
+When player clicks a revealed, unvisited station:
+1. Check: `Coal >= 1`. If no → show "Not enough coal" feedback.
+2. Deduct 1 coal
+3. Mark station as visited
+4. Reveal adjacent stations
+5. If station type == Combat → transition to Setup state
+6. If station type == Empty → mark as cleared, stay on map
+7. If station type == Exit → trigger zone complete
+
+### World Structure
+- 3 worlds, each with its own zone
+- **WBP_WorldMap**: linear display of 3 worlds with difficulty indicators
+- Each world applies a difficulty multiplier to all combat in its zones
+- World 1: 1.0x, World 2: 1.5x, World 3: 2.0x (see GAME_DOCS.md for exact values)
+
+### Key Blueprint Nodes
+- **Canvas Panel** + **Canvas Panel Slot** (absolute positioning for stations)
+- **Create Widget** dynamically for each station button
+- **On Clicked** (button event for station selection)
+- **Draw Line** (in Paint event for connections)
+- **Branch** (coal check before travel)
+
+### Web-to-UE5 Translation
+The web game renders the zone map on a 2D canvas with click detection. In UE5, the zone map is a UMG widget with buttons for each station and lines for connections. The procedural generation logic is identical — generate the graph data, then visualize it.
+
+### Verify
+- [ ] Zone map displays stations with correct types (combat icon, empty dash, exit star)
+- [ ] Only revealed stations are visible
+- [ ] Clicking a station deducts 1 coal and reveals neighbors
+- [ ] Combat stations trigger the Setup → Running flow
+- [ ] Empty stations clear immediately
+- [ ] Exit station triggers zone completion
+- [ ] Coal counter updates correctly
+- [ ] Cannot travel with 0 coal
+- [ ] Routes vary between playthroughs (procedural)
+- [ ] Cross-connections appear sometimes (roughly 35%)
+
+---
+
+## Step 15: Shop & Persistence
+
+**Goal:** Between-zone shop where players spend gold on permanent upgrades, with save/load.
+
+### What to Create
+- **WBP_Shop** Widget Blueprint
+- **BP_TrainSaveGame** (extends SaveGame)
+- Save/load logic on **GameInstance**
+
+### WBP_Shop Layout
+- 7 upgrade rows, each containing:
+  - Icon (left)
+  - Name + description (center)
+  - Level pips (filled/empty circles showing current/max level)
+  - Cost text (right)
+  - Buy button (right, disabled if can't afford or maxed)
+- Coal purchase row at bottom: "Buy 2 Coal — 30g"
+- Navigation buttons: "Map" (return to zone map), "Next Zone" (if zone complete)
+
+### Shop Upgrades (see GAME_DOCS.md for all values)
+Cost formula: `baseCost * (currentLevel + 1)`
+
+| Upgrade | Base Cost | Max Level | Effect Per Level |
+|---|---|---|---|
+| Damage | 40 | 5 | +15% weapon damage |
+| Shield | 35 | 5 | -2 damage taken |
+| Cool Off | 45 | 5 | -10% weapon cooldown |
+| Max HP | 30 | 5 | +15 max HP |
+| Base Area | 40 | 5 | +15% weapon range |
+| Greed | 60 | 3 | +20% gold from coins |
+| Crew Slots | 300 | 2 | Unlock Davie / Punk |
+
+### Buy Logic
+On buy button clicked:
+1. Calculate cost: `BaseCost * (CurrentLevel + 1)`
+2. Check: `Gold >= Cost` AND `CurrentLevel < MaxLevel`
+3. If valid: deduct gold, increment level, update display
+4. Refresh all buttons (some may become affordable/unaffordable)
+
+### BP_TrainSaveGame
+Create a Blueprint extending **SaveGame** (right-click > Blueprint Class > search "Save Game"):
+
+**Variables:**
+| Variable | Type |
+|---|---|
+| `Gold` | Integer |
+| `Coal` | Integer |
+| `MaxCoal` | Integer |
+| `UpgradeLevels` | Map (String → Integer) |
+| `UnlockedCrew` | Array of Integer |
+| `MusicVolume` | Float |
+| `SfxVolume` | Float |
+
+### Save/Load (on GameInstance Blueprint)
+
+**SaveGame():**
+1. **Create Save Game Object** (class: BP_TrainSaveGame)
+2. Copy all current values into the save object
+3. **Save Game to Slot** (slot name: "TrainDefense", user index: 0)
+
+**LoadGame():**
+1. **Does Save Game Exist** (slot: "TrainDefense")
+2. If yes: **Load Game from Slot** → cast to BP_TrainSaveGame → copy values to GameInstance
+3. If no: use defaults
+
+**When to save:** On shop exit, on world complete, on settings change.
+**When to load:** On game start (Event Init in GameInstance).
+
+### Applying Upgrades
+At the start of each combat run (Setup state):
+1. Get upgrade levels from GameInstance
+2. Apply to train: `MaxHP = 100 + maxHpLevel * 15`
+3. Store multipliers for combat use: `DamageMultiplier = 1.0 + damageLvl * 0.15`
+4. Unlock crew members based on `UnlockedCrew` array
+
+### Key Blueprint Nodes
+- **Create Save Game Object**
+- **Save Game to Slot** / **Load Game from Slot**
+- **Does Save Game Exist**
+- **Cast To** BP_TrainSaveGame
+- **Get Game Instance** (access persistent data from anywhere)
+- **Set Text** (update cost/level displays)
+- **Set Is Enabled** (disable buy buttons when can't afford)
+
+### Web-to-UE5 Translation
+The web game uses `localStorage` for persistence and an in-memory `save` object. In UE5, the GameInstance holds runtime state (persists across levels but not across sessions) and SaveGame handles disk persistence. The shop upgrade formulas are identical.
+
+### Verify
+- [ ] All 7 upgrades display with correct costs and level pips
+- [ ] Buying an upgrade deducts gold and increments level
+- [ ] Cost increases correctly: Damage Lv1=40g, Lv2=80g, Lv3=120g
+- [ ] Can't buy past max level or without enough gold
+- [ ] Coal purchase works (30g → 2 coal)
+- [ ] Crew unlock (300g) makes Davie/Punk available
+- [ ] Saving works: close game, reopen, gold and upgrades persist
+- [ ] Upgrades apply in combat (e.g., +15% damage per damage level)
+- [ ] Settings (volumes) persist across sessions
+
+---
+
+## Step 16: Coins & Economy
+
+**Goal:** Coins spawn during combat, magnets collect all coins, and gold flows into the economy.
+
+### What to Create
+- **BP_Coin** Actor Blueprint (pool of 30)
+- **BP_Magnet** Actor Blueprint (pool of 3)
+- **BP_FlyingCoin** (pool of 30, for the collection animation)
+
+### BP_Coin — Components
+1. **Cylinder Mesh** (gold material, small — placeholder disc)
+2. **Sphere Component** (collision, slightly larger than mesh for easy collection)
+
+### BP_Coin — Bob Animation
+In Event Tick (when active):
+1. Get **Game Time in Seconds**
+2. `BobOffset = Sin(GameTime * 3) * 200` (bob up/down 200 cm)
+3. **Set Relative Location** on mesh: Z = BobOffset
+
+### Coin Spawner (on GameMode or subsystem)
+Timer every 3 seconds (+/- 30% random variation):
+1. Roll: 8% chance → spawn magnet instead of coin
+2. Pick random position within camera view (but not overlapping train)
+3. Acquire coin from pool, activate at position
+
+### Magnet Behavior
+When any projectile hits the magnet (OnComponentBeginOverlap):
+1. Get all active coins from the coin pool
+2. For each active coin: convert to a **BP_FlyingCoin**
+   - Deactivate the static coin
+   - Activate a flying coin at that position
+3. Flying coin lerps toward the gold HUD counter position over 0.5s
+4. On arrival: add gold, deactivate flying coin
+
+### Flying Coin — Movement
+1. On activate: store start position and HUD target position
+2. Event Tick:
+   - `Progress += DeltaSeconds * 2.0` (0.5s travel)
+   - Use **Ease** (EaseIn) for acceleration effect
+   - **Lerp** between start and target using eased progress
+   - **Project World to Screen** to get the HUD gold counter's world-space target
+3. When Progress >= 1.0: add gold value, play coin sound, deactivate
+
+### Gold Calculation
+```
+GoldGained = CoinValue * (1.0 + GreedBonusPercent) * CargoMultiplier
+CargoMultiplier = 1.0 + CargoBoxes * 0.25
+```
+
+### Key Blueprint Nodes
+- **Sin** (bob animation)
+- **Game Time in Seconds**
+- **Lerp** + **Ease** (flying coin animation)
+- **Project World to Screen** (find HUD target position)
+- **Set Timer by Event** with random variation (coin spawn interval)
+- **Get All Actors of Class** (find all active coins for magnet)
+
+### Web-to-UE5 Translation
+The web game handles coin collection by checking projectile-coin distance each frame. In UE5, use overlap events on the coin's sphere component. The flying coin animation uses the same lerp-to-HUD approach, but you need **Project World to Screen** to find the HUD counter position in screen space.
+
+### Verify
+- [ ] Coins spawn every ~3 seconds during combat
+- [ ] Coins bob up and down smoothly
+- [ ] 8% of spawns are magnets instead of coins
+- [ ] Shooting a magnet collects ALL active coins
+- [ ] Coins fly toward the HUD gold counter with acceleration
+- [ ] Gold value matches: 10 * greed multiplier * cargo multiplier
+- [ ] Coin pickup sound plays on collection
+- [ ] Max 30 coins and 3 magnets active simultaneously
+- [ ] Flying coins deactivate correctly after reaching HUD
+
+---
+
+## Step 17: Audio Implementation
+
+**Goal:** Complete audio system with music, SFX, and synthesized sounds.
+
+### Sound Class Hierarchy
+In the UE5 editor, create Sound Classes:
+```
+Master
+  ├── Music (volume controlled by MusicVolume setting)
+  │   └── SC_BackgroundMusic
+  └── SFX (volume controlled by SfxVolume setting)
+      ├── SC_Shoot, SC_EnemyHit, SC_EnemyKill
+      ├── SC_TrainDamage, SC_Powerup
+      ├── SC_CoinPickup, SC_StealLoop
+      └── SC_LevelUp, SC_ZoneComplete, SC_WinWorld, SC_Defeat
+```
+
+Create a **Sound Mix** that controls the Master class. Apply volume changes via **Set Sound Mix Class Override**.
+
+### Import Audio Files
+Import these existing files as USoundWave assets:
+- `music.mp3` → looping background music
+- `coin.mp3` → coin pickup
+- `steal.mp3` → bandit stealing (loop)
+- `levelup.mp3` → level-up trigger
+- `zonecomplete.mp3` → zone cleared
+- `winworld.mp3` → world beaten
+- `loose.mp3` → player death
+
+### Background Music
+1. Add an **Audio Component** to the GameMode (or a persistent audio manager actor)
+2. Set Sound: `SC_BackgroundMusic`
+3. Set looping: true
+4. Start/stop based on game state:
+   - Play during Running, ZoneMap, Shop
+   - Stop during StartScreen, Settings
+
+### One-Shot SFX
+Use **Play Sound 2D** for UI and non-positional sounds:
+- Coin pickup, level-up, zone complete, win, death
+
+Use **Play Sound at Location** for world-positioned sounds:
+- Weapon fire (at mount position)
+- Enemy hit (at enemy position)
+- Enemy kill (at enemy position)
+
+### MetaSounds (Synthesized SFX)
+Create MetaSound Sources for these sounds (replace placeholder Sound Cues later):
+
+| Sound | Approach |
+|---|---|
+| Shoot | Oscillator (square wave) 800→200Hz sweep, 60ms ADSR |
+| Enemy Hit | Oscillator (sine) 300→80Hz sweep, 100ms ADSR |
+| Enemy Kill | Noise burst + oscillator (square) 600→100Hz, layered |
+| Train Damage | Oscillator (sine) 120→30Hz + noise layer, 300ms |
+| Powerup | Oscillator (triangle) 800→1200Hz step, 300ms |
+
+### Volume Control
+In settings, when player adjusts a slider:
+1. **Set Sound Mix Class Override** on the appropriate Sound Class
+2. Store volume in GameInstance → save to SaveGame
+
+### Key Blueprint Nodes
+- **Play Sound 2D** (non-positional SFX)
+- **Play Sound at Location** (world-space SFX)
+- **Set Sound Mix Class Override** (volume control)
+- **Audio Component** > **Play** / **Stop** (background music)
+- **Spawn Sound 2D** (returns audio component for control, useful for steal loop)
+
+### Web-to-UE5 Translation
+The web game uses the Web Audio API with oscillators and gain nodes. MetaSounds is the direct equivalent — a node-based audio graph. For imported MP3 files, UE5's import is straightforward. The web game's separate `musicGain` / `sfxGainNode` becomes Sound Class volume control.
+
+### Verify
+- [ ] Background music loops during gameplay
+- [ ] Music stops in menus where appropriate
+- [ ] Weapon fire, hit, and kill sounds play at correct positions
+- [ ] Coin pickup sound plays on collection
+- [ ] Steal loop starts/stops correctly with bandit stealing
+- [ ] Level-up, zone complete, world win, and death sounds play at correct moments
+- [ ] Volume sliders in settings affect the correct sound groups
+- [ ] Volume persists across sessions (saved)
+- [ ] No audio pops or clicks on sound start/stop
+
+---
+
+## Step 18: UI/HUD (UMG)
+
+**Goal:** All UI screens as UMG Widget Blueprints with correct layout and information.
+
+### Widget List
+
+| Widget | Purpose | Shown During |
+|---|---|---|
+| `WBP_GameHUD` | HP bar, gold, coal, wave phase, distance, crew panel | Running, Setup |
+| `WBP_ZoneMap` | Station graph with travel controls | ZoneMap |
+| `WBP_Shop` | Upgrade purchase screen | Shop |
+| `WBP_LevelUp` | 3 card selection | LevelUp |
+| `WBP_Settings` | Volume sliders, debug toggles | Settings |
+| `WBP_Pause` | Resume, restart, quit buttons | RunPause |
+| `WBP_GameOver` | Result screen (4 variants) | GameOver |
+| `WBP_StartScreen` | Title, buttons | StartScreen |
+| `WBP_WorldMap` | World selection | WorldSelect, WorldMap |
+
+### WBP_GameHUD Layout
+- **Top bar:** HP progress bar (red→green), gold counter, coal counter, wave phase indicator
+- **Left side:** distance progress bar (how far until station end)
+- **Bottom-left:** 3 rows:
+  - Crew row: 3 crew icons (colored circles) with weapon level indicators
+  - Weapon row: equipped auto-weapon icons with level
+  - Defense row: equipped defense icons with level
+- **Bandit alert:** red pulsing banner at top-center ("BANDITS ON TRAIN!")
+- **Idle crew hint:** orange indicator near empty mounts when crew is unassigned
+
+### WBP_GameOver — 4 Variants
+Use a single widget with dynamic content:
+1. **Combat Win:** "STATION CLEARED!" + Continue button
+2. **Zone Complete:** "DELIVERED!" + gold/coal summary + Shop button + Next Zone button
+3. **World Complete:** "WORLD COMPLETE!" + fireworks + bonus gold display + Continue button
+4. **Death:** "TRAIN DESTROYED" + Restart button
+
+Set variant via a function that shows/hides sections and changes the title text.
+
+### CommonUI Input Routing
+Add **CommonUI** to prevent input bleed:
+1. Make menu widgets extend **Common Activatable Widget**
+2. When a menu opens, it captures input focus
+3. Gameplay input is blocked until the menu is deactivated
+
+### Key Blueprint Nodes
+- **Progress Bar** (HP, XP, distance)
+- **Text Block** (labels, counters)
+- **Image** (icons)
+- **Button** (interactive elements)
+- **Overlay** / **Canvas Panel** (layering)
+- **Play Animation** (pulsing bandit alert, card hover effects)
+- **Bind Widget** (connect variable to widget for easy access in Blueprint)
+
+### Web-to-UE5 Translation
+The web game draws all UI directly on a 2D canvas with `fillText`, `fillRect`, etc. In UE5, each screen is a separate Widget Blueprint designed in the UMG visual editor. Data binding replaces the per-frame draw calls — widgets update only when their bound values change.
+
+### Verify
+- [ ] HUD shows HP, gold, coal, distance, wave phase during combat
+- [ ] Crew panel shows all unlocked crew with weapon levels
+- [ ] Bandit alert appears when bandits are stealing
+- [ ] All 4 game over variants display correctly with appropriate buttons
+- [ ] Menu navigation works with both mouse and keyboard
+- [ ] CommonUI prevents input from reaching gameplay during menus
+- [ ] No UI elements overlap incorrectly at different aspect ratios
+
+---
+
+## Step 19: Start Screen
+
+**Goal:** A polished title screen matching the web game's aesthetic.
+
+### Layout
+- **Background:** Dark radial gradient (center slightly lighter, edges dark)
+- **Dust particles:** Niagara system (NS_DustParticles) with slow-drifting small particles
+- **3D Train model:** Centered, slowly rotating (1 rotation every 20 seconds)
+- **Title:** "TRAIN DEFENSE" — golden color (#FFD700 equivalent), large bold text (equivalent to 64pt)
+- **No subtitle, no silhouette boxes**
+
+### 3 Buttons (stacked vertically, centered)
+1. "Start Game" → transitions to WorldSelect
+2. "Power Ups" → transitions to Shop
+3. "Settings" → transitions to Settings
+
+All buttons share the same golden style with dark background, matching the title color.
+
+### Rotating Train
+1. Place a `BP_Train` (or a simplified display-only version) in the level
+2. In its Tick: **Add Actor Local Rotation** Yaw = `DeltaSeconds * 18` (360/20 = 18 deg/sec)
+3. Position it so the camera sees it behind/below the UI
+
+### Niagara Dust Particles
+Create `NS_DustParticles`:
+- Spawn rate: 5/sec
+- Lifetime: 8-12s
+- Velocity: slow random drift (100-300 cm/s)
+- Size: very small (2-5 cm)
+- Color: warm tan/brown, low opacity (0.2-0.4)
+- Spawn volume: large box covering the camera's view
+
+### Key Blueprint Nodes
+- **Add Actor Local Rotation** (train spin)
+- **Create Widget** + **Add to Viewport** (start screen)
+- **On Clicked** (button events → state transitions)
+- **Activate Niagara Component** (dust particles)
+
+### Verify
+- [ ] Title text reads "TRAIN DEFENSE" in golden color
+- [ ] 3D train rotates slowly in the background
+- [ ] Dust particles drift across the scene
+- [ ] 3 buttons are visible: Start Game, Power Ups, Settings
+- [ ] Each button navigates to the correct state
+- [ ] No subtitle text or silhouette boxes present
+- [ ] Dark radial gradient background visible
+
+---
+
+## Step 20: Visual Effects & Polish
+
+**Goal:** Particle effects, screen feedback, and material polish to match (and enhance) the web game's feel.
+
+### Niagara Systems to Create
+
+| System | Trigger | Description |
+|---|---|---|
+| `NS_Confetti` | Level-up card selection, zone complete | Colorful paper bits falling from top |
+| `NS_Fireworks` | World complete | Bursts of colored sparks at random positions |
+| `NS_MuzzleFlash` | Weapon fire | Brief bright flash at mount position |
+| `NS_DamageParticles` | Enemy hit | Small debris/sparks at impact point |
+| `NS_SteamAura` | Steam Blast active | Continuous ring matching weapon radius |
+| `NS_CoinSparkle` | Coin spawn | Subtle glint on coin surface |
+| `NS_DustParticles` | Start screen, zone map | Ambient floating dust |
+
+### Screen Shake
+Create multiple **Camera Shake** assets:
+- `CS_TrainDamage`: 0.2s, moderate amplitude (train takes hit)
+- `CS_SurgeRumble`: 8s, low amplitude, looping (during surge phase)
+- `CS_BigHit`: 0.1s, high amplitude (boss kill or large damage)
+
+Trigger with **Play World Camera Shake** at the appropriate moments.
+
+### Damage Flash (Post-Process)
+1. Create a **Post Process Material** that tints the screen white
+2. Add a `FlashIntensity` scalar parameter (0 = no flash, 1 = full white)
+3. On train damage:
+   - Set `FlashIntensity` = 0.3
+   - **Timeline** over 0.15s: lerp back to 0
+4. Apply via **Post Process Volume** (unbound, so it covers everything)
+
+### Dynamic Materials for Enemies
+1. Create a base enemy material with parameters:
+   - `BaseColor` (Vector) — tier-based color
+   - `FlashAmount` (Scalar) — 0 to 1, lerp to white
+   - `EmissiveStrength` (Scalar) — for glow effects
+2. On enemy activate: **Create Dynamic Material Instance**, set `BaseColor` for tier
+3. On hit: set `FlashAmount` = 1, then lerp back to 0 over 0.1s
+4. On kill: brief emissive pulse before deactivation
+
+### Weapon Glow
+Auto-weapons on mounts should have a subtle glow:
+- Turret: blue emissive
+- Steam: orange emissive
+- Laser: green emissive
+- Use emissive material parameter, pulsing via sine wave in material or Blueprint
+
+### Key Blueprint Nodes
+- **Spawn System at Location** (Niagara one-shot effects)
+- **Activate Niagara Component** / **Deactivate** (continuous effects)
+- **Play World Camera Shake**
+- **Create Dynamic Material Instance** + **Set Scalar Parameter** / **Set Vector Parameter**
+- **Set Post Process Settings** (on camera or post process volume)
+- **Timeline** (for all timed visual transitions)
+
+### Web-to-UE5 Translation
+The web game uses canvas-based effects (screen flash overlay, CSS-like animations for damage numbers). UE5 replaces these with post-process materials (screen flash), Niagara (particles), camera shake assets (screen rumble), and dynamic material instances (per-object visual changes). The trigger points are identical.
+
+### Verify
+- [ ] Confetti spawns on level-up selection and zone complete
+- [ ] Fireworks play on world complete
+- [ ] Muzzle flash visible when weapons fire
+- [ ] Enemy hit sparks visible at impact point
+- [ ] Steam Blast has a visible aura ring matching its radius
+- [ ] Screen flashes briefly white when train takes damage
+- [ ] Screen shakes on train damage and during surge
+- [ ] Enemies flash white on hit
+- [ ] Auto-weapons glow with their type-appropriate color
+- [ ] All effects deactivate cleanly (no lingering particles)
+
+---
+
+## Coordinate System & Scale
 
 ### Axis Conversion
 
@@ -662,539 +1657,151 @@ UE5.Z =  ThreeJS.Y × 100    (up)
 
 ### Scale Reference
 
-| Concept | Web (px) | UE5 (cm) | Conversion |
+| Concept | Web (px) | UE5 (cm) at x100 | Notes |
 |---|---|---|---|
-| Train car width | 32 | 3,200 | ×100 |
-| Enemy radius | 6 | 600 | ×100 |
-| Weapon range | 220 | 22,000 | ×100 |
-| Canvas width | 960 | 96,000 | ×100 |
-| Train speed | 167/sec | 16,700/sec | ×100 |
+| Train car width | 32 | 3,200 | May be too large — consider x10 instead |
+| Enemy radius | 6 | 600 | |
+| Weapon range | 220 | 22,000 | |
+| Canvas width | 960 | 96,000 | |
+| Train speed | 167/sec | 16,700/sec | |
 
-**Note:** These direct conversions may result in very large UE5 units. Consider a different scale factor (e.g., ×10 or ×1) based on your art style and camera setup. The important thing is **consistency** — pick one scale factor and apply it everywhere.
+**Important:** Direct x100 conversion may result in very large UE5 units. Consider using x10 (1 web pixel = 10 cm) for a more manageable scale. The critical thing is **consistency** — pick one factor and apply it everywhere.
 
 ### Rotation
-
-- Web: radians, standard math angles (0 = right, π/2 = up)
+- Web: radians, standard math angles (0 = right, PI/2 = up)
 - UE5: `FRotator(Pitch, Yaw, Roll)` in degrees
-- Conversion: `Degrees = Radians × (180 / π)`
+- Conversion: `Degrees = Radians * (180 / PI)`
 - Yaw in UE5 = angle from forward (X-axis), clockwise when viewed from above
 
 ---
 
-## 9. All Tuning Constants
+## Asset Pipeline
 
-Store these in a **DataAsset** (a simple data container you can edit in the UE5 editor without recompiling code) or **DeveloperSettings** (appears in the Project Settings menu). Either way, designers can tweak values without touching C++.
+### 3D Models
 
-### Train
-```
-TRAIN_MAX_HP = 100          CAR_WIDTH = 32
-TRAIN_SPEED = 167           CAR_HEIGHT = 14
-TARGET_DISTANCE = 10000     CAR_GAP = 6
-CARGO_BOXES_START = 4       CARGO_MULTIPLIER_PER_BOX = 0.25
-DRIVER_DAMAGE_BUFF = 1.5
-```
-
-### Weapons
-```
-WEAPON_CONE_HALF_ANGLE = 45°    PROJECTILE_SPEED = 350
-WEAPON_RANGE = 220              PROJECTILE_LIFETIME = 2.0
-WEAPON_FIRE_RATE = 5            PROJECTILE_RADIUS = 3
-WEAPON_DAMAGE = 12              MOUNT_RADIUS = 8
-```
-
-### Manual Gun (per level: base + growth × level)
-```
-MANUAL_LV1_DAMAGE = 12         MANUAL_DAMAGE_GROWTH = 4
-MANUAL_LV1_FIRE_RATE = 5       MANUAL_FIRE_RATE_GROWTH = 0.8
-MANUAL_LV1_RANGE = 220         MANUAL_RANGE_GROWTH = 15
-```
-
-### Auto-Weapons (per level: base + growth × level)
-```
-TURRET_LV1_SHOTS = 1           TURRET_SHOT_GROWTH = 1
-TURRET_LV1_DAMAGE = 10         TURRET_DAMAGE_GROWTH = 2
-TURRET_LV1_FIRE_INTERVAL = 1.2 TURRET_INTERVAL_REDUCTION = 0.1
-TURRET_LV1_RANGE = 250         TURRET_RANGE_GROWTH = 20
-
-STEAM_LV1_RADIUS = 80          STEAM_RADIUS_GROWTH = 25
-STEAM_LV1_DAMAGE = 4           STEAM_DAMAGE_GROWTH = 3
-STEAM_LV1_TICK_RATE = 0.5      STEAM_TICK_REDUCTION = 0.05
-
-LASER_LV1_BOUNCES = 2          LASER_BOUNCE_GROWTH = 1
-LASER_LV1_DAMAGE = 8           LASER_DAMAGE_GROWTH = 3
-LASER_LV1_FIRE_INTERVAL = 2.5  LASER_INTERVAL_REDUCTION = 0.3
-LASER_LV1_SPEED = 300          LASER_SPEED_GROWTH = 25
-```
-
-### Enemies
-```
-ENEMY_BASE_HP = 20              ENEMY_BASE_SPEED = 50
-ENEMY_RADIUS = 6               ENEMY_CONTACT_DAMAGE = 6
-ENEMY_SPAWN_INTERVAL_START = 1.5    ENEMY_SPAWN_INTERVAL_MIN = 0.25
-ENEMY_RADIUS_MULT = [1.5, 5, 5]     ENEMY_HP_MULT = [1, 4, 6]
-MAX_ENEMIES = 150
-```
-
-### Crew
-```
-CREW_REASSIGN_COOLDOWN = 1.0    CREW_RADIUS = 8
-CREW_COLORS = [#e74c3c, #3498db, #2ecc71]
-```
-
-### Bandits
-```
-BANDIT_SPEED = 110              BANDIT_SPAWN_INTERVAL = 15
-BANDIT_JUMP_DURATION = 0.4      BANDIT_STEAL_RATE = 5
-BANDIT_FIGHT_DURATION = 0.5     MAX_BANDITS = 10
-```
-
-### Economy
-```
-XP_PER_KILL = 12               XP_PER_LEVEL = 80
-COIN_VALUE = 10                COIN_SPAWN_INTERVAL = 3
-COIN_RADIUS = 8                COIN_FLY_SPEED = 400
-MAGNET_SPAWN_CHANCE = 0.08     GOLD_PER_STATION = 25
-COAL_PER_WIN = 2               COAL_SHOP_COST = 30
-COAL_SHOP_AMOUNT = 2
-ZONES_PER_WORLD = 3            ZONE_DIFFICULTY_SCALE = 0.2
-```
-
-### Shop Upgrades (cost × (level+1))
-```
-damage:    40g/level, 5 max, +15% per level
-shield:    35g/level, 5 max, -2 damage per level
-coolOff:   45g/level, 5 max, -10% cooldown per level
-maxHp:     30g/level, 5 max, +15 HP per level
-baseArea:  40g/level, 5 max, +15% range per level
-greed:     60g/level, 3 max, +20% gold per level
-crewSlots: 300g/level, 2 max (unlocks crew member)
-```
-
-### Object Pools
-```
-MAX_PROJECTILES = 300           MAX_RICOCHET_BOLTS = 10
-MAX_DAMAGE_NUMBERS = 80         MAX_COINS = 30
-MAX_FLYING_COINS = 30           MAX_BANDITS = 10
-MAX_ENEMIES = 150               MAX_MAGNETS = 3
-```
-
----
-
-## 10. UI Screens & Flow
-
-### Screen Flow Diagram
-```
-                    ┌──────────┐
-          ┌────────►│ ZONE MAP │◄───────────┐
-          │         └──┬───────┘            │
-          │            │ click station      │
-          │         ┌──▼───┐                │
-          │         │SETUP │                │
-          │         └──┬───┘                │
-          │            │ depart             │
-          │     ┌──────▼──────┐             │
-          │     │   RUNNING   │◄──┐         │
-          │     └──┬──────┬───┘   │         │
-          │        │      │       │         │
-          │   ┌────▼──┐ ┌─▼────┐  │         │
-          │   │LEVELUP│ │GAME  │  │         │
-          │   └──┬────┘ │OVER  │  │         │
-          │      │      └──┬───┘  │         │
-          │ ┌────▼─────┐   │      │         │
-          │ │PLACE_WEAP│   │      │         │
-          │ └────┬─────┘   │      │         │
-          │      └─────────┘──────┘         │
-          │                │                │
-          │           ┌────▼───┐            │
-          │           │  SHOP  ├────────────┘
-          │           └────────┘
-          │
-     ┌────┴─────┐    ┌──────────┐
-     │  PAUSED  │    │ SETTINGS │
-     └──────────┘    └──────────┘
-     (from any)      (from any)
-```
-
-### Per-Screen Specification
-
-**ZONE MAP:**
-- Background: sandy terrain with zombie/bug emojis scattered
-- Station graph: connected nodes with type icons
-- HUD: coal counter, gold counter, zone/world indicator
-- Subtitle: "Deliver the cargo. Survive the wasteland."
-- Zombie density increases toward later stations
-
-**SETUP:**
-- Train visible with 8 mount slots + driver seat
-- Crew panel at bottom with unassigned crew
-- Instructions: "Left-click to select crew. Right-click a slot to place."
-- Depart button (disabled until 1+ crew on weapon mount)
-
-**RUNNING:**
-- Full 3D scene with train, enemies, projectiles
-- HUD overlay: HP bar, XP bar, distance bar, gold counter, level counter
-- Crew/Weapon/Defense HUD (bottom-left, 3 rows)
-- Bandit alert banner (red, pulsing)
-- Idle crew warning (orange, near mount)
-
-**LEVEL UP:**
-- 3 cards with icon, name, description
-- Hover to enlarge, click to select
-- Confetti on selection
-
-**GAME OVER (4 variants):**
-- Combat win: "STATION CLEARED!" + [CONTINUE]
-- Zone complete: "DELIVERED!" + cargo/gold/coal summary + [SHOP] [NEXT ZONE]
-- World complete: "WORLD COMPLETE!" + fireworks + confetti + massive gold + [CONTINUE]
-- Death: "TRAIN DESTROYED" + [RESTART]
-
-**SHOP:**
-- 7 upgrade rows with level pips
-- Coal purchase row
-- Map button + Next Zone button
-
----
-
-## 11. Audio Implementation
-
-### UE5 Audio Architecture
-
-UE5 organizes sounds into **Sound Classes**, which are like volume groups. A "Master" class contains "Music" and "SFX" sub-classes. Set the volume on a class and all sounds in that class are affected — this replaces the web game's separate `musicGain` / `sfxGainNode` setup.
-
-```
-Sound Classes:
-├── Master
-│   ├── Music (volume: musicVolume)
-│   │   └── SC_BackgroundMusic
-│   └── SFX (volume: sfxVolume)
-│       ├── SC_Shoot, SC_EnemyHit, SC_EnemyKill
-│       ├── SC_TrainDamage, SC_Powerup
-│       ├── SC_CoinPickup, SC_StealLoop
-│       ├── SC_LevelUp, SC_ZoneComplete
-│       ├── SC_WinWorld, SC_Defeat
-│       └── MS_TrainEngine (MetaSound, reactive)
-```
-
-### Sound Triggers
-
-| Event | Sound | Type | Volume |
+| Asset | Source | UE5 Format | Import Notes |
 |---|---|---|---|
-| Crew fires | SC_Shoot | One-shot | 0.08 |
-| Bullet hits enemy | SC_EnemyHit | One-shot | 0.12 |
-| Enemy dies | SC_EnemyKill | One-shot | 0.10 |
-| Train takes damage | SC_TrainDamage | One-shot | 0.25 |
-| Coin collected | coin.mp3 | One-shot | 0.60 |
-| Level-up card selected | SC_Powerup | One-shot | 0.15 |
-| Bandit stealing (start) | steal.mp3 | Loop start | SFX vol |
-| Bandit stealing (stop) | steal.mp3 | Loop stop | — |
-| Level-up triggered | levelup.mp3 | One-shot | 0.60 |
-| Zone cleared | zonecomplete.mp3 | One-shot | 0.70 |
-| World beaten | winworld.mp3 | One-shot | 0.70 |
-| Player dies | loose.mp3 | One-shot | 0.70 |
-| Background music | music.mp3 | Loop | Music vol |
+| Train (4 cars) | Train.fbx | Static Mesh | Check scale (x100), verify pivot points |
+| Enemy zombie | enemy.fbx | Static Mesh | Need LOD for 150 on-screen |
+| Weapons | Gun.fbx, AutoGun.fbx, Laser.fbx, Garlic.fbx | Static Mesh | Attach to mount sockets |
+| Rail/track | Rail.fbx | Static Mesh | Tiling/instanced for scrolling |
+| Bandit | New asset needed | Static Mesh | Web uses procedural box geometry |
+| Crew | New asset needed | Static Mesh | Web uses colored spheres |
+| Coins | New: simple disc | Static Mesh | Gold cylinder with material |
 
-### MetaSounds Candidates
+### Audio Files
 
-- **Train engine:** Continuous, pitch/volume reactive to train speed
-- **Steam blast aura:** Continuous hiss when active, radius affects volume
-- **Ambient wasteland:** Wind, distant sounds, intensity scales with difficulty
-
----
-
-## 12. Prioritization Strategy
-
-### Why Order Matters
-
-A port is not a rewrite — the game design is proven. The risk isn't "will it be fun?" but "can we make it work in UE5?" Prioritize by **technical risk** first, then **core loop**, then **meta loop**, then **polish**.
-
-### Risk Map
-
-| Risk | Why It's Risky | When to Prove |
+| File | Type | Import As |
 |---|---|---|
-| **Orthographic camera + isometric** | UE5 defaults to perspective. Ortho breaks some VFX, post-process, and culling. Prove it works before building anything on top. | Day 1 |
-| **150 enemies + 300 projectiles** | Object pooling in UE5 is manual and easy to get wrong (forgetting to disable tick = wasted CPU; forgetting to disable collision = invisible blockers). Prove pool performance before building combat. | Week 1 |
-| **Click-to-select crew on 3D mounts** | Mouse raycast → 3D hit → identify mount is the core interaction. If this feels bad, the game doesn't work. | Week 1 |
-| **World-space health bars × 150** | Creating a separate UI widget per enemy won't scale. Need a batched drawing approach. | Week 2 |
-| **Train speed + scrolling terrain** | Constant movement with parallax. If camera/terrain stutters, everything feels wrong. | Week 1 |
+| music.mp3 | Background loop | USoundWave, set looping |
+| coin.mp3 | One-shot SFX | USoundWave |
+| steal.mp3 | Looping SFX | USoundWave, set looping |
+| levelup.mp3 | One-shot SFX | USoundWave |
+| zonecomplete.mp3 | One-shot SFX | USoundWave |
+| winworld.mp3 | One-shot SFX | USoundWave |
+| loose.mp3 | One-shot SFX | USoundWave |
 
-### Priority Tiers
-
-```
-TIER 1 — PROVE IT (kill technical risk)
-  Camera rig, train movement, mouse-to-mount interaction, enemy pooling at scale
-
-TIER 2 — CORE LOOP (one fun combat run)
-  Crew assignment, manual shooting, enemy spawning, projectile collision,
-  HP/damage, game over, basic HUD
-
-TIER 3 — DEPTH (full combat variety)
-  Auto-weapons (turret, steam, laser), defenses, level-up cards,
-  bandit system, coins/magnets, damage numbers
-
-TIER 4 — META LOOP (progression across runs)
-  Zone map, station graph, coal resource, shop upgrades,
-  save/load, world completion, difficulty scaling
-
-TIER 5 — POLISH (match original feel)
-  All audio, VFX (confetti, fireworks, muzzle flash), screen shake,
-  damage flash, crew names/HUD, settings menu, keyboard nav
-```
-
-### The "Playable at Every Tier" Rule
-
-Each tier should produce something you can play-test:
-- **After Tier 1:** Train moves, you can click mounts, enemies appear and die → "Is the camera right? Does clicking feel good?"
-- **After Tier 2:** Full combat run with crew → "Is it fun? Does the core loop hold up in 3D?"
-- **After Tier 3:** Weapons, bandits, coins → "Does the complexity work? Is balance close?"
-- **After Tier 4:** Full meta loop → "Can someone play 30 minutes and feel progression?"
-- **After Tier 5:** Ship-ready → "Does it feel as good as the web version?"
-
-### What NOT to Build Early
-
-| Trap | Why to Avoid |
-|---|---|
-| Final 3D art/models | Use placeholders until gameplay is locked. Art changes are expensive. |
-| MetaSounds synthesis | Import the MP3s first. Recreate synth sounds only in polish phase. |
-| Full UI/UMG polish | Gray boxes with text are fine for Tiers 1-3. Pretty UI is Tier 5. |
-| Zone map procedural gen | Hardcode 3 test zones. Procedural gen is Tier 4. |
-| Save system | Keep state in GameInstance (memory only). Disk save is Tier 4. |
-| Settings menu | Hardcode volumes. Settings is Tier 5. |
-
-### Critical Path (shortest path to "is this port viable?")
-
-```
-Day 1-2:  Project setup → ortho camera → train actor moving along track
-Day 3-4:  Enemy pool (50 first, scale to 150) → spawn from edges → move toward train
-Day 5-6:  Mouse raycast → mount selection → projectile firing → enemy collision
-Day 7:    DECISION POINT — Does it feel right? Is performance OK?
-          If yes → proceed to Tier 2
-          If no → identify what's wrong before investing more
-```
-
-This 1-week spike answers the three biggest unknowns:
-1. Does orthographic isometric look right in UE5?
-2. Can we pool 150+ actors without performance issues?
-3. Does click-to-aim on 3D mounts feel responsive?
-
-If any answer is "no", you know exactly what to fix before building more.
+### FBX Import Checklist
+1. Check scale: Three.js models are in meters, UE5 uses centimeters
+2. Check pivot points: Three.js centers at geometry center; UE5 expects pivot at "feet"
+3. Check axis: Y-up in Three.js vs Z-up in UE5 (usually auto-converted)
+4. Check normals: verify faces aren't flipped after import
 
 ---
 
-## 13. Phased Porting Plan
+## Tuning Constants
 
-### Phase 1: Skeleton — Prove the Camera + Movement (Tier 1)
-**Goal:** Train moves through scene, camera follows, basic input works
-**Exit criteria:** You can watch the train scroll past at correct speed with ortho camera
+All gameplay values are documented in **GAME_DOCS.md**. For the UE5 port, store them in one of these containers:
 
-- [ ] C++ project setup, folder structure
-- [ ] Orthographic camera rig matching isometric angle
-- [ ] ATrain actor with 4 car meshes (placeholders OK)
-- [ ] Train constant-speed movement along track
-- [ ] Enhanced Input: mouse click + keyboard basics
-- [ ] Basic UMG HUD (HP text, distance text)
+### Recommended: DataAsset Approach
+Create a `DA_GameConstants` Primary Data Asset with categorized variables:
 
-### Phase 2: Pooling + Enemies — Prove Performance (Tier 1)
-**Goal:** 150 enemies spawn, move, and despawn without frame drops
-**Exit criteria:** Stable 60fps with 100+ enemies on screen
-**Why now:** If pooling doesn't work at scale, everything built on top is wasted
+```
+DA_GameConstants
+├── Train
+│   ├── MaxHP (Float) = 100
+│   ├── Speed (Float) = 16700
+│   ├── TargetDistance (Float) = 1000000
+│   └── ...
+├── Weapons
+│   ├── ManualGunLevels (Array of Struct)
+│   ├── TurretLevels (Array of Struct)
+│   ├── SteamLevels (Array of Struct)
+│   └── LaserLevels (Array of Struct)
+├── Enemies
+│   ├── BaseHP, BaseSpeed, etc.
+│   └── TierMultipliers (Array)
+├── Economy
+│   ├── CoinValue, XPPerKill, etc.
+│   └── ShopUpgrades (Array of Struct)
+└── Pools
+    ├── MaxEnemies = 150
+    ├── MaxProjectiles = 300
+    └── ...
+```
 
-- [ ] `UActorPoolSubsystem` (C++) with Acquire/Release pattern
-- [ ] AEnemy actor implementing IPoolable (activate/deactivate)
-- [ ] Enemy spawn logic (wave-based from edges, move toward train)
-- [ ] Stress test: spawn 150 enemies, verify no tick leaks or collision ghosts
-- [ ] AProjectile with `UProjectileMovementComponent` + same pool subsystem
-- [ ] Projectile pool: 300 actors, verify clean return cycle
+### Alternative: DataTable Approach
+Use DataTables for per-level weapon stats (rows = levels, columns = stats). Good for weapon balancing since you can edit them in a spreadsheet-like view.
 
-### Phase 3: Click-to-Mount + Basic Combat — Prove Interaction (Tier 1→2)
-**Goal:** Player can click a mount, fire at enemies, enemies die
-**Exit criteria:** Click mount → projectile fires → hits enemy → enemy flashes and dies → feels responsive
-**Why now:** This is THE core interaction. If mouse→3D mount feels laggy or imprecise, the game fails.
-
-- [ ] WeaponMount component on train car actors
-- [ ] Mouse raycast (cast an invisible line from camera through mouse cursor into 3D world) → identify clicked mount
-- [ ] Basic crew weapon firing (auto-target closest enemy in range)
-- [ ] Collision detection (projectile overlap → enemy)
-- [ ] Damage system (HP reduction, white flash 0.1s, death)
-- [ ] Damage numbers (floating text, size/color scale with damage)
-- [ ] Basic HUD: HP bar, distance counter, kill counter
-
-**⚡ DECISION POINT after Phase 3:** Play-test for 5 minutes. Does it feel right?
-- Camera angle correct? → If not, adjust before Phase 4
-- Clicking mounts intuitive? → If not, try larger hit areas or visual highlights
-- Performance with 100 enemies + 50 projectiles? → If not, profile and fix pooling
-
-### Phase 4: Crew Assignment — Complete Core Loop (Tier 2)
-**Goal:** Full combat run from setup to game over with crew management
-**Exit criteria:** Play a complete run: place crew → fight → take damage → win or die
-
-- [ ] ACrewMember actors (3, with crew colors)
-- [ ] Crew panel UI (simple UMG list)
-- [ ] Left-click to select crew, right-click mount to assign
-- [ ] Animated crew walk between cars (door waypoints, 120px/sec, 0.35s pause)
-- [ ] Driver seat + 1.5× damage buff
-- [ ] Selected crew aims at mouse (manual targeting within cone)
-- [ ] Unselected crew auto-target closest enemy
-- [ ] Game state machine: SETUP → RUNNING → GAMEOVER
-- [ ] Win condition (distance reached) and lose condition (HP ≤ 0)
-- [ ] Basic game over screen with restart
-
-### Phase 5: Auto-Weapons + Defenses — Combat Depth (Tier 3)
-**Goal:** All weapon types and defensive options work
-**Exit criteria:** Player can equip turret + steam blast, activate shield, and feel the variety
-**Why now:** This is what makes combat interesting beyond "click and shoot"
-
-- [ ] Turret auto-weapon (auto-target, burst fire, pooled projectiles)
-- [ ] Steam Blast aura (radius damage tick via overlap sphere, Niagara ring visual)
-- [ ] Laser/Ricochet bolts (bounce logic: enemy→enemy, screen edge bounce)
-- [ ] Shield defense (-2 dmg/level, min 1 damage)
-- [ ] Regen defense (+3 HP/sec/level)
-- [ ] Repair (instant +30 HP)
-- [ ] Weapon HUD: 3 rows (Crew with names, Weapons, Defense)
-- [ ] Max constraints: 2 auto-weapons, 2 defense slots
-
-### Phase 6: Level-Up + XP — In-Run Progression (Tier 3)
-**Goal:** Players grow stronger during a combat run
-**Exit criteria:** Kill enemies → gain XP → pick a card → see the upgrade take effect
-
-- [ ] XP tracking (12 per kill, threshold = level × 80)
-- [ ] Level-up card generation (3 random from weighted pool)
-- [ ] Card selection UI (UMG modal with hover highlight)
-- [ ] Pool constraints: max 2 weapons, max 2 defense, per-crew gun cap at 5
-- [ ] Apply upgrades immediately on selection
-- [ ] Place weapon flow (highlight empty mounts, click to place)
-- [ ] Powerup sound + confetti VFX on selection
-
-### Phase 7: Economy — Coins, Gold, Bandits (Tier 3)
-**Goal:** Gold economy and bandit threat complete
-**Exit criteria:** Coins spawn, magnets collect all, bandits steal gold, crew fights them off
-**Why grouped:** Coins and bandits both affect gold — test the economy as one system
-
-- [ ] Coin spawning (every 3s, 8% magnet chance) + pooling
-- [ ] Magnet: projectile hit → all coins fly to HUD
-- [ ] Flying coins animation (accelerate toward HUD target)
-- [ ] Gold counter with cargo multiplier
-- [ ] ABandit with 5-state machine (RUNNING→JUMPING→ON_TRAIN→FIGHTING→DEAD)
-- [ ] Bandit gold stealing (5g/sec on unmanned mount)
-- [ ] Bandit weapon disabling (auto-weapon mount = weapon off)
-- [ ] Crew fight interaction (0.5s, crew always wins)
-- [ ] Steal sound loop (start when any stealing, stop when none)
-- [ ] Visual: red glow + big X on disabled mounts, orange "IDLE" on guarding crew
-
-### Phase 8: Zone Map + World Progression — Meta Loop (Tier 4)
-**Goal:** Multiple combat runs connected by a zone map with strategic choices
-**Exit criteria:** Navigate 3 zones, choose routes, spend coal, complete a world
-**Why now:** The meta loop is what gives the game longevity. Without it, combat runs are isolated.
-
-- [ ] UZoneData data asset (station graph, types, connections)
-- [ ] Zone generation (2-3 routes, short/long, cross-connections)
-- [ ] Zone map UI (UMG: station nodes, connection lines, coal cost)
-- [ ] Station types: START, COMBAT (→ setup), EMPTY (rest), EXIT (→ zone complete)
-- [ ] Coal resource (4 start, 1/hop, +2/win, buyable)
-- [ ] Zone complete screen ("DELIVERED!" + gold summary)
-- [ ] World complete screen (fireworks, confetti, bonus gold)
-- [ ] Difficulty scaling: zone number × 0.2, distance-based within run
-- [ ] 4 game over variants: combat win, zone complete, world complete, death
-
-### Phase 9: Shop + Save — Persistence (Tier 4)
-**Goal:** Players invest gold in permanent upgrades that carry across worlds
-**Exit criteria:** Buy an upgrade → start new run → upgrade is active → save persists across sessions
-
-- [ ] Shop UI (7 upgrade rows + coal purchase)
-- [ ] Cost formula: baseCost × (currentLevel + 1)
-- [ ] All 7 upgrades: damage, shield, coolOff, maxHp, baseArea, greed, crewSlots
-- [ ] Crew slot unlocking (300g per slot, max 2 additional)
-- [ ] USaveGame with all persistent data (gold, coal, upgrades, audio prefs)
-- [ ] Save on shop exit / world complete
-- [ ] Load on game start
-- [ ] Settings screen (music/SFX volume sliders)
-
-### Phase 10: Polish — Ship Quality (Tier 5)
-**Goal:** Matches original game feel and adds UE5-quality enhancements
-**Exit criteria:** Someone who played the web version says "this feels the same but better"
-
-- [ ] Final 3D models imported (train, enemies, weapons, crew, bandits)
-- [ ] Materials: damage flash (dynamic material instance = a runtime copy of a material whose color can change, e.g., flash white on hit), enemy tier colors
-- [ ] All MP3 audio imported as USoundWave assets
-- [ ] MetaSounds for synth SFX (shoot, hit, kill, train damage, powerup)
-- [ ] Niagara VFX: muzzle flash, steam aura, confetti, fireworks, coin sparkle
-- [ ] Screen shake on train damage (UMatineeCameraShake, 0.2s)
-- [ ] Damage flash overlay (white flash on train hit)
-- [ ] Game over screens (4 variants with correct buttons/flow)
-- [ ] Pause menu with resume/restart/quit
-- [ ] Keyboard navigation for all menus
-- [ ] Balance pass: verify all tuning values match Section 9 constants
-- [ ] Performance pass: profile with max enemies/projectiles, optimize hot paths
-- [ ] Final audio mix: balance all volumes against each other
-
-### Estimated Timeline (solo developer)
-
-| Phase | Tier | Duration | Cumulative | Playable? |
-|---|---|---|---|---|
-| 1: Camera + Train | 1 | 2-3 days | 3 days | Train moves ✓ |
-| 2: Pooling + Enemies | 1 | 3-4 days | 1 week | Enemies swarm ✓ |
-| 3: Click + Combat | 1→2 | 4-5 days | 2 weeks | **Core combat works** ✓ |
-| 4: Crew System | 2 | 5-6 days | 3 weeks | Full crew management ✓ |
-| 5: Auto-Weapons | 3 | 4-5 days | 4 weeks | Weapon variety ✓ |
-| 6: Level-Up | 3 | 3-4 days | 4.5 weeks | In-run progression ✓ |
-| 7: Economy + Bandits | 3 | 5-6 days | 5.5 weeks | Full combat depth ✓ |
-| 8: Zone Map | 4 | 5-6 days | 7 weeks | **Full game loop** ✓ |
-| 9: Shop + Save | 4 | 3-4 days | 8 weeks | Persistence ✓ |
-| 10: Polish | 5 | 2-3 weeks | 11 weeks | **Ship quality** ✓ |
-
-**Key milestone: Week 2 (Phase 3 complete)** — This is where you know if the port is viable. If the core combat feels good in UE5, the rest is execution. If it doesn't, you've only invested 2 weeks.
+### Access Pattern
+1. Store a reference to `DA_GameConstants` on the GameMode
+2. Any Blueprint that needs a constant: **Get Game Mode** → **Cast to GM_TrainDefense** → access the DataAsset reference
+3. Never hardcode gameplay values in individual Blueprints
 
 ---
 
-## 14. Common Pitfalls
+## Common Pitfalls
 
 ### Architecture
-- **Don't replicate the central game loop.** In UE5, each Actor updates itself via Tick. If you try to write one big `updateAll()` function, you will fight the engine instead of working with it.
-- **Don't use strings for state/type checks.** Convert string comparisons to `UENUM` types immediately. Strings are slow to compare and easy to misspell.
-- **Don't call `Destroy()` on pooled actors.** Always return them to the pool. If you destroy a pooled actor, the pool loses track of it and eventually runs out of pre-allocated actors.
+- **Don't replicate the central game loop.** In UE5, each Actor updates itself via Tick. If you try to write one big `updateAll()` function, you will fight the engine.
+- **Don't use strings for state/type checks.** Use UENUM types. Strings are slow and typo-prone.
+- **Don't call Destroy() on pooled actors.** Always return them to the pool. Destroying a pooled actor breaks the pool permanently.
 
 ### Coordinates
-- **Y-up → Z-up.** Every hardcoded position needs conversion.
-- **Meters → Centimeters.** Multiply all distances by 100 (or choose a consistent scale).
-- **Radians → Degrees.** All angle constants need conversion.
-- **Right-handed → Left-handed.** Some rotation math may need a sign flip when converting.
+- **Y-up to Z-up.** Every hardcoded position needs conversion.
+- **Centimeter scale.** Multiply all distances by your chosen scale factor consistently.
+- **Radians to Degrees.** All angle constants need conversion.
+- **Right-handed to Left-handed.** Some rotation math needs a sign flip.
 
 ### Performance
-- **Disable tick on inactive pooled actors.** In JS, skipping an entity in a loop is free. In UE5, every ticking actor has CPU overhead even if it does nothing.
-- **Use Timers for cooldowns** (UE5's built-in timer system), not manual per-frame countdown checks. Timers are more efficient and cleaner.
-- **Use overlap events for range detection.** UE5's physics system can automatically notify you when actors enter a radius — much cheaper than checking distances every frame.
-- **Batch UI updates.** Don't update all HUD text every frame — only update when values actually change (use a "dirty" flag pattern).
+- **Disable tick on inactive pooled actors.** A hidden actor with tick enabled still wastes CPU every frame.
+- **Use Timers for cooldowns**, not manual per-frame countdown checks. UE5 timers are more efficient.
+- **Use overlap events for range detection.** The physics system handles distance checks more efficiently than manual per-frame loops.
+- **Batch UI updates.** Only update HUD text when values change, not every frame.
 
 ### UI
-- **Don't create a widget per enemy health bar.** For 150 enemies, creating 150 separate UI widgets will tank performance. Instead, draw all health bars in a single custom widget or use world-space rendering.
-- **Use CommonUI input routing** to prevent gameplay input during menus. Without it, clicking a "Buy" button in the shop might also fire a weapon behind the menu.
+- **Don't create a widget per enemy health bar.** 150 separate widgets will tank performance. Use a single batched draw widget or world-space canvas approach.
+- **Use CommonUI input routing.** Without it, clicking a menu button might also fire a weapon behind it.
 
 ### Assets
-- **Check FBX scale on import.** Three.js models are in meters, UE5 uses centimeters. You may need to scale models up on import.
-- **Check pivot points.** The pivot is the point around which a model rotates and positions. Three.js meshes center at geometry center; UE5 expects the pivot at the actor's "feet." If your train car rotates weirdly, the pivot is probably wrong.
+- **Check FBX scale on import.** Three.js models are in meters; UE5 expects centimeters.
+- **Check pivot points.** Wrong pivots cause weird rotation and positioning. Three.js centers at geometry; UE5 expects pivot at origin/feet.
 
 ---
 
-## 15. Acceptance Criteria
+## Acceptance Criteria
 
-Each ported system should be verified against the original:
+Each system should be verified against the original web game:
 
 | System | Test |
 |---|---|
-| Train movement | Reaches end at same relative time (10,000 ÷ 167 ≈ 60s) |
+| Train movement | Reaches end at same relative time (10,000 / 167 = ~60s) |
 | Crew damage | Manual gun Lv1 deals 12 dmg, Lv5 deals 28 dmg |
-| Driver buff | All weapons deal 1.5× with crew on driver seat |
+| Driver buff | All weapons deal 1.5x with crew on driver seat |
 | Enemy HP scaling | Zone 1 base enemy: 20 HP. Zone 3 boss: ~40+ HP |
 | Turret burst | Lv3 fires 3 shots per burst |
 | Steam radius | Lv1: 80px equivalent, Lv5: 180px equivalent |
 | Laser bounces | Lv1: 2 bounces, Lv5: 6 bounces |
-| Coin value | 10g per coin × greed multiplier |
+| Coin value | 10g per coin x greed multiplier |
 | Bandit steal rate | 5g/sec while on unmanned mount |
 | Coal consumption | 1 per hop, +2 per combat win |
 | Shop costs | Damage Lv1: 40g, Lv2: 80g, Lv3: 120g |
-| Level-up XP | Level 1→2: 80 XP (≈7 kills), Level 5→6: 480 XP (≈40 kills) |
+| Level-up XP | Level 1→2: 80 XP (~7 kills), Level 5→6: 480 XP (~40 kills) |
 | Max crew | 3 (1 base + 2 unlockable at 300g each) |
 | Game over types | 4 distinct screens: combat win, zone complete, world complete, death |
+| Object pools | 150 enemies + 300 projectiles at 60fps stable |
+| Save/Load | Gold, upgrades, and volumes persist across sessions |
 
 ---
 
-*This document should be kept alongside the source code and updated as the port progresses. Each phase completion should be tagged in version control.*
+*This document should be kept alongside the source code and updated as the port progresses. Reference GAME_DOCS.md for all gameplay values and mechanics details.*
