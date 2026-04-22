@@ -654,56 +654,33 @@ export class Renderer3D {
         }
       }
 
-      // Firing cone visualization — shows current aim direction
+      // Firing cone — hardcoded screen-space directions per mount
+      // Train runs bottom-left → upper-right in isometric.
+      // Each corner mount's outward direction in screen coords:
+      //   top-left → LEFT (π), top-right → UP (-π/2),
+      //   bottom-left → DOWN (π/2), bottom-right → RIGHT (0)
       const hasAuto = mount.hasAutoWeapon;
-      const skipCone = mount.autoWeaponId === 'steamBlast' || mount.autoWeaponId === 'ricochetShot';
-      const showCone = mount.isManned && !skipCone;
+      const showCone = mount.isManned;
       if (showCone) {
+        // Mount index within its car: 0=TL, 1=TR, 2=BL, 3=BR
+        const mountInCar = i % 4;
+        const screenAngles = [Math.PI, -Math.PI / 2, Math.PI / 2, 0];
+        const screenCenter = screenAngles[mountInCar];
+        const screenHalf = Math.PI / 2; // 180° total arc
+
         const coneColor = mount.crew.color;
         const coneRadius = 70;
-        const projDist = 30; // distance in 3D units to project cone edges
-        const aimDir = mount.baseDirection + Math.PI; // flip for isometric projection
-        const half = mount.coneHalfAngle;
-
-        // Project cone edges using 3D offsets directly (not pixel space)
-        // In 2D pixel space: cos→+X(right), sin→+Y(down)
-        // In 3D world: pixel X → world X, pixel Y → world Z
-        const ox = offset.x, oz = offset.z;
-
-        const e1x = ox + Math.cos(aimDir - half) * projDist;
-        const e1z = oz + Math.sin(aimDir - half) * projDist;
-        const e1Scr = this._project(e1x, e1z);
-        const screenEdge1 = Math.atan2(e1Scr.y - sy, e1Scr.x - sx);
-
-        const e2x = ox + Math.cos(aimDir + half) * projDist;
-        const e2z = oz + Math.sin(aimDir + half) * projDist;
-        const e2Scr = this._project(e2x, e2z);
-        const screenEdge2 = Math.atan2(e2Scr.y - sy, e2Scr.x - sx);
-
-        let arcStart = screenEdge1;
-        let arcEnd = screenEdge2;
-        let span = arcEnd - arcStart;
-        while (span > Math.PI) span -= Math.PI * 2;
-        while (span < -Math.PI) span += Math.PI * 2;
-        if (span < 0) {
-          arcStart = screenEdge2;
-          arcEnd = screenEdge1;
-          span = -span;
-        }
-
-        const fillAlpha = 0.25;
-        const strokeAlpha = 0.5;
 
         ctx.save();
         ctx.beginPath();
         ctx.moveTo(sx, sy);
-        ctx.arc(sx, sy, coneRadius, arcStart, arcEnd, false);
+        ctx.arc(sx, sy, coneRadius, screenCenter - screenHalf, screenCenter + screenHalf, false);
         ctx.closePath();
         ctx.fillStyle = coneColor;
-        ctx.globalAlpha = fillAlpha;
+        ctx.globalAlpha = 0.2;
         ctx.fill();
         ctx.strokeStyle = coneColor;
-        ctx.globalAlpha = strokeAlpha;
+        ctx.globalAlpha = 0.4;
         ctx.lineWidth = 2;
         ctx.stroke();
         ctx.restore();
