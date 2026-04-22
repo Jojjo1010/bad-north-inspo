@@ -8,11 +8,12 @@ import { toWorld, toWorldX, toWorldZ, toPixelX, toPixelZ } from './coordMap.js';
 //   A/S: gun rotation offset ±5° D/F: cone half-angle ±5°
 window.__mountDebug = window.__mountDebug || {
   enabled: false,
-  upperConeAngle: -125,  // degrees
-  lowerConeAngle: 55,    // degrees
-  upperGunOffset: -55,   // degrees (gun offset for upper mounts)
-  lowerGunOffset: 30,    // degrees (gun offset for lower mounts)
-  coneHalf: 90,          // degrees (half of total cone)
+  upperConeAngle: -125,  // screen-space cone center (degrees)
+  lowerConeAngle: 55,    // screen-space cone center (degrees)
+  upperGunRot: 80,       // direct rotation.y for upper gun (degrees)
+  lowerGunRot: -15,      // direct rotation.y for lower gun (degrees)
+  coneHalf: 90,          // half of total cone (degrees)
+  mouseScale: -1,        // multiplier for mouse delta → rotation.y
 };
 const MD = window.__mountDebug;
 document.addEventListener('keydown', (e) => {
@@ -26,10 +27,10 @@ document.addEventListener('keydown', (e) => {
     case 'Digit2': MD.upperConeAngle += step; break;
     case 'Digit3': MD.lowerConeAngle -= step; break;
     case 'Digit4': MD.lowerConeAngle += step; break;
-    case 'Digit5': MD.upperGunOffset -= step; break;
-    case 'Digit6': MD.upperGunOffset += step; break;
-    case 'Digit7': MD.lowerGunOffset -= step; break;
-    case 'Digit8': MD.lowerGunOffset += step; break;
+    case 'Digit5': MD.upperGunRot -= step; break;
+    case 'Digit6': MD.upperGunRot += step; break;
+    case 'Digit7': MD.lowerGunRot -= step; break;
+    case 'Digit8': MD.lowerGunRot += step; break;
     case 'Digit9': MD.coneHalf -= step; break;
     case 'Digit0': MD.coneHalf += step; break;
     default: handled = false;
@@ -616,18 +617,13 @@ export class Renderer3D {
         const entry = this.mountGroups[mountIdx];
         const group = entry.group;
         group.position.set(offset.x, offset.y, offset.z);
-        // Hardcoded tuned defaults: upper = 135° + (-55°) = 80°, lower = -45° + 30° = -15°
-        const defaultRot = offset.z < 0
-          ? (135 + MD.upperGunOffset) * Math.PI / 180
-          : (-45 + MD.lowerGunOffset) * Math.PI / 180;
-        if (mount._aimRotY !== undefined) {
-          // Mouse aim: clamp within 90° of default outward direction
-          let diff = mount._aimRotY - defaultRot;
-          while (diff > Math.PI) diff -= 2 * Math.PI;
-          while (diff < -Math.PI) diff += 2 * Math.PI;
-          const maxDiff = MD.coneHalf * Math.PI / 180;
-          if (Math.abs(diff) > maxDiff) diff = Math.sign(diff) * maxDiff;
-          group.rotation.y = defaultRot - diff;
+        // Direct rotation.y from tuned values
+        const defaultRot = (offset.z < 0 ? MD.upperGunRot : MD.lowerGunRot) * Math.PI / 180;
+        if (mount.screenAimAngle !== undefined) {
+          // Mouse aim: compute delta from cone center in screen space, apply to 3D rotation
+          const coneCenterRad = (offset.z < 0 ? MD.upperConeAngle : MD.lowerConeAngle) * Math.PI / 180;
+          const aimDelta = mount.screenAimAngle - coneCenterRad;
+          group.rotation.y = defaultRot + aimDelta * MD.mouseScale;
         } else {
           group.rotation.y = defaultRot;
         }
@@ -670,10 +666,11 @@ export class Renderer3D {
             ctx.stroke();
             // Show rotation value
             const rotDeg = Math.round(group.rotation.y * 180 / Math.PI);
+            const defDeg = offset.z < 0 ? MD.upperGunRot : MD.lowerGunRot;
             ctx.fillStyle = '#ff0';
             ctx.font = '10px monospace';
             ctx.textAlign = 'left';
-            ctx.fillText(`rot=${rotDeg}° def=${Math.round((offset.z < 0 ? (135+MD.upperGunOffset) : (-45+MD.lowerGunOffset)))}°`, sx + 15, sy - 15);
+            ctx.fillText(`rot=${rotDeg}° def=${defDeg}°`, sx + 15, sy - 15);
             ctx.restore();
           } catch(e) { /* prevent crash */ }
         }
@@ -1982,8 +1979,8 @@ export class Renderer3D {
     ctx.font = '11px monospace';
     ctx.fillText(`1/2  Upper cone: ${MD.upperConeAngle}\u00B0`, dx + 6, dy + 30);
     ctx.fillText(`3/4  Lower cone: ${MD.lowerConeAngle}\u00B0`, dx + 6, dy + 44);
-    ctx.fillText(`5/6  Upper gun:  ${MD.upperGunOffset}\u00B0`, dx + 6, dy + 58);
-    ctx.fillText(`7/8  Lower gun:  ${MD.lowerGunOffset}\u00B0`, dx + 6, dy + 72);
+    ctx.fillText(`5/6  Upper gun rot: ${MD.upperGunRot}\u00B0`, dx + 6, dy + 58);
+    ctx.fillText(`7/8  Lower gun rot: ${MD.lowerGunRot}\u00B0`, dx + 6, dy + 72);
     ctx.fillText(`9/0  Cone half:  ${MD.coneHalf}\u00B0`, dx + 6, dy + 86);
     ctx.fillStyle = '#888';
     ctx.fillText('Copy these values when aligned!', dx + 6, dy + 100);
