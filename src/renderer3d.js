@@ -654,21 +654,13 @@ export class Renderer3D {
         }
       }
 
-      // Firing cone — compute outward from screen-space car center
+      // Firing cone — perpendicular to the train edge this mount sits on
+      // Upper side (z<0) → upper-left (-135°), Lower side (z>0) → lower-right (45°)
       const hasAuto = mount.hasAutoWeapon;
       const showCone = mount.isManned;
       if (showCone) {
-        // Average all 4 mount SCREEN positions to get car center
-        const carStart = i < 4 ? 0 : 4;
-        let csx = 0, csy = 0;
-        for (let j = carStart; j < carStart + 4; j++) {
-          const off = this.mountOffsets3D[j];
-          const scr = this._project(off.x, off.z);
-          csx += scr.x; csy += scr.y;
-        }
-        csx /= 4; csy /= 4;
-        const screenCenter = Math.atan2(sy - csy, sx - csx);
-        const screenHalf = Math.PI / 4; // 90° cone — 4 mounts × 90° = full coverage
+        const screenCenter = offset.z < 0 ? -3 * Math.PI / 4 : Math.PI / 4;
+        const screenHalf = Math.PI / 2; // 180° cone
 
         const coneColor = mount.crew.color;
         const coneRadius = 70;
