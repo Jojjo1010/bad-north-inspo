@@ -638,7 +638,7 @@ export class Renderer3D {
         // Determine which model to show
         let desiredType = null;
         if (mount.hasAutoWeapon) {
-          const modelMap = { turret: 'AutoGun', steamBlast: 'Garlic', ricochetShot: 'Laser' };
+          const modelMap = { turret: 'AutoGun', steamBlast: 'Laser', ricochetShot: 'Laser' };
           desiredType = modelMap[mount.autoWeaponId] || null;
         } else if (mount.isManned) {
           desiredType = 'Gun';
