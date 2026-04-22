@@ -409,16 +409,12 @@ function updateSetup(dt) {
       // fall through to normal click handling
     }
 
-    // Check if clicked the garlic mount (use helper that falls back to worldX)
-    const garlicMount = train.getAutoWeaponMount('steamBlast');
-    if (garlicMount) {
-      const gsx = slotScreenX(garlicMount);
-      const gsy = slotScreenY(garlicMount);
-      if (input.hitCircle(gsx, gsy, MOUNT_RADIUS + 10)) {
-        garlicSelected = true;
-        selectedCrew = null;
-        return;
-      }
+    // Check if clicked the garlic mount — use findSlotAtMouse (proven to work for crew)
+    const clickedSlot = findSlotAtMouse();
+    if (clickedSlot && clickedSlot.autoWeaponId === 'steamBlast') {
+      garlicSelected = true;
+      selectedCrew = null;
+      return;
     }
 
     const clickedCrew = findCrewAtMouse();
