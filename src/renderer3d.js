@@ -272,16 +272,16 @@ export class Renderer3D {
     // 8 weapon mounts: 4 on rear weapon car, 4 on front weapon car
     // Train layout (along X): rear weapon (-80) | cargo (-27) | front weapon (27) | locomotive (80)
     this.mountOffsets3D = [
-      // Rear weapon car (4 mounts: corners) — tighter to car body
-      { x: -90, y: 16, z: -8 },   // rear top-left
-      { x: -68, y: 16, z: -8 },   // rear top-right
-      { x: -90, y: 16, z: 8 },    // rear bottom-left
-      { x: -68, y: 16, z: 8 },    // rear bottom-right
+      // Rear weapon car (4 mounts: corners)
+      { x: -76, y: 16, z: -6 },   // rear top-left
+      { x: -62, y: 16, z: -6 },   // rear top-right
+      { x: -76, y: 16, z: 6 },    // rear bottom-left
+      { x: -62, y: 16, z: 6 },    // rear bottom-right
       // Front weapon car (4 mounts: corners)
-      { x: 15, y: 16, z: -8 },    // front top-left
-      { x: 37, y: 16, z: -8 },    // front top-right
-      { x: 15, y: 16, z: 8 },     // front bottom-left
-      { x: 37, y: 16, z: 8 },     // front bottom-right
+      { x: 10, y: 16, z: -6 },    // front top-left
+      { x: 26, y: 16, z: -6 },    // front top-right
+      { x: 10, y: 16, z: 6 },     // front bottom-left
+      { x: 26, y: 16, z: 6 },     // front bottom-right
     ];
     // Driver seat on locomotive
     this.driverOffset3D = { x: 75, y: 16, z: 0 };
@@ -678,23 +678,24 @@ export class Renderer3D {
           : (hasAuto && AUTO_WEAPONS[mount.autoWeaponId] ? AUTO_WEAPONS[mount.autoWeaponId].color : '#888888');
 
         const coneRadius = isManned ? 70 : 42;
-        const projDist = 50;
-        // Use coneDirection (current aim) instead of baseDirection (fixed arc)
+        const projDist = 30; // distance in 3D units to project cone edges
         const aimDir = mount.coneDirection;
         const half = mount.coneHalfAngle;
 
-        // Project both cone edges into isometric screen space
-        const edge1Px = mount.worldX + Math.cos(aimDir - half) * projDist;
-        const edge1Py = mount.worldY + Math.sin(aimDir - half) * projDist;
-        const edge1W = toWorld(edge1Px, edge1Py);
-        const edge1Scr = this._project(edge1W.x, edge1W.z);
-        const screenEdge1 = Math.atan2(edge1Scr.y - sy, edge1Scr.x - sx);
+        // Project cone edges using 3D offsets directly (not pixel space)
+        // In 2D pixel space: cos→+X(right), sin→+Y(down)
+        // In 3D world: pixel X → world X, pixel Y → world Z
+        const ox = offset.x, oz = offset.z;
 
-        const edge2Px = mount.worldX + Math.cos(aimDir + half) * projDist;
-        const edge2Py = mount.worldY + Math.sin(aimDir + half) * projDist;
-        const edge2W = toWorld(edge2Px, edge2Py);
-        const edge2Scr = this._project(edge2W.x, edge2W.z);
-        const screenEdge2 = Math.atan2(edge2Scr.y - sy, edge2Scr.x - sx);
+        const e1x = ox + Math.cos(aimDir - half) * projDist;
+        const e1z = oz + Math.sin(aimDir - half) * projDist;
+        const e1Scr = this._project(e1x, e1z);
+        const screenEdge1 = Math.atan2(e1Scr.y - sy, e1Scr.x - sx);
+
+        const e2x = ox + Math.cos(aimDir + half) * projDist;
+        const e2z = oz + Math.sin(aimDir + half) * projDist;
+        const e2Scr = this._project(e2x, e2z);
+        const screenEdge2 = Math.atan2(e2Scr.y - sy, e2Scr.x - sx);
 
         let arcStart = screenEdge1;
         let arcEnd = screenEdge2;
