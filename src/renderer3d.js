@@ -625,9 +625,10 @@ export class Renderer3D {
         const coneRadius = 56;
 
         // Compute outward direction in screen space:
-        // project train center (0,0) and mount position, outward = mount - center
-        const trainCenter = this._project(0, 0);
-        const outwardAngle = Math.atan2(sy - trainCenter.y, sx - trainCenter.x);
+        // project the car's center axis and the mount, outward = mount - car axis
+        const carCX = mountIdx < 4 ? -80 : 25;
+        const carCenter = this._project(carCX, 0);
+        const outwardAngle = Math.atan2(sy - carCenter.y, sx - carCenter.x);
 
         // Screen-space half angle (fixed visual, not projected)
         const screenHalf = mount.coneHalfAngle;
@@ -695,14 +696,15 @@ export class Renderer3D {
       mount.worldX = toPixelX(offset.x);
       mount.worldY = toPixelZ(offset.z);
 
-      // Update baseDirection to point outward from train center in pixel space
-      // This aligns clampAngle (gameplay) with the visual cone
-      const trainCenterX = toPixelX(0);
-      const trainCenterY = toPixelZ(0);
-      mount.baseDirection = Math.atan2(
-        mount.worldY - trainCenterY,
-        mount.worldX - trainCenterX
-      );
+      // Update baseDirection to point outward from the car's center axis
+      // Use the mount's Z offset (perpendicular to track) as the primary direction,
+      // with a small X contribution from position relative to car center
+      // Car centers: rear=-80, front=25 (midpoints of mount X pairs)
+      const carCenterX = mountIdx < 4 ? -80 : 25;
+      const dx = offset.x - carCenterX;  // small: mounts are ±15 from car center
+      const dz = offset.z;               // ±15: which side of the track
+      // In pixel space, X maps to X and Z maps to Y
+      mount.baseDirection = Math.atan2(dz, dx);
       // Re-clamp current aim to the updated arc
       mount.coneDirection = mount.clampAngle(mount.coneDirection);
     }
