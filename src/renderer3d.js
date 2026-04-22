@@ -613,7 +613,7 @@ export class Renderer3D {
       const sx = screenPos.x;
       const sy = screenPos.y;
 
-      // Firing cone visualization — fixed allowed arc + current aim
+      // Firing cone visualization — single cone pointing outward from train
       // Skip steam blast (area effect) and laser (random direction)
       const hasAuto = mount.hasAutoWeapon;
       const skipCone = mount.autoWeaponId === 'steamBlast' || mount.autoWeaponId === 'ricochetShot';
@@ -622,56 +622,28 @@ export class Renderer3D {
           ? mount.crew.color
           : (hasAuto && AUTO_WEAPONS[mount.autoWeaponId] ? AUTO_WEAPONS[mount.autoWeaponId].color : '#ffffff');
 
-        const dirDist = 40;
         const coneRadius = 56;
 
-        // Project cone center + edges through isometric projection
-        // baseDirection is in 2D pixel space (X=right, Y=down).
-        // 3D world: X=along train, Z=perpendicular. Y(2D down) maps to -Z(3D).
-        const half = mount.coneHalfAngle;
-        const baseDirX = offset.x + Math.cos(mount.baseDirection) * dirDist;
-        const baseDirZ = offset.z - Math.sin(mount.baseDirection) * dirDist;
-        const baseScreen = this._project(baseDirX, baseDirZ);
-        const baseScreenAngle = Math.atan2(baseScreen.y - sy, baseScreen.x - sx);
+        // Compute outward direction in screen space:
+        // project train center (0,0) and mount position, outward = mount - center
+        const trainCenter = this._project(0, 0);
+        const outwardAngle = Math.atan2(sy - trainCenter.y, sx - trainCenter.x);
 
-        // Project both edges to get the screen-space half angle
-        const edgeAng1 = mount.baseDirection - half;
-        const edge1X = offset.x + Math.cos(edgeAng1) * dirDist;
-        const edge1Z = offset.z - Math.sin(edgeAng1) * dirDist;
-        const edgeScreen1 = this._project(edge1X, edge1Z);
-        const screenEdge1 = Math.atan2(edgeScreen1.y - sy, edgeScreen1.x - sx);
-        // Screen-space half angle = distance from center to one edge
-        let screenHalf = Math.abs(screenEdge1 - baseScreenAngle);
-        if (screenHalf > Math.PI) screenHalf = Math.PI * 2 - screenHalf;
+        // Screen-space half angle (fixed visual, not projected)
+        const screenHalf = mount.coneHalfAngle;
 
-        // Full allowed arc (faint)
         ctx.save();
         ctx.beginPath();
         ctx.moveTo(sx, sy);
-        ctx.arc(sx, sy, coneRadius, baseScreenAngle - screenHalf, baseScreenAngle + screenHalf, false);
+        ctx.arc(sx, sy, coneRadius, outwardAngle - screenHalf, outwardAngle + screenHalf, false);
         ctx.closePath();
         ctx.fillStyle = coneColor;
-        ctx.globalAlpha = 0.08;
+        ctx.globalAlpha = 0.12;
         ctx.fill();
         ctx.strokeStyle = coneColor;
-        ctx.globalAlpha = 0.25;
+        ctx.globalAlpha = 0.3;
         ctx.lineWidth = 1;
         ctx.stroke();
-
-        // Current aim direction within the arc (brighter wedge)
-        const aimDirX = offset.x + Math.cos(mount.coneDirection) * dirDist;
-        const aimDirZ = offset.z - Math.sin(mount.coneDirection) * dirDist;
-        const aimScreen = this._project(aimDirX, aimDirZ);
-        const aimScreenAngle = Math.atan2(aimScreen.y - sy, aimScreen.x - sx);
-        const aimWedge = 0.15; // small wedge showing current aim
-
-        ctx.beginPath();
-        ctx.moveTo(sx, sy);
-        ctx.arc(sx, sy, coneRadius * 0.85, aimScreenAngle - aimWedge, aimScreenAngle + aimWedge, false);
-        ctx.closePath();
-        ctx.fillStyle = coneColor;
-        ctx.globalAlpha = 0.4;
-        ctx.fill();
         ctx.restore();
       }
 

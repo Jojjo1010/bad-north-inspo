@@ -388,7 +388,7 @@ function updateSetup(dt) {
     const mount = getSelectedMount();
     if (mount) {
       const mouseWorld = renderer.screenToPixel
-        ? renderer.screenToPixel(input.mouseX, input.mouseY)
+        ? renderer.screenToPixel(input.mouseX, input.mouseY, 16)
         : { x: input.mouseX, y: input.mouseY };
       mount.coneDirection = mount.clampAngle(Math.atan2(
         mouseWorld.y - mount.worldY,
@@ -482,7 +482,7 @@ function updateRun(dt) {
     const mount = getSelectedMount();
     if (mount) {
       const mouseWorld = renderer.screenToPixel
-        ? renderer.screenToPixel(input.mouseX, input.mouseY)
+        ? renderer.screenToPixel(input.mouseX, input.mouseY, 16)
         : { x: input.mouseX, y: input.mouseY };
       mount.coneDirection = mount.clampAngle(Math.atan2(
         mouseWorld.y - mount.worldY,
@@ -1247,7 +1247,7 @@ function updateRunPause() {
 
   // Aim selected mount / auto-weapon in real-time as mouse moves
   if (pauseAimMount) {
-    const mouseWorld = renderer.screenToPixel(input.mouseX, input.mouseY);
+    const mouseWorld = renderer.screenToPixel(input.mouseX, input.mouseY, 16);
     pauseAimMount.coneDirection = pauseAimMount.clampAngle(Math.atan2(
       mouseWorld.y - pauseAimMount.worldY,
       mouseWorld.x - pauseAimMount.worldX
