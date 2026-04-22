@@ -188,7 +188,7 @@ export class BanditSystem {
     for (let i = 0; i < MAX_BANDITS; i++) {
       this.pool.push(new Bandit());
     }
-    this.spawnTimer = 9; // initial delay — player gets ~9s to orient before first bandit
+    this.spawnTimer = 15; // initial delay — player gets ~9s to orient before first bandit
   }
 
   update(dt, train, difficulty, wavePhase) {
@@ -256,6 +256,6 @@ export class BanditSystem {
         b.targetSlot = null;
       }
     }
-    this.spawnTimer = 9;
+    this.spawnTimer = 15;
   }
 }

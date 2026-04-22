@@ -42,7 +42,7 @@ export const ENEMY_BASE_HP = T('ENEMY_BASE_HP', 20);
 export const ENEMY_BASE_SPEED = T('ENEMY_BASE_SPEED', 50);
 export const ENEMY_RADIUS = T('ENEMY_RADIUS', 6);
 export const ENEMY_CONTACT_DAMAGE = T('ENEMY_CONTACT_DAMAGE', 8);
-export const ENEMY_SPAWN_INTERVAL_START = T('ENEMY_SPAWN_INTERVAL_START', 1.5);
+export const ENEMY_SPAWN_INTERVAL_START = T('ENEMY_SPAWN_INTERVAL_START', 2.0);
 export const ENEMY_SPAWN_INTERVAL_MIN = T('ENEMY_SPAWN_INTERVAL_MIN', 0.25);
 
 // Enemy tier multipliers (read by enemies.js)
@@ -142,7 +142,7 @@ export const TARGET_DISTANCE = T('TARGET_DISTANCE', 10000);
 
 // Bandits
 export const BANDIT_SPEED = T('BANDIT_SPEED', 110);
-export const BANDIT_SPAWN_INTERVAL = T('BANDIT_SPAWN_INTERVAL', 8); // tighter overlap with waves
+export const BANDIT_SPAWN_INTERVAL = T('BANDIT_SPAWN_INTERVAL', 12); // breathing room between bandits
 export const BANDIT_JUMP_DURATION = T('BANDIT_JUMP_DURATION', 0.4);
 export const BANDIT_STEAL_RATE = T('BANDIT_STEAL_RATE', 0); // gold per second
 export const BANDIT_FIGHT_DURATION = T('BANDIT_FIGHT_DURATION', 0.5);
@@ -154,11 +154,11 @@ export const BRAWLER_DAMAGE_MULT = T('BRAWLER_DAMAGE_MULT', 0.6);        // -40%
 export const GUNNER_FIGHT_DURATION_MULT = T('GUNNER_FIGHT_DURATION_MULT', 2.0); // 2x bandit fight time
 
 // Wave system
-export const WAVE_CYCLE_DURATION = T('WAVE_CYCLE_DURATION', 7);       // seconds between surge starts
-export const WAVE_SURGE_DURATION = T('WAVE_SURGE_DURATION', 8);        // seconds a surge lasts
-export const WAVE_CALM_DURATION = T('WAVE_CALM_DURATION', 3);          // brief recovery (was 4)
-export const WAVE_SURGE_SPAWN_MULT = T('WAVE_SURGE_SPAWN_MULT', 3.5);  // spawn rate multiplier during surge
-export const WAVE_CALM_SPAWN_MULT = T('WAVE_CALM_SPAWN_MULT', 0.7);    // dip in pressure, never empty
+export const WAVE_CYCLE_DURATION = T('WAVE_CYCLE_DURATION', 10);       // seconds between surge starts
+export const WAVE_SURGE_DURATION = T('WAVE_SURGE_DURATION', 6);        // seconds a surge lasts
+export const WAVE_CALM_DURATION = T('WAVE_CALM_DURATION', 5);          // real breathing room
+export const WAVE_SURGE_SPAWN_MULT = T('WAVE_SURGE_SPAWN_MULT', 2.5);  // intense but not overwhelming
+export const WAVE_CALM_SPAWN_MULT = T('WAVE_CALM_SPAWN_MULT', 0.5);    // light pressure, clear contrast with surge
 export const WAVE_ESCALATION = T('WAVE_ESCALATION', 0.10);             // per-wave difficulty increase
 export const WAVE_WARNING_DURATION = T('WAVE_WARNING_DURATION', 3);    // seconds of warning before surge
 export const WAVE_BOSS_SURGE_MULT = T('WAVE_BOSS_SURGE_MULT', 3.5);   // extra intense boss wave multiplier
