@@ -612,8 +612,14 @@ export class Renderer3D {
         const entry = this.mountGroups[mountIdx];
         const group = entry.group;
         group.position.set(offset.x, offset.y, offset.z);
+        // Gun rotation: convert screen-space coneDirection to 3D rotation
         const gunOff = offset.z < 0 ? MD.upperGunOffset : MD.lowerGunOffset;
-        group.rotation.y = -mount.coneDirection + gunOff * Math.PI / 180;
+        const coneCenter = offset.z < 0 ? MD.upperConeAngle : MD.lowerConeAngle;
+        const coneCenterRad = coneCenter * Math.PI / 180;
+        // How far the gun has rotated from cone center (in screen space)
+        const aimDelta = mount.coneDirection - coneCenterRad;
+        // Apply: base gun orientation + aim delta
+        group.rotation.y = gunOff * Math.PI / 180 - aimDelta;
 
         // Determine which model to show
         let desiredType = null;
