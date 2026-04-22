@@ -528,6 +528,12 @@ export class Renderer3D {
   }
 
   drawTerrain(scrollOffset) {
+    // Re-show rail and restore background after start screen
+    this.railGroup.visible = true;
+    if (this._savedBg) {
+      this.scene.background = this._savedBg;
+      this._savedBg = null;
+    }
     // Scroll only by one sleeper spacing cycle so track never disappears
     const sleeperSpacing = 15;
     const offset = (scrollOffset * 0.5) % sleeperSpacing;
@@ -536,8 +542,9 @@ export class Renderer3D {
 
   drawTrain(train) {
     if (!this.trainMesh) return;
-    // Train always at scene origin
+    // Train always at scene origin, reset rotation from start screen
     this.trainMesh.position.set(0, 0, 0);
+    this.trainMesh.rotation.y = 0;
     this.trainMesh.visible = true;
 
     // Project driver seat to screen coords
@@ -3164,11 +3171,34 @@ export class Renderer3D {
     const cx = CANVAS_WIDTH / 2;
     const t = performance.now() * 0.001;
 
-    // Background gradient
-    const bg = ctx.createRadialGradient(cx, CANVAS_HEIGHT * 0.45, 60, cx, CANVAS_HEIGHT * 0.45, 500);
-    bg.addColorStop(0, '#1a1208');
-    bg.addColorStop(1, '#0a0804');
-    ctx.fillStyle = bg;
+    // Hide all gameplay 3D objects so only the train shows
+    for (const mesh of this.enemyPool) mesh.visible = false;
+    for (const entry of this.mountGroups) entry.group.visible = false;
+    for (const mesh of this.coinPool) mesh.visible = false;
+    for (const mesh of this.banditPool) mesh.visible = false;
+    for (const mesh of this.projectilePool) mesh.visible = false;
+    if (this.railGroup) this.railGroup.visible = false;
+
+    // Dark 3D background for start screen
+    this._savedBg = this.scene.background;
+    this.scene.background = new THREE.Color(0x0a0804);
+
+    // Show 3D train model, slowly rotating
+    if (this.trainMesh) {
+      this.trainMesh.visible = true;
+      this.trainMesh.position.set(0, 0, 0);
+      this.trainMesh.rotation.y = t * 0.3;
+    }
+
+    // Semi-transparent overlay so 3D train shows through
+    ctx.fillStyle = 'rgba(10, 8, 4, 0.55)';
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+    // Vignette: darken edges, keep center lighter for train visibility
+    const vig = ctx.createRadialGradient(cx, CANVAS_HEIGHT * 0.42, 100, cx, CANVAS_HEIGHT * 0.42, 460);
+    vig.addColorStop(0, 'rgba(0,0,0,0)');
+    vig.addColorStop(1, 'rgba(0,0,0,0.7)');
+    ctx.fillStyle = vig;
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
     // Animated dust/star particles (simple dots)
@@ -3187,13 +3217,6 @@ export class Renderer3D {
     ctx.shadowBlur = 24;
     ctx.fillText('TRAIN DEFENSE', cx, 180);
     ctx.shadowBlur = 0;
-
-    // Show 3D train model on start screen
-    if (this.trainMesh) {
-      this.trainMesh.visible = true;
-      this.trainMesh.position.set(0, 0, 0);
-      this.trainMesh.rotation.y = t * 0.3;
-    }
 
     // Buttons — all same style, stacked vertically
     const buttons = [

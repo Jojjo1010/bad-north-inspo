@@ -72,8 +72,8 @@ START_SCREEN ──┬──> WORLD_SELECT ──> ZONE_MAP ──> SETUP ──
 
 ## 3. Start Screen
 
-- **Title:** Static game title text
-- **3D Train Model:** Rotating 3D render of the train, displayed continuously
+- **Title:** Static golden title text ("TRAIN DEFENSE") with glow
+- **3D Train Model:** Actual 3D train mesh slowly rotating, visible through semi-transparent overlay with vignette. All other gameplay objects (enemies, mounts, rails) hidden.
 - **Buttons:** 3 vertically stacked golden buttons:
   1. **Start Game** — enters WORLD_SELECT
   2. **Power Ups** — enters SHOP
