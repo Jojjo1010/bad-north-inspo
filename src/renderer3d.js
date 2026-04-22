@@ -617,8 +617,8 @@ export class Renderer3D {
           // Mouse aim: 3D rotation computed in main.js
           group.rotation.y = mount._aimRotY;
         } else {
-          // Default tuned position: -baseDirection + gunOffset
-          group.rotation.y = -mount.baseDirection + gunOff * Math.PI / 180;
+          // Default tuned position (exact formula from F4 tuning session)
+          group.rotation.y = -mount.coneDirection + gunOff * Math.PI / 180;
         }
 
         // Determine which model to show

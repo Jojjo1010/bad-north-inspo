@@ -481,13 +481,16 @@ function updateRun(dt) {
       if (Math.abs(diff) > halfRad) diff = Math.sign(diff) * halfRad;
       mount.screenAimAngle = centerRad + diff;
 
-      // 3D gun rotation: convert mouse to world position, compute atan2
-      const mouseWorld = renderer.screenToPixel(input.mouseX, input.mouseY, 16);
-      const mwx = mouseWorld.x - CANVAS_WIDTH / 2;
-      const mwz = mouseWorld.y - CANVAS_HEIGHT / 2;
+      // 3D gun rotation: use CLAMPED screen angle → project to 3D → atan2
+      const aimDist = 100;
+      const targetSx = mount.screenX + Math.cos(mount.screenAimAngle) * aimDist;
+      const targetSy = mount.screenY + Math.sin(mount.screenAimAngle) * aimDist;
+      const targetWorld = renderer.screenToPixel(targetSx, targetSy, 16);
+      const twx = targetWorld.x - CANVAS_WIDTH / 2;
+      const twz = targetWorld.y - CANVAS_HEIGHT / 2;
       const mountWx = mount.worldX - CANVAS_WIDTH / 2;
       const mountWz = mount.worldY - CANVAS_HEIGHT / 2;
-      mount._aimRotY = Math.atan2(mwx - mountWx, mwz - mountWz);
+      mount._aimRotY = Math.atan2(twx - mountWx, twz - mountWz);
     }
   }
 
