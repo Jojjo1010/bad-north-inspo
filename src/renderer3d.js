@@ -623,20 +623,32 @@ export class Renderer3D {
           : (hasAuto && AUTO_WEAPONS[mount.autoWeaponId] ? AUTO_WEAPONS[mount.autoWeaponId].color : '#ffffff');
 
         const coneRadius = 56;
+        const projDist = 50;
 
-        // Compute outward direction in screen space:
-        // project the car's center axis and the mount, outward = mount - car axis
-        const carCX = mountIdx < 4 ? -80 : 25;
-        const carCenter = this._project(carCX, 0);
-        const outwardAngle = Math.atan2(sy - carCenter.y, sx - carCenter.x);
+        // Project the game's actual baseDirection into isometric screen space.
+        // In 2D pixel space: cos→X, sin→Y(down). Pixel X→world X, pixel Y→world Z.
+        // So a 2D direction (cos(a), sin(a)) maps to 3D offset (cos(a), sin(a)) on (X, Z).
+        const half = mount.coneHalfAngle;
+        const centerPx = mount.worldX + Math.cos(mount.baseDirection) * projDist;
+        const centerPy = mount.worldY + Math.sin(mount.baseDirection) * projDist;
+        const centerW = toWorld(centerPx, centerPy);
+        const centerScr = this._project(centerW.x, centerW.z);
+        const screenBaseAngle = Math.atan2(centerScr.y - sy, centerScr.x - sx);
 
-        // Screen-space half angle (fixed visual, not projected)
-        const screenHalf = mount.coneHalfAngle;
+        // Project both cone edges the same way to get the screen half angle
+        const edge1Px = mount.worldX + Math.cos(mount.baseDirection - half) * projDist;
+        const edge1Py = mount.worldY + Math.sin(mount.baseDirection - half) * projDist;
+        const edge1W = toWorld(edge1Px, edge1Py);
+        const edge1Scr = this._project(edge1W.x, edge1W.z);
+        const screenEdge1 = Math.atan2(edge1Scr.y - sy, edge1Scr.x - sx);
+
+        let screenHalf = Math.abs(screenEdge1 - screenBaseAngle);
+        if (screenHalf > Math.PI) screenHalf = Math.PI * 2 - screenHalf;
 
         ctx.save();
         ctx.beginPath();
         ctx.moveTo(sx, sy);
-        ctx.arc(sx, sy, coneRadius, outwardAngle - screenHalf, outwardAngle + screenHalf, false);
+        ctx.arc(sx, sy, coneRadius, screenBaseAngle - screenHalf, screenBaseAngle + screenHalf, false);
         ctx.closePath();
         ctx.fillStyle = coneColor;
         ctx.globalAlpha = 0.12;
@@ -696,17 +708,8 @@ export class Renderer3D {
       mount.worldX = toPixelX(offset.x);
       mount.worldY = toPixelZ(offset.z);
 
-      // Update baseDirection to point outward from the car's center axis
-      // Use the mount's Z offset (perpendicular to track) as the primary direction,
-      // with a small X contribution from position relative to car center
-      // Car centers: rear=-80, front=25 (midpoints of mount X pairs)
-      const carCenterX = mountIdx < 4 ? -80 : 25;
-      const dx = offset.x - carCenterX;  // small: mounts are ±15 from car center
-      const dz = offset.z;               // ±15: which side of the track
-      // In pixel space, X maps to X and Z maps to Y
-      mount.baseDirection = Math.atan2(dz, dx);
-      // Re-clamp current aim to the updated arc
-      mount.coneDirection = mount.clampAngle(mount.coneDirection);
+      // Do NOT override baseDirection — train.js sets it in 2D pixel space
+      // which is the coordinate system used by aiming and combat
     }
 
     // Hide unused mount groups
