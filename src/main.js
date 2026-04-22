@@ -728,10 +728,10 @@ function updateRun(dt) {
     crew._kickCount = (crew._kickCount || 0) + 1;
     crew._kickTotalDmg = (crew._kickTotalDmg || 0) + kickTotalDmg;
     crew._kickHits = (crew._kickHits || 0) + kickHits;
-    // BIG impact on landing
-    train.shakeTimer = Math.max(train.shakeTimer, 0.4);
-    train.shakeIntensity = 3.0;
-    hitStopTimer = 0.12;
+    // Impact on landing — punchy but brief
+    train.shakeTimer = Math.max(train.shakeTimer, 0.15);
+    train.shakeIntensity = 1.5;
+    hitStopTimer = 0.05;
     // Project landing position from pixel-space to screen-space
     const landScreen = renderer._project(kx - CANVAS_WIDTH / 2, ky - CANVAS_HEIGHT / 2);
     renderer.spawnBrawlerKick(landScreen.x, landScreen.y, kickR);
