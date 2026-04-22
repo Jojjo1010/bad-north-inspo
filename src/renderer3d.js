@@ -49,8 +49,8 @@ import {
 // Role-based crew emoji: visually distinct per role
 function crewEmoji(crew) {
   if (!crew) return '\uD83D\uDC31'; // default cat
-  if (crew.role === 'Gunner')  return '\uD83D\uDE3E'; // 😾 pouting cat
-  if (crew.role === 'Brawler') return '\uD83D\uDE3C'; // 😼 cat with wry smile
+  if (crew.role === 'Gunner')  return '\uD83D\uDC31'; // 🐱 cat
+  if (crew.role === 'Brawler') return '\u26C4\uFE0F'; // ⛄️ snowman
   return '\uD83D\uDC31'; // 🐱 default
 }
 
@@ -2223,7 +2223,7 @@ export class Renderer3D {
 
     const roles = [
       {
-        id: 'Gunner', avatar: '\uD83D\uDE3E',
+        id: 'Gunner', avatar: '\uD83D\uDC31',
         color: '#ffb74d', bg: 'rgba(255, 160, 50, 0.15)',
         title: 'GUNNER',
         tagline: 'Firepower specialist',
@@ -2231,7 +2231,7 @@ export class Renderer3D {
         cons: ['Bandit fights take 2x longer', 'Vulnerable when boarded'],
       },
       {
-        id: 'Brawler', avatar: '\uD83D\uDE3C',
+        id: 'Brawler', avatar: '\u26C4\uFE0F',
         color: '#66bb6a', bg: 'rgba(80, 200, 90, 0.15)',
         title: 'BRAWLER',
         tagline: 'Bandit fighter',
