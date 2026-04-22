@@ -463,23 +463,31 @@ function updateRun(dt) {
     }
   }
 
-  // Aim selected crew's weapon — screen-space mouse tracking
+  // Aim selected crew's weapon — follows mouse
+  // Clear aim state for all mounts first
+  for (const m of train.allMounts) { m._aimRotY = undefined; m.screenAimAngle = undefined; }
   if (selectedCrew) {
     const mount = getSelectedMount();
-    if (mount && mount.screenX !== undefined) {
+    if (mount && mount.screenX !== undefined && renderer.screenToPixel) {
+      // Screen-space angle for cone visual clamping
       const MD = window.__mountDebug;
-      // Screen-space angle from mount to mouse
-      const mouseAngle = Math.atan2(input.mouseY - mount.screenY, input.mouseX - mount.screenX);
-      // Cone center and half in screen space
       const isUpper = mount._offset_z < 0;
       const centerRad = (isUpper ? MD.upperConeAngle : MD.lowerConeAngle) * Math.PI / 180;
       const halfRad = MD.coneHalf * Math.PI / 180;
-      // Clamp to cone
+      const mouseAngle = Math.atan2(input.mouseY - mount.screenY, input.mouseX - mount.screenX);
       let diff = mouseAngle - centerRad;
       while (diff > Math.PI) diff -= Math.PI * 2;
       while (diff < -Math.PI) diff += Math.PI * 2;
       if (Math.abs(diff) > halfRad) diff = Math.sign(diff) * halfRad;
       mount.screenAimAngle = centerRad + diff;
+
+      // 3D gun rotation: convert mouse to world position, compute atan2
+      const mouseWorld = renderer.screenToPixel(input.mouseX, input.mouseY, 16);
+      const mwx = mouseWorld.x - CANVAS_WIDTH / 2;
+      const mwz = mouseWorld.y - CANVAS_HEIGHT / 2;
+      const mountWx = mount.worldX - CANVAS_WIDTH / 2;
+      const mountWz = mount.worldY - CANVAS_HEIGHT / 2;
+      mount._aimRotY = Math.atan2(mwx - mountWx, mwz - mountWz);
     }
   }
 
