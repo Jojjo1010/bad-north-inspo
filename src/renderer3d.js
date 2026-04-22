@@ -46,6 +46,14 @@ import {
   MAX_COINS, MAX_FLYING_COINS, MAX_BANDITS
 } from './constants.js';
 
+// Role-based crew emoji: visually distinct per role
+function crewEmoji(crew) {
+  if (!crew) return '\uD83D\uDC31'; // default cat
+  if (crew.role === 'Gunner')  return '\uD83D\uDE3E'; // 😾 pouting cat
+  if (crew.role === 'Brawler') return '\uD83D\uDE3C'; // 😼 cat with wry smile
+  return '\uD83D\uDC31'; // 🐱 default
+}
+
 export class Renderer3D {
   constructor(threeCanvas, overlayCtx) {
     this.ctx = overlayCtx;
@@ -776,7 +784,7 @@ export class Renderer3D {
       if (mount.crew) {
         ctx.font = '12px serif';
         ctx.textAlign = 'center';
-        ctx.fillText('\uD83D\uDC31', sx, sy + 4);
+        ctx.fillText(crewEmoji(mount.crew), sx, sy + 4);
 
         // PROTOTYPE: buddy bonus "+" removed for cleaner visuals
 
@@ -1217,7 +1225,7 @@ export class Renderer3D {
       ctx.globalAlpha = pulse;
       ctx.font = '20px serif';
       ctx.textAlign = 'center';
-      ctx.fillText('\uD83D\uDC31', sx, sy + 6);
+      ctx.fillText(crewEmoji(c), sx, sy + 6);
       ctx.globalAlpha = 1;
     }
   }
@@ -2169,7 +2177,7 @@ export class Renderer3D {
 
       ctx.font = '18px serif';
       ctx.textAlign = 'center';
-      ctx.fillText('\uD83D\uDC31', cx, cy + 6);
+      ctx.fillText(crewEmoji(c), cx, cy + 6);
 
       // Role badge below crew circle
       if (c.role) {
@@ -2208,128 +2216,150 @@ export class Renderer3D {
     ctx.fillText('Left-click crew to select, right-click slot to place', CANVAS_WIDTH / 2, 32);
   }
 
-  // Role pick UI — returns button hit areas for main.js interaction
+  // Role pick UI — each role is a character card you pick per crew slot
   drawRolePickUI(crew, hoveredBtn) {
     const ctx = this.ctx;
+    const now = performance.now();
+
     // Dark overlay
-    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.75)';
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
     // Title
     ctx.fillStyle = '#f5a623';
-    ctx.font = 'bold 24px monospace';
+    ctx.font = 'bold 22px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('CHOOSE CREW ROLES', CANVAS_WIDTH / 2, 100);
-    ctx.fillStyle = '#aaa';
-    ctx.font = '13px monospace';
-    ctx.fillText('Each role changes how that crew member handles combat and bandits', CANVAS_WIDTH / 2, 126);
-
-    const cardW = 200;
-    const cardH = 260;
-    const gap = 40;
-    const totalW = crew.length * cardW + (crew.length - 1) * gap;
-    const startX = CANVAS_WIDTH / 2 - totalW / 2;
-    const cardY = 150;
+    ctx.fillText('CHOOSE YOUR CREW', CANVAS_WIDTH / 2, 60);
+    ctx.fillStyle = '#888';
+    ctx.font = '12px monospace';
+    ctx.fillText('Pick a role for each crew slot', CANVAS_WIDTH / 2, 80);
 
     const roles = [
-      { id: 'Gunner',  icon: '\uD83D\uDD2B', color: '#ffb74d', desc: '+60% gun damage', downside: 'Bandit fights take 2x longer' },
-      { id: 'Brawler', icon: '\uD83E\uDD1C', color: '#66bb6a', desc: 'Instant bandit kick-off', downside: '-40% gun damage' },
+      {
+        id: 'Gunner', emoji: '\uD83C\uDF96\uFE0F', avatar: '\uD83D\uDE3E',
+        color: '#ffb74d', bg: 'rgba(255, 160, 50, 0.12)', borderColor: '#cc8830',
+        title: 'GUNNER',
+        tagline: 'Firepower specialist',
+        pros: ['+60% gun damage', 'High kill speed'],
+        cons: ['Bandit fights take 2x longer', 'Vulnerable when boarded'],
+      },
+      {
+        id: 'Brawler', emoji: '\uD83E\uDD1C', avatar: '\uD83D\uDE3C',
+        color: '#66bb6a', bg: 'rgba(80, 200, 90, 0.12)', borderColor: '#3a8a3c',
+        title: 'BRAWLER',
+        tagline: 'Bandit fighter',
+        pros: ['Instant bandit kick-off', 'Keeps weapons online'],
+        cons: ['-40% gun damage', 'Slower at clearing enemies'],
+      },
     ];
 
-    const buttons = []; // returned for hit testing
+    const buttons = [];
+    const slotW = 380;
+    const slotH = 130;
+    const cardW = 170;
+    const cardH = slotH - 16;
+    const slotGap = 30;
+    const totalH = crew.length * slotH + (crew.length - 1) * slotGap;
+    const startY = 100;
+    const slotX = CANVAS_WIDTH / 2 - slotW / 2;
 
     for (let ci = 0; ci < crew.length; ci++) {
       const c = crew[ci];
-      const cx = startX + ci * (cardW + gap);
+      const slotY = startY + ci * (slotH + slotGap);
 
-      // Card background
-      ctx.fillStyle = 'rgba(30, 30, 50, 0.9)';
-      ctx.beginPath();
-      this.roundRect(cx, cardY, cardW, cardH, 10);
-      ctx.fill();
-      ctx.strokeStyle = c.color;
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      this.roundRect(cx, cardY, cardW, cardH, 10);
-      ctx.stroke();
-
-      // Crew name + color dot
-      ctx.beginPath();
-      ctx.arc(cx + 20, cardY + 24, 8, 0, Math.PI * 2);
+      // Crew slot label
       ctx.fillStyle = c.color;
-      ctx.fill();
-      ctx.fillStyle = '#fff';
-      ctx.font = 'bold 16px monospace';
+      ctx.font = 'bold 13px monospace';
       ctx.textAlign = 'left';
-      ctx.fillText(c.name || `Crew ${ci + 1}`, cx + 35, cardY + 30);
+      ctx.fillText(`CREW ${ci + 1}: ${(c.name || '').toUpperCase()}`, slotX, slotY + 12);
 
-      // Role buttons
-      const btnW = cardW - 24;
-      const btnH = 80;
-      const btnX = cx + 12;
+      // Two role cards side by side
+      const cardGap = 20;
+      const cardsStartX = slotX + (slotW - roles.length * cardW - (roles.length - 1) * cardGap) / 2;
 
       for (let ri = 0; ri < roles.length; ri++) {
         const role = roles[ri];
-        const btnY = cardY + 50 + ri * (btnH + 10);
+        const rx = cardsStartX + ri * (cardW + cardGap);
+        const ry = slotY + 20;
         const isSelected = c.role === role.id;
         const btnKey = `${ci}_${role.id}`;
         const isHovered = hoveredBtn === btnKey;
 
-        // Button background
-        if (isSelected) {
-          ctx.fillStyle = role.color;
-          ctx.globalAlpha = 0.3;
-          ctx.beginPath();
-          this.roundRect(btnX, btnY, btnW, btnH, 6);
-          ctx.fill();
-          ctx.globalAlpha = 1;
-        }
-
-        ctx.strokeStyle = isSelected ? role.color : (isHovered ? '#888' : '#444');
-        ctx.lineWidth = isSelected ? 2 : 1;
+        // Card background
+        ctx.fillStyle = isSelected ? role.bg : 'rgba(20, 22, 35, 0.95)';
         ctx.beginPath();
-        this.roundRect(btnX, btnY, btnW, btnH, 6);
-        ctx.stroke();
+        this.roundRect(rx, ry, cardW, cardH, 8);
+        ctx.fill();
 
-        // Icon + name
-        ctx.fillStyle = isSelected ? role.color : (isHovered ? '#ddd' : '#999');
+        // Border — selected glows, hovered lighter
+        if (isSelected) {
+          ctx.shadowColor = role.color;
+          ctx.shadowBlur = 10;
+        }
+        ctx.strokeStyle = isSelected ? role.color : (isHovered ? '#666' : '#333');
+        ctx.lineWidth = isSelected ? 2.5 : 1;
+        ctx.beginPath();
+        this.roundRect(rx, ry, cardW, cardH, 8);
+        ctx.stroke();
+        ctx.shadowBlur = 0;
+
+        // Large avatar emoji
+        ctx.font = '32px serif';
+        ctx.textAlign = 'center';
+        ctx.fillText(role.avatar, rx + 30, ry + 38);
+
+        // Role name
+        ctx.fillStyle = isSelected ? role.color : (isHovered ? '#ddd' : '#aaa');
         ctx.font = 'bold 14px monospace';
         ctx.textAlign = 'left';
-        ctx.fillText(`${role.icon} ${role.id}`, btnX + 10, btnY + 22);
+        ctx.fillText(role.title, rx + 56, ry + 24);
 
-        // Bonus text
-        ctx.fillStyle = isSelected ? '#cfc' : '#8a8';
-        ctx.font = '11px monospace';
-        ctx.fillText(`+ ${role.desc}`, btnX + 10, btnY + 42);
+        // Tagline
+        ctx.fillStyle = isSelected ? '#ccc' : '#666';
+        ctx.font = '10px monospace';
+        ctx.fillText(role.tagline, rx + 56, ry + 38);
 
-        // Downside text
-        ctx.fillStyle = isSelected ? '#fcc' : '#866';
-        ctx.fillText(`- ${role.downside}`, btnX + 10, btnY + 58);
-
-        // Checkmark if selected
-        if (isSelected) {
-          ctx.fillStyle = role.color;
-          ctx.font = 'bold 18px monospace';
-          ctx.textAlign = 'right';
-          ctx.fillText('\u2713', btnX + btnW - 8, btnY + 24);
+        // Pros (green)
+        ctx.font = '10px monospace';
+        let lineY = ry + 56;
+        for (const pro of role.pros) {
+          ctx.fillStyle = isSelected ? '#8f8' : '#585';
+          ctx.fillText(`+ ${pro}`, rx + 10, lineY);
+          lineY += 13;
+        }
+        // Cons (red)
+        for (const con of role.cons) {
+          ctx.fillStyle = isSelected ? '#f88' : '#855';
+          ctx.fillText(`- ${con}`, rx + 10, lineY);
+          lineY += 13;
         }
 
-        buttons.push({ crewIdx: ci, roleId: role.id, x: btnX, y: btnY, w: btnW, h: btnH, key: btnKey });
+        // Selected checkmark
+        if (isSelected) {
+          ctx.fillStyle = role.color;
+          ctx.font = 'bold 16px monospace';
+          ctx.textAlign = 'right';
+          ctx.fillText('\u2713', rx + cardW - 8, ry + 18);
+        }
+
+        buttons.push({ crewIdx: ci, roleId: role.id, x: rx, y: ry, w: cardW, h: cardH, key: btnKey });
       }
     }
 
-    // Confirm hint
+    // Bottom hint
     const allChosen = crew.every(c => c.role !== null);
+    const hintY = startY + totalH + 40;
     if (allChosen) {
-      ctx.fillStyle = '#f5a623';
-      ctx.font = 'bold 16px monospace';
+      const pulse = 0.7 + Math.sin(now * 0.005) * 0.3;
+      ctx.fillStyle = `rgba(245, 166, 35, ${pulse})`;
+      ctx.font = 'bold 15px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('Click DEPART when ready', CANVAS_WIDTH / 2, cardY + cardH + 30);
+      ctx.fillText('ROLES SET \u2014 close to place crew and depart', CANVAS_WIDTH / 2, hintY);
     } else {
-      ctx.fillStyle = '#666';
-      ctx.font = '14px monospace';
+      ctx.fillStyle = '#555';
+      ctx.font = '13px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('Select a role for each crew member', CANVAS_WIDTH / 2, cardY + cardH + 30);
+      ctx.fillText('Click a role for each crew member', CANVAS_WIDTH / 2, hintY);
     }
 
     return buttons;
