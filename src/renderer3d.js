@@ -613,7 +613,12 @@ export class Renderer3D {
         const group = entry.group;
         group.position.set(offset.x, offset.y, offset.z);
         const gunOff = offset.z < 0 ? MD.upperGunOffset : MD.lowerGunOffset;
-        group.rotation.y = -mount.coneDirection + gunOff * Math.PI / 180;
+        const coneCenter = offset.z < 0 ? MD.upperConeAngle : MD.lowerConeAngle;
+        const coneCenterRad = coneCenter * Math.PI / 180;
+        // screenAimAngle is in screen space; gunOff is the tuned rotation at cone center
+        const aimAngle = mount.screenAimAngle !== undefined ? mount.screenAimAngle : coneCenterRad;
+        const aimDelta = aimAngle - coneCenterRad;
+        group.rotation.y = gunOff * Math.PI / 180 - aimDelta;
 
         // Determine which model to show
         let desiredType = null;
@@ -760,6 +765,7 @@ export class Renderer3D {
       // Screen coords for input hit-testing + overlay drawing
       mount.screenX = sx;
       mount.screenY = sy;
+      mount._offset_z = offset.z; // which side of train (for cone angle lookup)
       // Set pixel coords from 3D offset so combat fires from turret position
       mount.worldX = toPixelX(offset.x);
       mount.worldY = toPixelZ(offset.z);
