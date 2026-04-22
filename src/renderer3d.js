@@ -1505,11 +1505,15 @@ export class Renderer3D {
           mesh.children.forEach(c => { if (c.material) c.material.color.setHex(color); });
           // Fade on death
           if (b.state === 4) {
-            const alpha = Math.max(0, b.timer / 0.6);
+            const fadeTime = b._brawlerKicked ? 1.0 : 0.6;
+            const alpha = b._brawlerKicked && !b._kickLanded
+              ? 1.0 // fully visible while flying
+              : Math.max(0, b.timer / (fadeTime * 0.3)); // fade after landing
             mesh.children.forEach(c => {
-              if (c.material) { c.material.transparent = true; c.material.opacity = alpha; }
+              if (c.material) { c.material.transparent = true; c.material.opacity = Math.min(1, alpha); }
             });
-            mesh.rotation.y += 0.1;
+            mesh.rotation.y += b._brawlerKicked ? 0.3 : 0.1; // spin faster when kicked
+            if (b._brawlerKicked) mesh.position.y = 4 + (1 - b.timer / fadeTime) * 30; // arc upward
           } else {
             mesh.children.forEach(c => {
               if (c.material && c.material.transparent) { c.material.transparent = false; c.material.opacity = 1; }
@@ -1648,15 +1652,45 @@ export class Renderer3D {
         }
 
         case 4: { // DEAD
-          const alpha = Math.max(0, b.timer / 0.6);
-          ctx.save();
-          ctx.globalAlpha = alpha;
-          ctx.translate(sx, sy);
-          ctx.rotate(performance.now() * 0.02);
-          ctx.font = '16px serif';
-          ctx.textAlign = 'center';
-          ctx.fillText('\uD83C\uDFCE\uFE0F', 0, 4);
-          ctx.restore();
+          if (b._brawlerKicked) {
+            // Kicked bandit — dramatic flying arc, visible until landing
+            const maxTime = 1.0;
+            const t = 1 - Math.max(0, b.timer / maxTime); // 0→1
+            const alpha = b._kickLanded ? Math.max(0, b.timer / 0.3) : 1;
+            ctx.save();
+            ctx.globalAlpha = alpha;
+            ctx.translate(sx, sy);
+            // Spin fast
+            ctx.rotate(t * Math.PI * 6);
+            // Scale up slightly while flying
+            const scale = 1 + t * 0.5;
+            ctx.scale(scale, scale);
+            ctx.font = '16px serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('\uD83C\uDFCE\uFE0F', 0, 4);
+            ctx.restore();
+            // Motion trail
+            if (!b._kickLanded && t > 0.1) {
+              ctx.globalAlpha = 0.3;
+              ctx.font = '12px serif';
+              ctx.textAlign = 'center';
+              ctx.fillText('\uD83C\uDFCE\uFE0F', sx - b.deathVx * 0.02, sy - b.deathVy * 0.02);
+              ctx.globalAlpha = 0.15;
+              ctx.fillText('\uD83C\uDFCE\uFE0F', sx - b.deathVx * 0.04, sy - b.deathVy * 0.04);
+              ctx.globalAlpha = 1;
+            }
+          } else {
+            // Normal death — fade out
+            const alpha = Math.max(0, b.timer / 0.6);
+            ctx.save();
+            ctx.globalAlpha = alpha;
+            ctx.translate(sx, sy);
+            ctx.rotate(performance.now() * 0.02);
+            ctx.font = '16px serif';
+            ctx.textAlign = 'center';
+            ctx.fillText('\uD83C\uDFCE\uFE0F', 0, 4);
+            ctx.restore();
+          }
           break;
         }
       }
