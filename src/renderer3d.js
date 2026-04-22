@@ -614,8 +614,10 @@ export class Renderer3D {
       const sy = screenPos.y;
 
       // Firing cone visualization — fixed allowed arc + current aim
+      // Skip steam blast (area effect, no directional cone)
       const hasAuto = mount.hasAutoWeapon;
-      if (mount.isManned || hasAuto) {
+      const isAreaWeapon = mount.autoWeaponId === 'steamBlast';
+      if ((mount.isManned || hasAuto) && !isAreaWeapon) {
         const coneColor = mount.isManned && mount.crew
           ? mount.crew.color
           : (hasAuto && AUTO_WEAPONS[mount.autoWeaponId] ? AUTO_WEAPONS[mount.autoWeaponId].color : '#ffffff');
@@ -624,16 +626,18 @@ export class Renderer3D {
         const coneRadius = 56;
 
         // Project cone center + edges through isometric projection
+        // baseDirection is in 2D pixel space (X=right, Y=down).
+        // 3D world: X=along train, Z=perpendicular. Y(2D down) maps to -Z(3D).
         const half = mount.coneHalfAngle;
         const baseDirX = offset.x + Math.cos(mount.baseDirection) * dirDist;
-        const baseDirZ = offset.z + Math.sin(mount.baseDirection) * dirDist;
+        const baseDirZ = offset.z - Math.sin(mount.baseDirection) * dirDist;
         const baseScreen = this._project(baseDirX, baseDirZ);
         const baseScreenAngle = Math.atan2(baseScreen.y - sy, baseScreen.x - sx);
 
         // Project both edges to get the screen-space half angle
         const edgeAng1 = mount.baseDirection - half;
         const edge1X = offset.x + Math.cos(edgeAng1) * dirDist;
-        const edge1Z = offset.z + Math.sin(edgeAng1) * dirDist;
+        const edge1Z = offset.z - Math.sin(edgeAng1) * dirDist;
         const edgeScreen1 = this._project(edge1X, edge1Z);
         const screenEdge1 = Math.atan2(edgeScreen1.y - sy, edgeScreen1.x - sx);
         // Screen-space half angle = distance from center to one edge
@@ -656,7 +660,7 @@ export class Renderer3D {
 
         // Current aim direction within the arc (brighter wedge)
         const aimDirX = offset.x + Math.cos(mount.coneDirection) * dirDist;
-        const aimDirZ = offset.z + Math.sin(mount.coneDirection) * dirDist;
+        const aimDirZ = offset.z - Math.sin(mount.coneDirection) * dirDist;
         const aimScreen = this._project(aimDirX, aimDirZ);
         const aimScreenAngle = Math.atan2(aimScreen.y - sy, aimScreen.x - sx);
         const aimWedge = 0.15; // small wedge showing current aim
@@ -2013,7 +2017,7 @@ export class Renderer3D {
   _drawLevelPips(ctx, x, y, level, color) {
     for (let l = 0; l < 5; l++) {
       ctx.fillStyle = l < level ? color : '#333';
-      ctx.fillRect(x + 4 + l * 8, y + 22, 6, 3);
+      ctx.fillRect(x + 4 + l * 8, y + 28, 6, 3);
     }
   }
 
