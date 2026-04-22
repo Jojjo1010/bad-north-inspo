@@ -626,7 +626,7 @@ function updateRun(dt) {
   // Aim selected crew's weapon — follows mouse
   // Clear aim state for all mounts first
   for (const m of train.allMounts) { m._aimRotY = undefined; m.screenAimAngle = undefined; m._fireAngle2D = undefined; }
-  if (selectedCrew) {
+  if (selectedCrew && selectedCrew.role !== 'Brawler') {
     const mount = getSelectedMount();
     if (mount && mount.screenX !== undefined && renderer.screenToPixel) {
       // Screen-space angle for cone visual clamping
