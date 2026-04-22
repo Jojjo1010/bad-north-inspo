@@ -3,7 +3,7 @@ import {
   CAR_WIDTH, CAR_HEIGHT, CAR_GAP, TRAIN_SPEED,
   TARGET_DISTANCE, AUTO_WEAPONS, MAX_AUTO_WEAPON_LEVEL, MOUNT_RADIUS, MANUAL_GUN,
   ZONES_PER_WORLD, ZONE_DIFFICULTY_SCALE, GOLD_PER_STATION, COAL_PER_WIN, SHOP_TUNING,
-  TRAIN_MAX_HP, COAL_SHOP_COST, COAL_SHOP_AMOUNT
+  TRAIN_MAX_HP, COAL_SHOP_COST, COAL_SHOP_AMOUNT, AUTO_WEAPON_CONE_HALF_ANGLE
 } from './constants.js';
 import { Train } from './train.js';
 import { Renderer3D } from './renderer3d.js';
@@ -155,11 +155,7 @@ function applyShopUpgrades() {
   train.greedMultiplier = 1 + u.greed.level * (ST.greed.perLevel / 100);
 }
 
-function placeGarlic() {
-  if (!train.hasAutoWeapon('steamBlast')) {
-    train.acquireAutoWeapon('steamBlast');
-  }
-}
+let garlicPlaced = false; // player must place garlic on a mount during setup
 
 function startNewWorld() {
   zoneNumber = 1;
@@ -170,7 +166,7 @@ function startNewWorld() {
   train = new Train();
   selectedCrew = null;
   applyShopUpgrades();
-  placeGarlic();
+  garlicPlaced = train.hasAutoWeapon('steamBlast');
   for (const c of train.crew) c.role = null;
   rolesChosen = false;
   train.hp = train.maxHp;
@@ -202,10 +198,7 @@ function prepareForCombat(isBossStation = false, modifier = null) {
   fanfareTimer = 0;
   won = false;
   applyShopUpgrades();
-  placeGarlic();
-  // Reset crew roles for role pick UI
-  for (const c of train.crew) c.role = null;
-  rolesChosen = false;
+  // Don't reset roles/garlic here — they persist across stations in a world
   train.hp = Math.min(train.hp, train.maxHp);
 }
 
@@ -346,37 +339,6 @@ function updateCrewWalk(dt) {
 function updateSetup(dt) {
   train.updateWorldPositions(trainScreenX, trainScreenY);
 
-  // Role pick phase — blocks normal setup until both crew have roles
-  if (!rolesChosen) {
-    // Hover detection
-    hoveredRoleBtn = null;
-    for (const btn of rolePickButtons) {
-      if (input.hitRect(btn.x, btn.y, btn.w, btn.h)) {
-        hoveredRoleBtn = btn.key;
-      }
-    }
-    // Click handling
-    if (input.leftClicked) {
-      for (const btn of rolePickButtons) {
-        if (!input.hitRect(btn.x, btn.y, btn.w, btn.h)) continue;
-        if (btn.type === 'roster') {
-          // Click roster card → fill next empty crew slot with this role
-          const emptyIdx = train.crew.findIndex(c => c.role === null);
-          if (emptyIdx >= 0) {
-            train.crew[emptyIdx].role = btn.roleId;
-          }
-        } else if (btn.type === 'slot') {
-          // Click filled slot → clear it
-          train.crew[btn.crewIdx].role = null;
-        } else if (btn.type === 'confirm') {
-          // Confirm button — lock in roles and proceed to setup
-          rolesChosen = true;
-        }
-      }
-    }
-    return; // block normal setup interaction
-  }
-
   train.updateCrewMovement(dt);
   handleKeyboardRotation(dt);
 
@@ -442,13 +404,6 @@ function renderSetup() {
   renderer.drawSteamBlastAura(train);
   renderer.drawTrain(train);
   renderer.drawWeaponMounts(train, getSelectedMount(), true);
-
-  if (!rolesChosen) {
-    // Role pick overlay — draw on top of train
-    rolePickButtons = renderer.drawRolePickUI(train.crew, hoveredRoleBtn);
-    renderer.flush();
-    return;
-  }
 
   renderer.drawMovingCrew(train.crew);
   renderer.drawCrewPanel(train.crew, crewPanelY);
@@ -1743,6 +1698,49 @@ function getWorldMapZones() {
 }
 
 function updateWorldMap() {
+  // Phase 1: Role pick (once per world)
+  if (!rolesChosen) {
+    hoveredRoleBtn = null;
+    for (const btn of rolePickButtons) {
+      if (input.hitRect(btn.x, btn.y, btn.w, btn.h)) {
+        hoveredRoleBtn = btn.key;
+      }
+    }
+    if (input.leftClicked) {
+      for (const btn of rolePickButtons) {
+        if (!input.hitRect(btn.x, btn.y, btn.w, btn.h)) continue;
+        if (btn.type === 'roster') {
+          const emptyIdx = train.crew.findIndex(c => c.role === null);
+          if (emptyIdx >= 0) train.crew[emptyIdx].role = btn.roleId;
+        } else if (btn.type === 'slot') {
+          train.crew[btn.crewIdx].role = null;
+        } else if (btn.type === 'confirm') {
+          rolesChosen = true;
+        }
+      }
+    }
+    return;
+  }
+
+  // Phase 2: Garlic placement (once per world)
+  if (!garlicPlaced) {
+    train.updateWorldPositions(trainScreenX, trainScreenY);
+    if (input.leftClicked) {
+      for (const mount of train.allMounts) {
+        if (mount.isOccupied || mount.crew) continue;
+        if (input.hitCircle(slotScreenX(mount), slotScreenY(mount), 22)) {
+          mount.autoWeaponId = 'steamBlast';
+          mount.coneHalfAngle = AUTO_WEAPON_CONE_HALF_ANGLE;
+          train.autoWeapons.steamBlast = { level: 1, cooldownTimer: 0, tickTimer: 0, mount };
+          garlicPlaced = true;
+          return;
+        }
+      }
+    }
+    return;
+  }
+
+  // Phase 3: Normal world map
   const zones = getWorldMapZones();
   for (const z of zones) {
     if (!z.isCurrent) continue;
@@ -1757,6 +1755,56 @@ function updateWorldMap() {
 }
 
 function renderWorldMap() {
+  // Phase 1: Role pick
+  if (!rolesChosen) {
+    renderer.drawTerrain(0);
+    rolePickButtons = renderer.drawRolePickUI(train.crew, hoveredRoleBtn);
+    renderer.flush();
+    return;
+  }
+
+  // Phase 2: Garlic placement
+  if (!garlicPlaced) {
+    train.updateWorldPositions(trainScreenX, trainScreenY);
+    renderer.drawTerrain(0);
+    renderer.drawTrain(train);
+    renderer.drawWeaponMounts(train, null, true);
+
+    // Dark overlay with instructions
+    const ctx = renderer.ctx;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+    ctx.fillRect(0, 0, CANVAS_WIDTH, 60);
+    ctx.fillStyle = '#8ecae6';
+    ctx.font = 'bold 18px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('PLACE YOUR GARLIC \uD83D\uDCA8', CANVAS_WIDTH / 2, 28);
+    ctx.fillStyle = '#aaa';
+    ctx.font = '12px monospace';
+    ctx.fillText('Click an empty mount to place the protective aura', CANVAS_WIDTH / 2, 48);
+
+    // Highlight empty mounts
+    for (const mount of train.allMounts) {
+      if (mount.isOccupied || mount.crew) continue;
+      const sx = slotScreenX(mount), sy = slotScreenY(mount);
+      const hovered = input.hitCircle(sx, sy, 22);
+      ctx.beginPath();
+      ctx.arc(sx, sy, MOUNT_RADIUS + 6, 0, Math.PI * 2);
+      ctx.strokeStyle = hovered ? '#8ecae6' : '#446';
+      ctx.lineWidth = hovered ? 3 : 1.5;
+      ctx.stroke();
+      if (hovered) {
+        ctx.fillStyle = 'rgba(142, 202, 230, 0.15)';
+        ctx.beginPath();
+        ctx.arc(sx, sy, MOUNT_RADIUS + 6, 0, Math.PI * 2);
+        ctx.fill();
+      }
+    }
+
+    renderer.flush();
+    return;
+  }
+
+  // Phase 3: Normal world map
   renderer.drawWorldMap(getWorldMapZones(), selectedWorld, zoneNumber, input);
   renderer.flush();
 }
