@@ -215,14 +215,7 @@ export class Spawner {
         return baseMult * escalation;
       }
       case WAVE_PHASE.CALM:
-        // Post-surge silence: near-zero spawns for first 2s, then ramp to normal calm rate
-        if (this.postSurgeSilenceTimer > 0) {
-          // t goes from 1 (just started silence) to 0 (silence ending)
-          const t = this.postSurgeSilenceTimer / 1.0;
-          // Exponential ramp: almost nothing at start, approaches calm rate at end
-          return WAVE_CALM_SPAWN_MULT * (1 - t) * (1 - t) * 0.15;
-        }
-        // During the post-surge calm, reduce rate
+        // Reduced but never empty — enemies always present
         return this.waveNumber > 0 ? WAVE_CALM_SPAWN_MULT : 1;
       case WAVE_PHASE.WARNING:
         return 1; // normal rate during warning
