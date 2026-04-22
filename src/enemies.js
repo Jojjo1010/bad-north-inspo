@@ -200,7 +200,7 @@ export class Spawner {
           this.wavePhaseTimer = WAVE_CALM_DURATION;
           this.waveCycleTimer = WAVE_CYCLE_DURATION;
           // Brief silence after surge for "relief" feeling
-          this.postSurgeSilenceTimer = 2.0;
+          this.postSurgeSilenceTimer = 1.0;
         }
         break;
     }
@@ -218,7 +218,7 @@ export class Spawner {
         // Post-surge silence: near-zero spawns for first 2s, then ramp to normal calm rate
         if (this.postSurgeSilenceTimer > 0) {
           // t goes from 1 (just started silence) to 0 (silence ending)
-          const t = this.postSurgeSilenceTimer / 2.0;
+          const t = this.postSurgeSilenceTimer / 1.0;
           // Exponential ramp: almost nothing at start, approaches calm rate at end
           return WAVE_CALM_SPAWN_MULT * (1 - t) * (1 - t) * 0.15;
         }
