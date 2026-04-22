@@ -1052,8 +1052,10 @@ export class Renderer3D {
     if (!stats) { this.steamRing.visible = false; return; }
 
     const m = train.getAutoWeaponMount('steamBlast');
-    if (m && m._bandit) { this.steamRing.visible = false; return; }
-    const pulse = 1 + Math.sin(performance.now() * 0.004) * 0.05;
+    const isBanditDisabled = m && m._bandit;
+    const now = performance.now();
+
+    const pulse = isBanditDisabled ? 1.0 : 1 + Math.sin(now * 0.004) * 0.12;
     const r = stats.radius * (train.totalAreaMultiplier || 1) * pulse;
 
     // Position 3D ring at the mount's 3D offset (not pixel coords)
@@ -1071,17 +1073,50 @@ export class Renderer3D {
     // Scale ring to match radius (base geometry is ~40 units)
     const scale = r / 40;
     this.steamRing.scale.set(scale, scale, scale);
-    this.steamRing.visible = true;
+    this.steamRing.visible = !isBanditDisabled;
 
-    // 2D overlay glow at the mount's projected screen position
+    // 2D overlay at the mount's projected screen position
     const scrX = m && m.screenX !== undefined ? m.screenX : CANVAS_WIDTH / 2;
     const scrY = m && m.screenY !== undefined ? m.screenY : CANVAS_HEIGHT / 2;
     const ctx = this.ctx;
-    ctx.strokeStyle = `rgba(142, 202, 230, ${0.15 + Math.sin(performance.now() * 0.006) * 0.05})`;
-    ctx.lineWidth = 2;
-    ctx.beginPath();
-    ctx.arc(scrX, scrY, r, 0, Math.PI * 2);
-    ctx.stroke();
+
+    if (isBanditDisabled) {
+      // Disrupted: flickering red circle
+      const flicker = Math.sin(now * 0.02) > 0 ? 0.25 : 0.08;
+      ctx.strokeStyle = `rgba(230, 60, 60, ${flicker})`;
+      ctx.lineWidth = 2;
+      ctx.setLineDash([6, 8]);
+      ctx.beginPath();
+      ctx.arc(scrX, scrY, r * 0.8, 0, Math.PI * 2);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      // "DISABLED" label
+      ctx.fillStyle = `rgba(230, 60, 60, ${0.5 + Math.sin(now * 0.008) * 0.3})`;
+      ctx.font = 'bold 10px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('GARLIC DISABLED', scrX, scrY - r * 0.8 - 8);
+    } else {
+      // Active: visible pulsing aura fill + stroke
+      const alpha = 0.08 + Math.sin(now * 0.005) * 0.04;
+      ctx.fillStyle = `rgba(142, 230, 180, ${alpha})`;
+      ctx.beginPath();
+      ctx.arc(scrX, scrY, r, 0, Math.PI * 2);
+      ctx.fill();
+
+      ctx.strokeStyle = `rgba(142, 230, 180, ${0.25 + Math.sin(now * 0.006) * 0.1})`;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      ctx.arc(scrX, scrY, r, 0, Math.PI * 2);
+      ctx.stroke();
+
+      // Inner ring for pulse visual
+      const innerR = r * (0.4 + Math.sin(now * 0.003) * 0.1);
+      ctx.strokeStyle = `rgba(142, 230, 180, ${0.12 + Math.sin(now * 0.008) * 0.06})`;
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.arc(scrX, scrY, innerR, 0, Math.PI * 2);
+      ctx.stroke();
+    }
   }
 
   drawWorldCoins(coins) {
@@ -1626,9 +1661,8 @@ export class Renderer3D {
 
     // Role bonus text per role
     const roleBonusMap = {
-      Gunner:   '2x damage (manual)',
-      Engineer: '2x fire rate (auto)',
-      Medic:    '+2 HP/s (3s still)',
+      Gunner:   '+60% dmg, slow bandit fight',
+      Brawler:  'Instant bandit kick, -40% dmg',
     };
     const roleBonus = roleBonusMap[crew.role] || '';
 
@@ -2136,6 +2170,15 @@ export class Renderer3D {
       ctx.font = '18px serif';
       ctx.textAlign = 'center';
       ctx.fillText('\uD83D\uDC31', cx, cy + 6);
+
+      // Role badge below crew circle
+      if (c.role) {
+        const roleColor = c.role === 'Gunner' ? '#ffb74d' : '#66bb6a';
+        ctx.fillStyle = roleColor;
+        ctx.font = 'bold 9px monospace';
+        ctx.textAlign = 'center';
+        ctx.fillText(c.role.toUpperCase(), cx, cy + 26);
+      }
     }
   }
 
@@ -2163,6 +2206,133 @@ export class Renderer3D {
     ctx.font = 'bold 20px monospace';
     ctx.textAlign = 'center';
     ctx.fillText('Left-click crew to select, right-click slot to place', CANVAS_WIDTH / 2, 32);
+  }
+
+  // Role pick UI — returns button hit areas for main.js interaction
+  drawRolePickUI(crew, hoveredBtn) {
+    const ctx = this.ctx;
+    // Dark overlay
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+    // Title
+    ctx.fillStyle = '#f5a623';
+    ctx.font = 'bold 24px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText('CHOOSE CREW ROLES', CANVAS_WIDTH / 2, 100);
+    ctx.fillStyle = '#aaa';
+    ctx.font = '13px monospace';
+    ctx.fillText('Each role changes how that crew member handles combat and bandits', CANVAS_WIDTH / 2, 126);
+
+    const cardW = 200;
+    const cardH = 260;
+    const gap = 40;
+    const totalW = crew.length * cardW + (crew.length - 1) * gap;
+    const startX = CANVAS_WIDTH / 2 - totalW / 2;
+    const cardY = 150;
+
+    const roles = [
+      { id: 'Gunner',  icon: '\uD83D\uDD2B', color: '#ffb74d', desc: '+60% gun damage', downside: 'Bandit fights take 2x longer' },
+      { id: 'Brawler', icon: '\uD83E\uDD1C', color: '#66bb6a', desc: 'Instant bandit kick-off', downside: '-40% gun damage' },
+    ];
+
+    const buttons = []; // returned for hit testing
+
+    for (let ci = 0; ci < crew.length; ci++) {
+      const c = crew[ci];
+      const cx = startX + ci * (cardW + gap);
+
+      // Card background
+      ctx.fillStyle = 'rgba(30, 30, 50, 0.9)';
+      ctx.beginPath();
+      this.roundRect(cx, cardY, cardW, cardH, 10);
+      ctx.fill();
+      ctx.strokeStyle = c.color;
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      this.roundRect(cx, cardY, cardW, cardH, 10);
+      ctx.stroke();
+
+      // Crew name + color dot
+      ctx.beginPath();
+      ctx.arc(cx + 20, cardY + 24, 8, 0, Math.PI * 2);
+      ctx.fillStyle = c.color;
+      ctx.fill();
+      ctx.fillStyle = '#fff';
+      ctx.font = 'bold 16px monospace';
+      ctx.textAlign = 'left';
+      ctx.fillText(c.name || `Crew ${ci + 1}`, cx + 35, cardY + 30);
+
+      // Role buttons
+      const btnW = cardW - 24;
+      const btnH = 80;
+      const btnX = cx + 12;
+
+      for (let ri = 0; ri < roles.length; ri++) {
+        const role = roles[ri];
+        const btnY = cardY + 50 + ri * (btnH + 10);
+        const isSelected = c.role === role.id;
+        const btnKey = `${ci}_${role.id}`;
+        const isHovered = hoveredBtn === btnKey;
+
+        // Button background
+        if (isSelected) {
+          ctx.fillStyle = role.color;
+          ctx.globalAlpha = 0.3;
+          ctx.beginPath();
+          this.roundRect(btnX, btnY, btnW, btnH, 6);
+          ctx.fill();
+          ctx.globalAlpha = 1;
+        }
+
+        ctx.strokeStyle = isSelected ? role.color : (isHovered ? '#888' : '#444');
+        ctx.lineWidth = isSelected ? 2 : 1;
+        ctx.beginPath();
+        this.roundRect(btnX, btnY, btnW, btnH, 6);
+        ctx.stroke();
+
+        // Icon + name
+        ctx.fillStyle = isSelected ? role.color : (isHovered ? '#ddd' : '#999');
+        ctx.font = 'bold 14px monospace';
+        ctx.textAlign = 'left';
+        ctx.fillText(`${role.icon} ${role.id}`, btnX + 10, btnY + 22);
+
+        // Bonus text
+        ctx.fillStyle = isSelected ? '#cfc' : '#8a8';
+        ctx.font = '11px monospace';
+        ctx.fillText(`+ ${role.desc}`, btnX + 10, btnY + 42);
+
+        // Downside text
+        ctx.fillStyle = isSelected ? '#fcc' : '#866';
+        ctx.fillText(`- ${role.downside}`, btnX + 10, btnY + 58);
+
+        // Checkmark if selected
+        if (isSelected) {
+          ctx.fillStyle = role.color;
+          ctx.font = 'bold 18px monospace';
+          ctx.textAlign = 'right';
+          ctx.fillText('\u2713', btnX + btnW - 8, btnY + 24);
+        }
+
+        buttons.push({ crewIdx: ci, roleId: role.id, x: btnX, y: btnY, w: btnW, h: btnH, key: btnKey });
+      }
+    }
+
+    // Confirm hint
+    const allChosen = crew.every(c => c.role !== null);
+    if (allChosen) {
+      ctx.fillStyle = '#f5a623';
+      ctx.font = 'bold 16px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('Click DEPART when ready', CANVAS_WIDTH / 2, cardY + cardH + 30);
+    } else {
+      ctx.fillStyle = '#666';
+      ctx.font = '14px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('Select a role for each crew member', CANVAS_WIDTH / 2, cardY + cardH + 30);
+    }
+
+    return buttons;
   }
 
   drawDepartButton(x, y, w, h, hovered, disabled = false) {

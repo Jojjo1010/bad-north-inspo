@@ -148,6 +148,11 @@ export const BANDIT_STEAL_RATE = T('BANDIT_STEAL_RATE', 0); // gold per second
 export const BANDIT_FIGHT_DURATION = T('BANDIT_FIGHT_DURATION', 0.5);
 export const MAX_BANDITS = 10;
 
+// Crew roles
+export const GUNNER_DAMAGE_MULT = T('GUNNER_DAMAGE_MULT', 1.6);          // +60% gun damage
+export const BRAWLER_DAMAGE_MULT = T('BRAWLER_DAMAGE_MULT', 0.6);        // -40% gun damage
+export const GUNNER_FIGHT_DURATION_MULT = T('GUNNER_FIGHT_DURATION_MULT', 2.0); // 2x bandit fight time
+
 // Wave system
 export const WAVE_CYCLE_DURATION = T('WAVE_CYCLE_DURATION', 7);       // seconds between surge starts
 export const WAVE_SURGE_DURATION = T('WAVE_SURGE_DURATION', 8);        // seconds a surge lasts

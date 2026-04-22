@@ -2,7 +2,7 @@ import {
   CANVAS_WIDTH, CANVAS_HEIGHT,
   MAX_PROJECTILES, PROJECTILE_SPEED, PROJECTILE_LIFETIME, PROJECTILE_RADIUS,
   DRIVER_DAMAGE_BUFF, XP_PER_KILL, MAX_RICOCHET_BOLTS, MAX_DAMAGE_NUMBERS,
-  UNMANNED_EFFECTIVENESS
+  UNMANNED_EFFECTIVENESS, GUNNER_DAMAGE_MULT, BRAWLER_DAMAGE_MULT
 } from './constants.js';
 import { playShoot, playEnemyHit, playEnemyKill, playTrainDamage } from './audio.js';
 import { spawnDamageNumber as spawnAttribution } from './damageAttribution.js';
@@ -252,7 +252,8 @@ export class CombatSystem {
 
         let damage = mount.damage * train.totalDamageMultiplier * banditMult;
         if (hasDriver) damage *= DRIVER_DAMAGE_BUFF;
-        if (mount.crew.role === 'Gunner') damage *= 2.0;
+        if (mount.crew.role === 'Gunner') damage *= GUNNER_DAMAGE_MULT;
+        if (mount.crew.role === 'Brawler') damage *= BRAWLER_DAMAGE_MULT;
         if (train.hasBuddyBonus(mount)) damage *= 1.15;
 
         this.fireProjectile(mount.worldX, mount.worldY, angle, damage, 'crew', mount.crew.color);

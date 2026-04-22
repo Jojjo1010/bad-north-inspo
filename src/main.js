@@ -60,6 +60,9 @@ let debugMode = false;
 
 // Selection state
 let selectedCrew = null; // currently selected crew member
+let rolesChosen = false; // blocks setup until both crew pick Gunner/Brawler
+let rolePickButtons = []; // cached hit areas from renderer
+let hoveredRoleBtn = null; // key like "0_Gunner"
 
 const ROTATE_SPEED = 2.5; // radians/sec for keyboard rotation
 
@@ -152,6 +155,12 @@ function applyShopUpgrades() {
   train.greedMultiplier = 1 + u.greed.level * (ST.greed.perLevel / 100);
 }
 
+function placeGarlic() {
+  if (!train.hasAutoWeapon('steamBlast')) {
+    train.acquireAutoWeapon('steamBlast');
+  }
+}
+
 function startNewWorld() {
   zoneNumber = 1;
   save.coal = STARTING_COAL;
@@ -161,6 +170,9 @@ function startNewWorld() {
   train = new Train();
   selectedCrew = null;
   applyShopUpgrades();
+  placeGarlic();
+  for (const c of train.crew) c.role = null;
+  rolesChosen = false;
   train.hp = train.maxHp;
 }
 
@@ -190,6 +202,10 @@ function prepareForCombat(isBossStation = false, modifier = null) {
   fanfareTimer = 0;
   won = false;
   applyShopUpgrades();
+  placeGarlic();
+  // Reset crew roles for role pick UI
+  for (const c of train.crew) c.role = null;
+  rolesChosen = false;
   train.hp = Math.min(train.hp, train.maxHp);
 }
 
@@ -324,6 +340,31 @@ function updateCrewWalk(dt) {
 // --- SETUP PHASE ---
 function updateSetup(dt) {
   train.updateWorldPositions(trainScreenX, trainScreenY);
+
+  // Role pick phase — blocks normal setup until both crew have roles
+  if (!rolesChosen) {
+    // Hover detection
+    hoveredRoleBtn = null;
+    for (const btn of rolePickButtons) {
+      if (input.hitRect(btn.x, btn.y, btn.w, btn.h)) {
+        hoveredRoleBtn = btn.key;
+      }
+    }
+    // Click to assign role
+    if (input.leftClicked) {
+      for (const btn of rolePickButtons) {
+        if (input.hitRect(btn.x, btn.y, btn.w, btn.h)) {
+          train.crew[btn.crewIdx].role = btn.roleId;
+        }
+      }
+      // Check if all chosen
+      if (train.crew.every(c => c.role !== null)) {
+        rolesChosen = true;
+      }
+    }
+    return; // block normal setup interaction
+  }
+
   train.updateCrewMovement(dt);
   handleKeyboardRotation(dt);
 
@@ -386,8 +427,17 @@ function updateSetup(dt) {
 function renderSetup() {
   train.updateWorldPositions(trainScreenX, trainScreenY);
   renderer.drawTerrain(0);
+  renderer.drawSteamBlastAura(train);
   renderer.drawTrain(train);
   renderer.drawWeaponMounts(train, getSelectedMount(), true);
+
+  if (!rolesChosen) {
+    // Role pick overlay — draw on top of train
+    rolePickButtons = renderer.drawRolePickUI(train.crew, hoveredRoleBtn);
+    renderer.flush();
+    return;
+  }
+
   renderer.drawMovingCrew(train.crew);
   renderer.drawCrewPanel(train.crew, crewPanelY);
   const crewReady = train.crew.some(c => c.assignment && !c.assignment.isDriverSeat);

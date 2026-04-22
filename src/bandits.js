@@ -1,7 +1,8 @@
 import {
   CANVAS_WIDTH, CANVAS_HEIGHT,
   BANDIT_SPEED, BANDIT_SPAWN_INTERVAL, BANDIT_JUMP_DURATION,
-  BANDIT_STEAL_RATE, BANDIT_FIGHT_DURATION, MAX_BANDITS
+  BANDIT_STEAL_RATE, BANDIT_FIGHT_DURATION, MAX_BANDITS,
+  GUNNER_FIGHT_DURATION_MULT
 } from './constants.js';
 import { startStealLoop, stopStealLoop, playStealCoin } from './audio.js';
 import { spawnDamageNumber as spawnAttribution } from './damageAttribution.js';
@@ -123,8 +124,16 @@ export class Bandit {
 
         // Check if crew just arrived at this slot
         if (this.targetSlot.crew) {
-          this.state = STATES.FIGHTING;
-          this.timer = BANDIT_FIGHT_DURATION;
+          const crew = this.targetSlot.crew;
+          if (crew.role === 'Brawler') {
+            // Brawler: instant kick-off
+            this.die();
+          } else {
+            this.state = STATES.FIGHTING;
+            this.timer = crew.role === 'Gunner'
+              ? BANDIT_FIGHT_DURATION * GUNNER_FIGHT_DURATION_MULT
+              : BANDIT_FIGHT_DURATION;
+          }
         }
         break;
       }

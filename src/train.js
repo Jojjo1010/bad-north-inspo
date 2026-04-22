@@ -128,7 +128,6 @@ export class TrainCar {
   get doorRightY() { return this.worldY + this.height / 2; }
 }
 
-const CREW_ROLES = ['Gunner', 'Engineer', 'Medic'];
 const CREW_NAMES = ['Rex', 'Kit', 'Rosa'];
 
 export class CrewMember {
@@ -136,7 +135,7 @@ export class CrewMember {
     this.id = id;
     this.color = CREW_COLORS[id];
     this.name = CREW_NAMES[id] || null;
-    this.role = CREW_ROLES[id] || null; // Gunner, Engineer, Medic
+    this.role = null; // set by role pick UI: 'Gunner' or 'Brawler'
     this.assignment = null;
     this.reassignCooldown = 0;
     this.panelX = 0;
