@@ -407,12 +407,18 @@ function updateSetup(dt) {
       // fall through to normal click handling
     }
 
-    // Check if clicked the garlic mount — use findSlotAtMouse (proven to work for crew)
-    const clickedSlot = findSlotAtMouse();
-    if (clickedSlot && clickedSlot.autoWeaponId === 'steamBlast') {
-      garlicSelected = true;
-      selectedCrew = null;
-      return;
+    // Check if clicked the garlic mount — check every mount directly with generous radius
+    for (const m of train.allMounts) {
+      if (m.autoWeaponId !== 'steamBlast') continue;
+      const msx = m.screenX !== undefined ? m.screenX : m.worldX;
+      const msy = m.screenY !== undefined ? m.screenY : m.worldY;
+      // Use generous hit area — 30px radius
+      const dx = input.mouseX - msx, dy = input.mouseY - msy;
+      if (dx * dx + dy * dy <= 30 * 30) {
+        garlicSelected = true;
+        selectedCrew = null;
+        return;
+      }
     }
 
     const clickedCrew = findCrewAtMouse();
@@ -435,7 +441,8 @@ function updateSetup(dt) {
         if (m.autoWeaponId || m.crew) continue;
         const sx = m.screenX !== undefined ? m.screenX : m.worldX;
         const sy = m.screenY !== undefined ? m.screenY : m.worldY;
-        if (input.hitCircle(sx, sy, MOUNT_RADIUS + 8)) { targetMount = m; break; }
+        const ddx = input.mouseX - sx, ddy = input.mouseY - sy;
+        if (ddx * ddx + ddy * ddy <= 30 * 30) { targetMount = m; break; }
       }
       if (targetMount) {
         const oldMount = train.getAutoWeaponMount('steamBlast');
