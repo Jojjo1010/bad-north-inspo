@@ -1505,15 +1505,19 @@ export class Renderer3D {
           mesh.children.forEach(c => { if (c.material) c.material.color.setHex(color); });
           // Fade on death
           if (b.state === 4) {
-            const fadeTime = b._brawlerKicked ? 1.0 : 0.6;
+            const fadeTime = b._brawlerKicked ? 1.8 : 0.6;
             const alpha = b._brawlerKicked && !b._kickLanded
               ? 1.0 // fully visible while flying
-              : Math.max(0, b.timer / (fadeTime * 0.3)); // fade after landing
+              : Math.max(0, (b._landTimer || b.timer) / (fadeTime * 0.3)); // fade after landing
             mesh.children.forEach(c => {
               if (c.material) { c.material.transparent = true; c.material.opacity = Math.min(1, alpha); }
             });
-            mesh.rotation.y += b._brawlerKicked ? 0.3 : 0.1; // spin faster when kicked
-            if (b._brawlerKicked) mesh.position.y = 4 + (1 - b.timer / fadeTime) * 30; // arc upward
+            mesh.rotation.y += b._brawlerKicked ? 0.5 : 0.1; // spin much faster when kicked
+            if (b._brawlerKicked) {
+              const tProgress = 1 - b.timer / fadeTime;
+              // Parabolic arc: rises then falls
+              mesh.position.y = 4 + Math.sin(tProgress * Math.PI) * 60;
+            }
           } else {
             mesh.children.forEach(c => {
               if (c.material && c.material.transparent) { c.material.transparent = false; c.material.opacity = 1; }
@@ -1653,31 +1657,134 @@ export class Renderer3D {
 
         case 4: { // DEAD
           if (b._brawlerKicked) {
-            // Kicked bandit — dramatic flying arc, visible until landing
-            const maxTime = 1.0;
-            const t = 1 - Math.max(0, b.timer / maxTime); // 0→1
-            const alpha = b._kickLanded ? Math.max(0, b.timer / 0.3) : 1;
+            // === KICKED BANDIT — spectacular flying arc ===
+            const maxTime = 1.8;
+            const t = 1 - Math.max(0, b.timer / maxTime); // 0→1 progress
+
+            // Record trail points (screen space)
+            if (!b._kickTrail) b._kickTrail = [];
+            if (!b._kickLanded) {
+              b._kickTrail.push({ x: sx, y: sy, t: performance.now() });
+              // Keep last 20 points
+              if (b._kickTrail.length > 20) b._kickTrail.shift();
+            }
+
+            // --- Draw bright green arc trail ---
+            if (b._kickTrail.length > 2) {
+              const trail = b._kickTrail;
+              const now = performance.now();
+              // Thick glowing green trail
+              ctx.save();
+              ctx.lineCap = 'round';
+              ctx.lineJoin = 'round';
+              for (let pass = 0; pass < 2; pass++) {
+                ctx.beginPath();
+                ctx.moveTo(trail[0].x, trail[0].y);
+                for (let i = 1; i < trail.length; i++) {
+                  ctx.lineTo(trail[i].x, trail[i].y);
+                }
+                if (pass === 0) {
+                  // Outer glow
+                  ctx.strokeStyle = 'rgba(0, 255, 80, 0.25)';
+                  ctx.lineWidth = 16;
+                  ctx.stroke();
+                } else {
+                  // Inner bright line
+                  ctx.strokeStyle = 'rgba(100, 255, 120, 0.7)';
+                  ctx.lineWidth = 5;
+                  ctx.stroke();
+                }
+              }
+              ctx.restore();
+            }
+
+            // --- Draw the kicked bandit HUGE and spinning ---
+            const alpha = b._kickLanded ? Math.max(0, (b._landTimer || 0) / 0.6) : 1;
             ctx.save();
             ctx.globalAlpha = alpha;
             ctx.translate(sx, sy);
-            // Spin fast
-            ctx.rotate(t * Math.PI * 6);
-            // Scale up slightly while flying
-            const scale = 1 + t * 0.5;
+            // Dramatic spin — 4 full rotations over the flight
+            ctx.rotate(t * Math.PI * 8);
+            // Big scaling: start at 1.5x, grow to 2.5x
+            const scale = 1.5 + t * 1.0;
             ctx.scale(scale, scale);
-            ctx.font = '16px serif';
+            ctx.font = '24px serif';
             ctx.textAlign = 'center';
             ctx.fillText('\uD83C\uDFCE\uFE0F', 0, 4);
             ctx.restore();
-            // Motion trail
-            if (!b._kickLanded && t > 0.1) {
-              ctx.globalAlpha = 0.3;
-              ctx.font = '12px serif';
-              ctx.textAlign = 'center';
-              ctx.fillText('\uD83C\uDFCE\uFE0F', sx - b.deathVx * 0.02, sy - b.deathVy * 0.02);
-              ctx.globalAlpha = 0.15;
-              ctx.fillText('\uD83C\uDFCE\uFE0F', sx - b.deathVx * 0.04, sy - b.deathVy * 0.04);
+
+            // --- Ghost trail emojis behind the bandit ---
+            if (!b._kickLanded && t > 0.05) {
+              for (let g = 1; g <= 3; g++) {
+                const gAlpha = 0.4 - g * 0.1;
+                const gScale = 1.5 + t * 1.0 - g * 0.3;
+                const offsetX = -b.deathVx * 0.015 * g;
+                const offsetY = -b.deathVy * 0.015 * g;
+                ctx.save();
+                ctx.globalAlpha = Math.max(0, gAlpha);
+                ctx.translate(sx + offsetX, sy + offsetY);
+                ctx.rotate(t * Math.PI * 8 - g * 0.5);
+                ctx.scale(Math.max(0.5, gScale), Math.max(0.5, gScale));
+                ctx.font = '20px serif';
+                ctx.textAlign = 'center';
+                ctx.fillText('\uD83C\uDFCE\uFE0F', 0, 4);
+                ctx.restore();
+              }
               ctx.globalAlpha = 1;
+            }
+
+            // --- "YEET!" / "WHAM!" text following the bandit ---
+            if (!b._kickLanded && t > 0.05 && t < 0.7) {
+              const textPulse = 0.7 + Math.sin(performance.now() * 0.02) * 0.3;
+              ctx.save();
+              ctx.globalAlpha = textPulse;
+              ctx.font = 'bold 22px monospace';
+              ctx.textAlign = 'center';
+              ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
+              ctx.lineWidth = 4;
+              ctx.strokeText('YEET!', sx, sy - 30);
+              ctx.fillStyle = '#00ff55';
+              ctx.fillText('YEET!', sx, sy - 30);
+              ctx.restore();
+            }
+
+            // --- Landing impact splat ---
+            if (b._kickLanded && b._landTimer > 0) {
+              const landAlpha = Math.max(0, b._landTimer / 0.6);
+              const impactScale = 1 + (0.6 - b._landTimer) * 3; // expands outward
+              const landSx = b._landX !== undefined ? b._landX : sx;
+              const landSy = b._landY !== undefined ? b._landY : sy;
+              // Project land position to screen
+              const lw = toWorld(landSx, landSy);
+              const ls = this._project(lw.x, lw.z);
+
+              ctx.save();
+              ctx.globalAlpha = landAlpha;
+              ctx.translate(ls.x, ls.y);
+
+              // Impact shockwave ring
+              ctx.beginPath();
+              ctx.arc(0, 0, 20 * impactScale, 0, Math.PI * 2);
+              ctx.strokeStyle = `rgba(100, 255, 100, ${landAlpha * 0.6})`;
+              ctx.lineWidth = 3;
+              ctx.stroke();
+
+              // Splat emoji
+              ctx.font = `${Math.min(40, 24 * impactScale)}px serif`;
+              ctx.textAlign = 'center';
+              ctx.fillText('\uD83D\uDCA5', 0, 8); // 💥
+
+              // "SPLAT!" text
+              if (b._landTimer > 0.2) {
+                ctx.font = 'bold 18px monospace';
+                ctx.strokeStyle = 'rgba(0,0,0,0.8)';
+                ctx.lineWidth = 3;
+                ctx.strokeText('SPLAT!', 0, -20);
+                ctx.fillStyle = '#ffcc00';
+                ctx.fillText('SPLAT!', 0, -20);
+              }
+
+              ctx.restore();
             }
           } else {
             // Normal death — fade out

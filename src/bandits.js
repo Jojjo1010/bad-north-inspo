@@ -161,10 +161,16 @@ export class Bandit {
         this.deathVy += 200 * dt; // gravity
 
         // Brawler kick: detect landing (falling back down past launch height)
-        if (this._brawlerKicked && !this._kickLanded && this.deathVy > 0 && this.timer < 0.5) {
+        if (this._brawlerKicked && !this._kickLanded && this.deathVy > 0 && this.timer < 1.0) {
           this._kickLanded = true;
           this._landX = this.x;
           this._landY = this.y;
+          this._landTimer = 0.6; // show impact for 0.6s
+        }
+
+        // Count down land timer
+        if (this._landTimer > 0) {
+          this._landTimer -= dt;
         }
 
         if (this.timer <= 0) {
@@ -193,12 +199,16 @@ export class Bandit {
     this._kickLanded = false;
     this._landX = 0;
     this._landY = 0;
+    this._landTimer = 0;
+    this._kickTrail = [];
     if (wasKicked) {
       // Brawler kick: dramatic launch — AOE triggers on landing
       this._brawlerKicked = true;
-      this.timer = 1.0;
-      this.deathVx = (Math.random() - 0.5) * 250;
-      this.deathVy = -300 - Math.random() * 100;
+      this._kickTrail = []; // screen-space trail points
+      this.timer = 1.8;
+      // Much more extreme velocity — bandit should visibly arc across the screen
+      this.deathVx = (Math.random() < 0.5 ? -1 : 1) * (400 + Math.random() * 200);
+      this.deathVy = -500 - Math.random() * 200;
     } else {
       this.timer = 0.6;
       this.deathVx = (Math.random() - 0.5) * 100;
