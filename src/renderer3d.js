@@ -2159,7 +2159,7 @@ export class Renderer3D {
     ctx.fillStyle = '#f5a623';
     ctx.font = 'bold 13px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('Left-click to select \u2022 Right-click slot to place', CANVAS_WIDTH / 2, panelY - 18);
+    ctx.fillText('L-click select \u2022 R-click place', CANVAS_WIDTH / 2, panelY - 18);
 
     for (let i = 0; i < crew.length; i++) {
       const c = crew[i];
@@ -2213,7 +2213,7 @@ export class Renderer3D {
     ctx.fillStyle = '#f5a623';
     ctx.font = 'bold 20px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('Left-click to select \u2022 Right-click slot to place', CANVAS_WIDTH / 2, 32);
+    ctx.fillText('L-click select \u2022 R-click place', CANVAS_WIDTH / 2, 32);
   }
 
   // Helper: draw a labeled stat bar

@@ -388,13 +388,20 @@ function updateSetup(dt) {
   // Right click: place selected crew or move garlic to slot
   if (input.rightClicked) {
     if (garlicSelected) {
-      const slot = findSlotAtMouse();
-      if (slot && !slot.autoWeaponId && !slot.crew) {
+      // Find empty mount under cursor (check all mounts directly)
+      let targetMount = null;
+      for (const m of train.allMounts) {
+        if (m.autoWeaponId || m.crew) continue;
+        const sx = m.screenX !== undefined ? m.screenX : m.worldX;
+        const sy = m.screenY !== undefined ? m.screenY : m.worldY;
+        if (input.hitCircle(sx, sy, MOUNT_RADIUS + 8)) { targetMount = m; break; }
+      }
+      if (targetMount) {
         const oldMount = train.getAutoWeaponMount('steamBlast');
         if (oldMount) oldMount.autoWeaponId = null;
-        slot.autoWeaponId = 'steamBlast';
-        slot.coneHalfAngle = AUTO_WEAPON_CONE_HALF_ANGLE;
-        train.autoWeapons.steamBlast.mount = slot;
+        targetMount.autoWeaponId = 'steamBlast';
+        targetMount.coneHalfAngle = AUTO_WEAPON_CONE_HALF_ANGLE;
+        train.autoWeapons.steamBlast.mount = targetMount;
         garlicSelected = false;
       }
     } else if (selectedCrew && !selectedCrew.isMoving) {
