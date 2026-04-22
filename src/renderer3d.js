@@ -623,17 +623,24 @@ export class Renderer3D {
         const dirDist = 40;
         const coneRadius = 56;
 
-        // Project base direction (fixed outward angle) to screen space
-        const baseDirX = offset.x + Math.cos(mount.baseDirection) * dirDist;
-        const baseDirZ = offset.z + Math.sin(mount.baseDirection) * dirDist;
-        const baseScreen = this._project(baseDirX, baseDirZ);
-        const baseScreenAngle = Math.atan2(baseScreen.y - sy, baseScreen.x - sx);
+        // Project cone edges through isometric projection for correct visual angle
+        const half = mount.coneHalfAngle;
+        const edgeAng1 = mount.baseDirection - half;
+        const edgeAng2 = mount.baseDirection + half;
+        const edge1X = offset.x + Math.cos(edgeAng1) * dirDist;
+        const edge1Z = offset.z + Math.sin(edgeAng1) * dirDist;
+        const edge2X = offset.x + Math.cos(edgeAng2) * dirDist;
+        const edge2Z = offset.z + Math.sin(edgeAng2) * dirDist;
+        const edgeScreen1 = this._project(edge1X, edge1Z);
+        const edgeScreen2 = this._project(edge2X, edge2Z);
+        const screenAng1 = Math.atan2(edgeScreen1.y - sy, edgeScreen1.x - sx);
+        const screenAng2 = Math.atan2(edgeScreen2.y - sy, edgeScreen2.x - sx);
 
         // Full allowed arc (faint)
         ctx.save();
         ctx.beginPath();
         ctx.moveTo(sx, sy);
-        ctx.arc(sx, sy, coneRadius, baseScreenAngle - mount.coneHalfAngle, baseScreenAngle + mount.coneHalfAngle, false);
+        ctx.arc(sx, sy, coneRadius, screenAng1, screenAng2, false);
         ctx.closePath();
         ctx.fillStyle = coneColor;
         ctx.globalAlpha = 0.08;
