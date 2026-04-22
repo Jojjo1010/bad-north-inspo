@@ -704,7 +704,7 @@ export class Renderer3D {
         ctx.fill();
         ctx.strokeStyle = coneColor;
         ctx.globalAlpha = strokeAlpha;
-        ctx.lineWidth = isManned ? 2 : 1;
+        ctx.lineWidth = 2;
         ctx.stroke();
         ctx.restore();
       }
