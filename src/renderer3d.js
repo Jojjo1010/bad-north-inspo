@@ -676,6 +676,16 @@ export class Renderer3D {
         const coneColor = mount.crew.color;
         const coneRadius = 70;
 
+        // DEBUG: draw direction line from mount outward
+        ctx.save();
+        ctx.beginPath();
+        ctx.moveTo(sx, sy);
+        ctx.lineTo(sx + Math.cos(screenCenter) * 80, sy + Math.sin(screenCenter) * 80);
+        ctx.strokeStyle = '#ff0';
+        ctx.lineWidth = 3;
+        ctx.stroke();
+        ctx.restore();
+
         ctx.save();
         ctx.beginPath();
         ctx.moveTo(sx, sy);
