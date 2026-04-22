@@ -3,7 +3,8 @@ import {
   CAR_WIDTH, CAR_HEIGHT, CAR_GAP, TRAIN_SPEED,
   TARGET_DISTANCE, AUTO_WEAPONS, MAX_AUTO_WEAPON_LEVEL, MOUNT_RADIUS, MANUAL_GUN,
   ZONES_PER_WORLD, ZONE_DIFFICULTY_SCALE, GOLD_PER_STATION, COAL_PER_WIN, SHOP_TUNING,
-  TRAIN_MAX_HP, COAL_SHOP_COST, COAL_SHOP_AMOUNT, AUTO_WEAPON_CONE_HALF_ANGLE
+  TRAIN_MAX_HP, COAL_SHOP_COST, COAL_SHOP_AMOUNT, AUTO_WEAPON_CONE_HALF_ANGLE,
+  BRAWLER_KICK_DAMAGE, BRAWLER_KICK_RADIUS
 } from './constants.js';
 import { Train } from './train.js';
 import { Renderer3D } from './renderer3d.js';
@@ -219,40 +220,58 @@ function generateLevelUpCards(train, crewIdx) {
 
   // Get current stats
   const curStats = MANUAL_GUN.levels[Math.max(0, c.gunLevel - 1)];
-  const curDmg = curStats.damage;
-  const curRate = curStats.fireRate;
+  const curDmg = curStats.damage + (c._dmgBonus || 0);
+  const curRate = curStats.fireRate + (c._rateBonus || 0);
 
-  // POWER path: +7 damage
-  const powerDmg = curDmg + 7;
-  cards.push({
-    type: 'upgradeManual',
-    name: 'POWER',
-    icon: '\u2694\uFE0F' + roleEmoji,
-    color: '#e57373',
-    crewColor: c.color,
-    roleLabel: c.role || '',
-    desc: `DMG ${curDmg} \u2192 ${powerDmg}`,
-    apply(t) {
-      t.crew[crewId].gunLevel = Math.min(MANUAL_GUN.maxLevel, t.crew[crewId].gunLevel + 1);
-      t.crew[crewId]._dmgBonus = (t.crew[crewId]._dmgBonus || 0) + 7;
-    },
-  });
+  if (c.role === 'Brawler') {
+    // KICK POWER: +15 AOE damage on bandit kick
+    const curKickDmg = BRAWLER_KICK_DAMAGE + (c._kickDmgBonus || 0);
+    cards.push({
+      type: 'upgradeManual', name: 'KICK POWER',
+      icon: '\uD83E\uDD1C' + roleEmoji, color: '#e57373',
+      crewColor: c.color, roleLabel: c.role,
+      desc: `Kick DMG ${curKickDmg} \u2192 ${curKickDmg + 15}`,
+      apply(t) {
+        t.crew[crewId]._kickDmgBonus = (t.crew[crewId]._kickDmgBonus || 0) + 15;
+      },
+    });
 
-  // SPEED path: +0.8 fire rate
-  const speedRate = curRate + 0.8;
-  cards.push({
-    type: 'upgradeManual',
-    name: 'SPEED',
-    icon: '\u26A1' + roleEmoji,
-    color: '#64b5f6',
-    crewColor: c.color,
-    roleLabel: c.role || '',
-    desc: `Rate ${curRate.toFixed(1)} \u2192 ${speedRate.toFixed(1)}/s`,
-    apply(t) {
-      t.crew[crewId].gunLevel = Math.min(MANUAL_GUN.maxLevel, t.crew[crewId].gunLevel + 1);
-      t.crew[crewId]._rateBonus = (t.crew[crewId]._rateBonus || 0) + 0.8;
-    },
-  });
+    // KICK RADIUS: +40 AOE radius
+    const curKickR = BRAWLER_KICK_RADIUS + (c._kickRadiusBonus || 0);
+    cards.push({
+      type: 'upgradeManual', name: 'KICK RADIUS',
+      icon: '\uD83D\uDCA5' + roleEmoji, color: '#81c784',
+      crewColor: c.color, roleLabel: c.role,
+      desc: `Kick Range ${curKickR} \u2192 ${curKickR + 40}`,
+      apply(t) {
+        t.crew[crewId]._kickRadiusBonus = (t.crew[crewId]._kickRadiusBonus || 0) + 40;
+      },
+    });
+  } else {
+    // Gunner: POWER (+7 damage)
+    cards.push({
+      type: 'upgradeManual', name: 'POWER',
+      icon: '\u2694\uFE0F' + roleEmoji, color: '#e57373',
+      crewColor: c.color, roleLabel: c.role || '',
+      desc: `DMG ${curDmg} \u2192 ${curDmg + 7}`,
+      apply(t) {
+        t.crew[crewId].gunLevel = Math.min(MANUAL_GUN.maxLevel, t.crew[crewId].gunLevel + 1);
+        t.crew[crewId]._dmgBonus = (t.crew[crewId]._dmgBonus || 0) + 7;
+      },
+    });
+
+    // Gunner: SPEED (+0.8 rate)
+    cards.push({
+      type: 'upgradeManual', name: 'SPEED',
+      icon: '\u26A1' + roleEmoji, color: '#64b5f6',
+      crewColor: c.color, roleLabel: c.role || '',
+      desc: `Rate ${curRate.toFixed(1)} \u2192 ${(curRate + 0.8).toFixed(1)}/s`,
+      apply(t) {
+        t.crew[crewId].gunLevel = Math.min(MANUAL_GUN.maxLevel, t.crew[crewId].gunLevel + 1);
+        t.crew[crewId]._rateBonus = (t.crew[crewId]._rateBonus || 0) + 0.8;
+      },
+    });
+  }
 
   // Defense option: Regen
   const regenLvl = train.getDefenseLevel('regen');
@@ -638,6 +657,33 @@ function updateRun(dt) {
 
   // Bandits
   banditSystem.update(dt, train, train.combatDifficulty || 1, currentPhase);
+
+  // Brawler kick AOE — check for kicks this frame
+  for (const b of banditSystem.pool) {
+    if (!b._brawlerKick) continue;
+    b._brawlerKick = false;
+    const kx = b._kickWorldX, ky = b._kickWorldY;
+    const crew = b._kickCrew;
+    const kickDmg = BRAWLER_KICK_DAMAGE + (crew._kickDmgBonus || 0);
+    const kickR = BRAWLER_KICK_RADIUS + (crew._kickRadiusBonus || 0);
+    const r2 = kickR * kickR;
+    // Damage all enemies in radius
+    for (const e of spawner.pool) {
+      if (!e.active) continue;
+      const dx = e.x - kx, dy = e.y - ky;
+      if (dx * dx + dy * dy <= r2) {
+        combat.spawnDamageNumber(e.x, e.y, kickDmg);
+        const ex = e.x, ey = e.y, ec = e.color;
+        e.takeDamage(kickDmg);
+        combat.handleEnemyDamageResult(e, train, ex, ey, ec);
+      }
+    }
+    // Visual: screen shake + kill effect at kick location
+    train.shakeTimer = Math.max(train.shakeTimer, 0.15);
+    train.shakeIntensity = 1.2;
+    renderer.spawnKillEffect(kx, ky, '#66bb6a');
+    renderer.spawnKillEffect(kx, ky, '#66bb6a');
+  }
 
   // Floating damage attribution numbers
   updateDamageAttribution(dt);
@@ -1038,6 +1084,10 @@ function renderLevelUp() {
   renderer.drawWeaponMounts(train, null);
   renderer.drawMovingCrew(train.crew);
   renderer.drawHUD(train);
+
+  // Ensure globalAlpha is reset before drawing overlays — earlier draw calls
+  // (damage numbers, moving crew, etc.) may leave it below 1.0.
+  renderer.ctx.globalAlpha = 1;
 
   if (slotMachinePhase === 'spinning' || slotMachinePhase === 'landed') {
     // Slot machine overlay

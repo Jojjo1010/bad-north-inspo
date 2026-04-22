@@ -126,7 +126,11 @@ export class Bandit {
         if (this.targetSlot.crew) {
           const crew = this.targetSlot.crew;
           if (crew.role === 'Brawler') {
-            // Brawler: instant kick-off
+            // Brawler: instant kick-off + AOE damage burst
+            this._brawlerKick = true; // signal for main.js to apply AOE
+            this._kickWorldX = this.targetSlot.worldX;
+            this._kickWorldY = this.targetSlot.worldY;
+            this._kickCrew = crew;
             this.die();
           } else {
             this.state = STATES.FIGHTING;

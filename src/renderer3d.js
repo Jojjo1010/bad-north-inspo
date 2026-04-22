@@ -2254,13 +2254,19 @@ export class Renderer3D {
         id: 'Gunner', avatar: '\uD83D\uDC31',
         color: '#ffb74d', bg: 'rgba(255, 160, 50, 0.15)',
         title: 'GUNNER', tagline: 'Firepower specialist',
-        stats: { damage: 4, banditSpeed: 1 }, // out of 5
+        statBars: [
+          { label: 'GUN DMG', value: 4, max: 5, color: '#e57373' },
+          { label: 'VS BANDIT', value: 1, max: 5, color: '#81c784' },
+        ],
       },
       {
         id: 'Brawler', avatar: '\u26C4\uFE0F',
         color: '#66bb6a', bg: 'rgba(80, 200, 90, 0.15)',
-        title: 'BRAWLER', tagline: 'Bandit fighter',
-        stats: { damage: 2, banditSpeed: 5 }, // out of 5
+        title: 'BRAWLER', tagline: 'AOE kick on bandit kill',
+        statBars: [
+          { label: 'KICK DMG', value: 4, max: 5, color: '#e57373' },
+          { label: 'VS BANDIT', value: 5, max: 5, color: '#81c784' },
+        ],
       },
     ];
     const roleMap = {};
@@ -2468,8 +2474,10 @@ export class Renderer3D {
 
       const barX = rx + 10;
       const barW = cardW - 20;
-      this._drawStatBar(ctx, 'DAMAGE',    barX, rosterY + 88,  barW, role.stats.damage,     5, '#e57373');
-      this._drawStatBar(ctx, 'VS BANDIT', barX, rosterY + 106, barW, role.stats.banditSpeed, 5, '#81c784');
+      for (let bi = 0; bi < role.statBars.length; bi++) {
+        const bar = role.statBars[bi];
+        this._drawStatBar(ctx, bar.label, barX, rosterY + 88 + bi * 18, barW, bar.value, bar.max, bar.color);
+      }
 
       // Assigned count badge
       if (assignedCount > 0) {
@@ -2752,6 +2760,10 @@ export class Renderer3D {
   // =============================================
   drawLevelUpMenu(level, powerups, hoveredIndex, train, chosenInfo) {
     const ctx = this.ctx;
+
+    // Reset globalAlpha — particle effects (confetti, kill effects, muzzle flashes,
+    // hit sparks) may leave it below 1.0 if they run before this method.
+    ctx.globalAlpha = 1;
 
     ctx.fillStyle = 'rgba(0,0,0,0.6)';
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);

@@ -152,6 +152,8 @@ export const MAX_BANDITS = 10;
 export const GUNNER_DAMAGE_MULT = T('GUNNER_DAMAGE_MULT', 1.6);          // +60% gun damage
 export const BRAWLER_DAMAGE_MULT = T('BRAWLER_DAMAGE_MULT', 0.6);        // -40% gun damage
 export const GUNNER_FIGHT_DURATION_MULT = T('GUNNER_FIGHT_DURATION_MULT', 2.0); // 2x bandit fight time
+export const BRAWLER_KICK_DAMAGE = T('BRAWLER_KICK_DAMAGE', 30);   // AOE damage on bandit kick
+export const BRAWLER_KICK_RADIUS = T('BRAWLER_KICK_RADIUS', 120);  // AOE radius on bandit kick
 
 // Wave system
 export const WAVE_CYCLE_DURATION = T('WAVE_CYCLE_DURATION', 12);       // seconds between surge starts
