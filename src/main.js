@@ -63,6 +63,7 @@ let selectedCrew = null; // currently selected crew member
 let rolesChosen = false; // blocks setup until both crew pick Gunner/Brawler
 let rolePickButtons = []; // cached hit areas from renderer
 let hoveredRoleBtn = null; // key like "0_Gunner"
+let garlicSelected = false; // true when player clicked the garlic mount to move it
 
 const ROTATE_SPEED = 2.5; // radians/sec for keyboard rotation
 
@@ -342,13 +343,14 @@ function updateSetup(dt) {
   train.updateCrewMovement(dt);
   handleKeyboardRotation(dt);
 
-  // Left click: select crew or UI buttons
+  // Left click: select crew, place garlic, or UI buttons
   if (input.leftClicked) {
     const crewPlaced = train.crew.some(c => c.assignment && !c.assignment.isDriverSeat);
     if (crewPlaced && input.hitRect(departBtn.x, departBtn.y, departBtn.w, departBtn.h)) {
       state = STATES.RUNNING;
       lastTime = performance.now();
       selectedCrew = null;
+      garlicSelected = false;
       // Auto-pause for debugging gun/cone alignment
       if (window.__mountDebug && window.__mountDebug.enabled) {
         state = STATES.RUN_PAUSE;
@@ -356,29 +358,59 @@ function updateSetup(dt) {
       return;
     }
 
+    // If garlic selected, left-click deselects
+    if (garlicSelected) {
+      garlicSelected = false;
+      // fall through to normal click handling
+    }
+
+    // Check if clicked the garlic mount
+    const garlicMount = train.getAutoWeaponMount('steamBlast');
+    if (garlicMount && garlicMount.screenX !== undefined) {
+      if (input.hitCircle(slotScreenX(garlicMount), slotScreenY(garlicMount), 22)) {
+        garlicSelected = true;
+        selectedCrew = null;
+        return;
+      }
+    }
+
     const clickedCrew = findCrewAtMouse();
     if (clickedCrew) {
       selectedCrew = clickedCrew === selectedCrew ? null : clickedCrew;
+      garlicSelected = false;
       return;
     }
 
     selectedCrew = null;
+    garlicSelected = false;
   }
 
-  // Right click: move selected crew to slot
-  if (input.rightClicked && selectedCrew && !selectedCrew.isMoving) {
-    const slot = findSlotAtMouse();
-    if (slot && (!slot.autoWeaponId || slot._bandit)) {
-      const fromSlot = selectedCrew.assignment;
-      if (fromSlot) {
-        const fromX = fromSlot.worldX;
-        const fromY = fromSlot.worldY;
-        const fromCar = train.findCarForSlot(fromSlot);
-        train.unassignCrew(selectedCrew);
-        selectedCrew.moveScreenX = undefined;
-        train.startCrewMove(selectedCrew, fromX, fromY, fromCar, slot);
-      } else {
-        train.assignCrew(selectedCrew, slot);
+  // Right click: place selected crew or move garlic to slot
+  if (input.rightClicked) {
+    if (garlicSelected) {
+      const slot = findSlotAtMouse();
+      if (slot && !slot.autoWeaponId && !slot.crew) {
+        const oldMount = train.getAutoWeaponMount('steamBlast');
+        if (oldMount) oldMount.autoWeaponId = null;
+        slot.autoWeaponId = 'steamBlast';
+        slot.coneHalfAngle = AUTO_WEAPON_CONE_HALF_ANGLE;
+        train.autoWeapons.steamBlast.mount = slot;
+        garlicSelected = false;
+      }
+    } else if (selectedCrew && !selectedCrew.isMoving) {
+      const slot = findSlotAtMouse();
+      if (slot && (!slot.autoWeaponId || slot._bandit)) {
+        const fromSlot = selectedCrew.assignment;
+        if (fromSlot) {
+          const fromX = fromSlot.worldX;
+          const fromY = fromSlot.worldY;
+          const fromCar = train.findCarForSlot(fromSlot);
+          train.unassignCrew(selectedCrew);
+          selectedCrew.moveScreenX = undefined;
+          train.startCrewMove(selectedCrew, fromX, fromY, fromCar, slot);
+        } else {
+          train.assignCrew(selectedCrew, slot);
+        }
       }
     }
   }
@@ -416,6 +448,27 @@ function renderSetup() {
   renderer.drawDepartButton(departBtn.x, departBtn.y, departBtn.w, departBtn.h,
     crewReady && input.hitRect(departBtn.x, departBtn.y, departBtn.w, departBtn.h), !crewReady);
   if (selectedCrew) renderer.drawSelectedIndicator(selectedCrew);
+  // Garlic selected indicator
+  if (garlicSelected) {
+    const gMount = train.getAutoWeaponMount('steamBlast');
+    if (gMount && gMount.screenX !== undefined) {
+      const ctx = renderer.ctx;
+      const pulse = 0.6 + Math.sin(performance.now() * 0.008) * 0.4;
+      ctx.strokeStyle = `rgba(142, 202, 230, ${pulse})`;
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      ctx.arc(slotScreenX(gMount), slotScreenY(gMount), MOUNT_RADIUS + 8, 0, Math.PI * 2);
+      ctx.stroke();
+      // Hint text
+      ctx.fillStyle = '#8ecae6';
+      ctx.font = 'bold 11px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText('GARLIC SELECTED', slotScreenX(gMount), slotScreenY(gMount) - MOUNT_RADIUS - 14);
+      ctx.fillStyle = '#aaa';
+      ctx.font = '10px monospace';
+      ctx.fillText('Right-click a mount to move', slotScreenX(gMount), slotScreenY(gMount) - MOUNT_RADIUS - 2);
+    }
+  }
   renderer.drawMountDebug();
   renderer.flush();
 }
