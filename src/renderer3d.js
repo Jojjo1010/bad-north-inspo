@@ -2251,13 +2251,13 @@ export class Renderer3D {
         id: 'Gunner', avatar: '\uD83D\uDC31',
         color: '#ffb74d', bg: 'rgba(255, 160, 50, 0.15)',
         title: 'GUNNER', tagline: 'Firepower specialist',
-        stats: { damage: 4, banditSpeed: 1, survival: 2 }, // out of 5
+        stats: { damage: 4, banditSpeed: 1 }, // out of 5
       },
       {
         id: 'Brawler', avatar: '\u26C4\uFE0F',
         color: '#66bb6a', bg: 'rgba(80, 200, 90, 0.15)',
         title: 'BRAWLER', tagline: 'Bandit fighter',
-        stats: { damage: 2, banditSpeed: 5, survival: 4 }, // out of 5
+        stats: { damage: 2, banditSpeed: 5 }, // out of 5
       },
     ];
     const roleMap = {};
@@ -2407,9 +2407,8 @@ export class Renderer3D {
       const barStartY = rosterY + 94;
       const barGap = 18;
 
-      this._drawStatBar(ctx, 'DAMAGE',  barX, barStartY,              barW, role.stats.damage,      5, '#e57373');
-      this._drawStatBar(ctx, 'VS BANDIT', barX, barStartY + barGap,   barW, role.stats.banditSpeed,  5, '#81c784');
-      this._drawStatBar(ctx, 'SURVIVAL', barX, barStartY + barGap * 2, barW, role.stats.survival,    5, '#64b5f6');
+      this._drawStatBar(ctx, 'DAMAGE',    barX, barStartY,            barW, role.stats.damage,      5, '#e57373');
+      this._drawStatBar(ctx, 'VS BANDIT', barX, barStartY + barGap,  barW, role.stats.banditSpeed,  5, '#81c784');
 
       // Assigned count badge
       if (assignedCount > 0) {
