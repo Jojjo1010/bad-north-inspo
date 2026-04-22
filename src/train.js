@@ -51,19 +51,22 @@ export class WeaponMount {
   get damage() {
     const lvl = this.crew ? this.crew.gunLevel : 1;
     const stats = MANUAL_GUN.levels[lvl - 1];
-    return stats ? stats.damage : WEAPON_DAMAGE;
+    const base = stats ? stats.damage : WEAPON_DAMAGE;
+    return base + (this.crew ? (this.crew._dmgBonus || 0) : 0);
   }
 
   get fireRate() {
     const lvl = this.crew ? this.crew.gunLevel : 1;
     const stats = MANUAL_GUN.levels[lvl - 1];
-    return stats ? stats.fireRate : WEAPON_FIRE_RATE;
+    const base = stats ? stats.fireRate : WEAPON_FIRE_RATE;
+    return base + (this.crew ? (this.crew._rateBonus || 0) : 0);
   }
 
   get range() {
     const lvl = this.crew ? this.crew.gunLevel : 1;
     const stats = MANUAL_GUN.levels[lvl - 1];
-    return stats ? stats.range : WEAPON_RANGE;
+    const base = stats ? stats.range : WEAPON_RANGE;
+    return base + (this.crew ? (this.crew._rangeBonus || 0) : 0);
   }
 }
 
@@ -355,7 +358,13 @@ export class Train {
   getAutoWeaponStats(weaponId) {
     const w = this.autoWeapons[weaponId];
     if (!w) return null;
-    return AUTO_WEAPONS[weaponId].levels[w.level - 1];
+    const base = AUTO_WEAPONS[weaponId].levels[w.level - 1];
+    // Apply bonuses from level-up choices
+    return {
+      ...base,
+      damage: (base.damage || 0) + (w._dmgBonus || 0),
+      radius: (base.radius || 0) + (w._radiusBonus || 0),
+    };
   }
 
   getAutoWeaponMount(weaponId) {

@@ -71,6 +71,14 @@ let levelUpChoices = [];
 let hoveredPowerup = -1;
 let pendingWeaponId = null; // weapon waiting to be placed on a mount
 
+// Slot machine state for level-up
+let slotMachinePhase = 'none'; // 'spinning' | 'landed' | 'choose' | 'none'
+let slotMachineTimer = 0;
+let slotMachineCrewIdx = 0; // which crew member was chosen
+let slotMachineSpeed = 0; // ticks per second (slows down)
+let slotMachineTick = 0;
+let slotMachineDisplayIdx = 0; // currently displayed crew index
+
 // === PERSISTENT UPGRADES (shop, kept across worlds — costs/levels from tuner) ===
 const ST = SHOP_TUNING;
 const STARTING_COAL = 4;
@@ -203,67 +211,85 @@ function prepareForCombat(isBossStation = false, modifier = null) {
   train.hp = Math.min(train.hp, train.maxHp);
 }
 
-function generateLevelUpCards(train) {
+function generateLevelUpCards(train, crewIdx) {
+  const c = train.crew[crewIdx];
+  const crewId = c.id;
+  const roleEmoji = c.role === 'Gunner' ? '\uD83D\uDC31' : c.role === 'Brawler' ? '\u26C4\uFE0F' : '\uD83D\uDC31';
   const cards = [];
 
-  // Per-crew manual gun upgrades
-  for (const c of train.crew) {
-    if (c.gunLevel < MANUAL_GUN.maxLevel) {
-      const nextLv = c.gunLevel + 1;
-      const nextStats = MANUAL_GUN.levels[nextLv - 1];
-      const crewId = c.id;
-      const roleEmoji = c.role === 'Gunner' ? '\uD83D\uDC31' : c.role === 'Brawler' ? '\u26C4\uFE0F' : '\uD83D\uDC31';
-      cards.push({
-        type: 'upgradeManual',
-        name: `${c.name || 'Crew ' + (crewId + 1)} Gun Lv${nextLv}`,
-        icon: MANUAL_GUN.icon + roleEmoji,
-        color: c.color,
-        crewColor: c.color,
-        roleLabel: c.role || '',
-        desc: `DMG ${nextStats.damage} | Rate ${nextStats.fireRate.toFixed(1)}/s`,
-        apply(t) { t.crew[crewId].gunLevel = nextLv; },
-      });
-    }
+  // Get current stats
+  const curStats = MANUAL_GUN.levels[Math.max(0, c.gunLevel - 1)];
+  const curDmg = curStats.damage;
+  const curRate = curStats.fireRate;
+
+  // POWER path: +7 damage
+  const powerDmg = curDmg + 7;
+  cards.push({
+    type: 'upgradeManual',
+    name: 'POWER',
+    icon: '\u2694\uFE0F' + roleEmoji,
+    color: '#e57373',
+    crewColor: c.color,
+    roleLabel: c.role || '',
+    desc: `DMG ${curDmg} \u2192 ${powerDmg}`,
+    apply(t) {
+      t.crew[crewId].gunLevel = Math.min(MANUAL_GUN.maxLevel, t.crew[crewId].gunLevel + 1);
+      t.crew[crewId]._dmgBonus = (t.crew[crewId]._dmgBonus || 0) + 7;
+    },
+  });
+
+  // SPEED path: +0.8 fire rate
+  const speedRate = curRate + 0.8;
+  cards.push({
+    type: 'upgradeManual',
+    name: 'SPEED',
+    icon: '\u26A1' + roleEmoji,
+    color: '#64b5f6',
+    crewColor: c.color,
+    roleLabel: c.role || '',
+    desc: `Rate ${curRate.toFixed(1)} \u2192 ${speedRate.toFixed(1)}/s`,
+    apply(t) {
+      t.crew[crewId].gunLevel = Math.min(MANUAL_GUN.maxLevel, t.crew[crewId].gunLevel + 1);
+      t.crew[crewId]._rateBonus = (t.crew[crewId]._rateBonus || 0) + 0.8;
+    },
+  });
+
+  // Defense option: Regen
+  const regenLvl = train.getDefenseLevel('regen');
+  if (regenLvl === 0 && train.canAddDefense) {
+    cards.push({
+      type: 'defence', name: 'Regen — New!', icon: '\u2764', color: '#e74c3c',
+      desc: '+3 HP/sec',
+      apply(t) {
+        const def = { id: 'regen', maxLevel: 5 };
+        t.addOrUpgradeDefense(def);
+        t._regenRate = 3;
+      },
+    });
+  } else if (regenLvl > 0 && regenLvl < 5) {
+    const nextLvl = regenLvl + 1;
+    cards.push({
+      type: 'defence', name: `Regen Lv${nextLvl}`, icon: '\u2764', color: '#e74c3c',
+      desc: `+${nextLvl * 3} HP/sec`,
+      apply(t) {
+        const def = { id: 'regen', maxLevel: 5 };
+        t.addOrUpgradeDefense(def);
+        t._regenRate = nextLvl * 3;
+      },
+    });
+  } else {
+    // Regen maxed — offer range boost instead
+    cards.push({
+      type: 'upgradeManual', name: 'RANGE', icon: '\uD83C\uDFAF' + roleEmoji,
+      color: '#81c784', crewColor: c.color, roleLabel: c.role || '',
+      desc: `Range +30`,
+      apply(t) {
+        t.crew[crewId]._rangeBonus = (t.crew[crewId]._rangeBonus || 0) + 30;
+      },
+    });
   }
 
-  // PROTOTYPE: auto-weapons disabled — cards removed from pool
-
-  // Defense cards (max 2 defense slots)
-  const DEFENSE_DEFS = [
-    { id: 'regen', name: 'Regen', icon: '\u2764', color: '#e74c3c', maxLevel: 5,
-      desc: lvl => `+${lvl * 3} HP/sec`,
-      apply(t, lvl) { t._regenRate = lvl * 3; } },
-  ];
-
-  for (const def of DEFENSE_DEFS) {
-    if (def.id === 'repair') {
-      // Repair is always available, doesn't take a slot
-      cards.push({ type: 'defence', name: def.name, icon: def.icon, color: def.color,
-        desc: def.desc(0), apply(t) { def.apply(t); } });
-      continue;
-    }
-    const currentLvl = train.getDefenseLevel(def.id);
-    if (currentLvl > 0 && currentLvl < def.maxLevel) {
-      // Upgrade existing
-      const nextLvl = currentLvl + 1;
-      cards.push({
-        type: 'defence', name: `${def.name} Lv${nextLvl}`, icon: def.icon, color: def.color,
-        desc: def.desc(nextLvl),
-        apply(t) { t.addOrUpgradeDefense(def); def.apply(t, nextLvl); },
-      });
-    } else if (currentLvl === 0 && train.canAddDefense) {
-      // New defense (takes a slot)
-      cards.push({
-        type: 'defence', name: `${def.name} — New!`, icon: def.icon, color: def.color,
-        desc: def.desc(1),
-        apply(t) { t.addOrUpgradeDefense(def); def.apply(t, 1); },
-      });
-    }
-  }
-
-  // Shuffle and pick 3
-  const shuffled = cards.sort(() => Math.random() - 0.5);
-  return shuffled.slice(0, 3);
+  return cards;
 }
 
 // Get the mount the selected crew is currently assigned to (if any)
@@ -635,7 +661,15 @@ function updateRun(dt) {
 
   if (combat.pendingLevelUp) {
     combat.pendingLevelUp = false;
-    levelUpChoices = generateLevelUpCards(train);
+    // Start slot machine — pick a random crew member (or garlic)
+    const candidates = [...train.crew.map((_, i) => i)];
+    if (train.hasAutoWeapon('steamBlast')) candidates.push(-1); // -1 = garlic
+    slotMachineCrewIdx = candidates[Math.floor(Math.random() * candidates.length)];
+    slotMachinePhase = 'spinning';
+    slotMachineTimer = 1.8;
+    slotMachineSpeed = 15; // ticks/sec
+    slotMachineTick = 0;
+    slotMachineDisplayIdx = 0;
     state = STATES.LEVELUP;
     kbPowerupIndex = 0;
     hoveredPowerup = 0;
@@ -878,8 +912,93 @@ function drawDebugHitboxes() {
 // --- LEVEL UP ---
 let kbPowerupIndex = 0; // keyboard selection index
 
+function generateGarlicCards(train) {
+  const w = train.autoWeapons.steamBlast;
+  if (!w) return [];
+  const stats = train.getAutoWeaponStats('steamBlast');
+  const cards = [];
+
+  // Radius upgrade
+  cards.push({
+    type: 'garlic', name: 'WIDER AURA',
+    icon: '\uD83D\uDCA8\uD83D\uDFE2', color: '#64b5f6',
+    crewColor: '#8ecae6', roleLabel: 'GARLIC',
+    desc: `Radius ${stats.radius} \u2192 ${stats.radius + 20}`,
+    apply(t) { t.autoWeapons.steamBlast._radiusBonus = (t.autoWeapons.steamBlast._radiusBonus || 0) + 20; },
+  });
+
+  // Damage upgrade
+  cards.push({
+    type: 'garlic', name: 'STRONGER AURA',
+    icon: '\uD83D\uDCA8\uD83D\uDD25', color: '#e57373',
+    crewColor: '#8ecae6', roleLabel: 'GARLIC',
+    desc: `DMG ${stats.damage} \u2192 ${stats.damage + 3}/tick`,
+    apply(t) { t.autoWeapons.steamBlast._dmgBonus = (t.autoWeapons.steamBlast._dmgBonus || 0) + 3; },
+  });
+
+  // Regen as third option
+  const regenLvl = train.getDefenseLevel('regen');
+  if (regenLvl < 5) {
+    const nextLvl = regenLvl + 1;
+    cards.push({
+      type: 'defence', name: regenLvl === 0 ? 'Regen — New!' : `Regen Lv${nextLvl}`,
+      icon: '\u2764', color: '#e74c3c',
+      desc: `+${nextLvl * 3} HP/sec`,
+      apply(t) {
+        if (regenLvl === 0) t.addOrUpgradeDefense({ id: 'regen', maxLevel: 5 });
+        else t.addOrUpgradeDefense({ id: 'regen', maxLevel: 5 });
+        t._regenRate = nextLvl * 3;
+      },
+    });
+  }
+
+  return cards;
+}
+
 function updateLevelUp() {
-  // Mouse hover
+  const dt = 0.016; // approximate
+
+  // Slot machine phase
+  if (slotMachinePhase === 'spinning') {
+    slotMachineTimer -= dt;
+    slotMachineTick += slotMachineSpeed * dt;
+
+    // Cycle display index
+    if (slotMachineTick >= 1) {
+      slotMachineTick -= 1;
+      const totalCandidates = train.crew.length + (train.hasAutoWeapon('steamBlast') ? 1 : 0);
+      slotMachineDisplayIdx = (slotMachineDisplayIdx + 1) % totalCandidates;
+    }
+
+    // Slow down over time
+    slotMachineSpeed = Math.max(2, 15 * (slotMachineTimer / 1.8));
+
+    if (slotMachineTimer <= 0) {
+      // Land on the chosen crew member
+      slotMachineDisplayIdx = slotMachineCrewIdx === -1 ? train.crew.length : slotMachineCrewIdx;
+      slotMachinePhase = 'landed';
+      slotMachineTimer = 0.8; // pause before showing cards
+    }
+    return;
+  }
+
+  if (slotMachinePhase === 'landed') {
+    slotMachineTimer -= dt;
+    if (slotMachineTimer <= 0) {
+      // Generate cards for the chosen crew/weapon
+      if (slotMachineCrewIdx === -1) {
+        levelUpChoices = generateGarlicCards(train);
+      } else {
+        levelUpChoices = generateLevelUpCards(train, slotMachineCrewIdx);
+      }
+      slotMachinePhase = 'choose';
+      hoveredPowerup = 0;
+      kbPowerupIndex = 0;
+    }
+    return;
+  }
+
+  // Choose phase — normal card selection
   let mouseHover = -1;
   for (let i = 0; i < levelUpChoices.length; i++) {
     const p = levelUpChoices[i];
@@ -887,7 +1006,6 @@ function updateLevelUp() {
   }
   if (mouseHover >= 0) hoveredPowerup = mouseHover;
 
-  // Keyboard navigation
   if (input.keyPressed('ArrowRight') || input.keyPressed('KeyD')) {
     kbPowerupIndex = Math.min(levelUpChoices.length - 1, kbPowerupIndex + 1);
     hoveredPowerup = kbPowerupIndex;
@@ -897,25 +1015,14 @@ function updateLevelUp() {
     hoveredPowerup = kbPowerupIndex;
   }
 
-  // Select with click or space/enter
   const confirmKey = input.keyPressed('Space') || input.keyPressed('Enter');
   if ((input.clicked && mouseHover >= 0) || (confirmKey && hoveredPowerup >= 0)) {
-    pendingWeaponId = null;
     const chosenCard = levelUpChoices[hoveredPowerup];
     chosenCard.apply(train);
     playPowerup();
-    if (pendingWeaponId) {
-      // New weapon acquired — trigger fanfare then go to placement screen
-      const weaponDef = AUTO_WEAPONS[pendingWeaponId];
-      fanfareText = `${weaponDef ? weaponDef.name.toUpperCase() : pendingWeaponId.toUpperCase()} ACQUIRED!`;
-      fanfareColor = weaponDef ? weaponDef.color : '#f5a623';
-      fanfareTimer = 0.4;
-      playWeaponAcquire();
-      state = STATES.PLACE_WEAPON;
-    } else {
-      state = STATES.RUNNING;
-      lastTime = performance.now();
-    }
+    slotMachinePhase = 'none';
+    state = STATES.RUNNING;
+    lastTime = performance.now();
   }
 }
 
@@ -929,7 +1036,69 @@ function renderLevelUp() {
   renderer.drawWeaponMounts(train, null);
   renderer.drawMovingCrew(train.crew);
   renderer.drawHUD(train);
-  renderer.drawLevelUpMenu(train.level, levelUpChoices, hoveredPowerup, train);
+
+  if (slotMachinePhase === 'spinning' || slotMachinePhase === 'landed') {
+    // Slot machine overlay
+    const ctx = renderer.ctx;
+    ctx.fillStyle = 'rgba(0,0,0,0.6)';
+    ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+    ctx.fillStyle = '#f5a623';
+    ctx.font = 'bold 28px monospace';
+    ctx.textAlign = 'center';
+    ctx.fillText(`LEVEL ${train.level}!`, CANVAS_WIDTH / 2, 140);
+
+    // Slot machine box
+    const boxW = 200;
+    const boxH = 160;
+    const boxX = CANVAS_WIDTH / 2 - boxW / 2;
+    const boxY = 170;
+
+    ctx.fillStyle = 'rgba(20, 22, 35, 0.95)';
+    ctx.beginPath();
+    renderer.roundRect(boxX, boxY, boxW, boxH, 12);
+    ctx.fill();
+    ctx.strokeStyle = '#f5a623';
+    ctx.lineWidth = 2;
+    ctx.beginPath();
+    renderer.roundRect(boxX, boxY, boxW, boxH, 12);
+    ctx.stroke();
+
+    // Determine what to show
+    const allCandidates = [];
+    for (const c of train.crew) allCandidates.push({ emoji: c.role === 'Gunner' ? '\uD83D\uDC31' : '\u26C4\uFE0F', name: c.name, color: c.color, role: c.role });
+    if (train.hasAutoWeapon('steamBlast')) allCandidates.push({ emoji: '\uD83D\uDCA8', name: 'Garlic', color: '#8ecae6', role: 'WEAPON' });
+
+    const displayItem = allCandidates[slotMachineDisplayIdx % allCandidates.length];
+    const isLanded = slotMachinePhase === 'landed';
+
+    // Big emoji
+    const scale = isLanded ? 1.2 : 1.0;
+    ctx.font = `${Math.round(60 * scale)}px serif`;
+    ctx.textAlign = 'center';
+    ctx.fillText(displayItem.emoji, CANVAS_WIDTH / 2, boxY + 80);
+
+    // Name
+    ctx.fillStyle = isLanded ? displayItem.color : '#aaa';
+    ctx.font = `bold ${isLanded ? 18 : 14}px monospace`;
+    ctx.fillText(displayItem.name, CANVAS_WIDTH / 2, boxY + 110);
+
+    // Role
+    const roleColor = displayItem.role === 'Gunner' ? '#ffb74d' : displayItem.role === 'Brawler' ? '#66bb6a' : '#8ecae6';
+    ctx.fillStyle = roleColor;
+    ctx.font = 'bold 11px monospace';
+    ctx.fillText(displayItem.role || '', CANVAS_WIDTH / 2, boxY + 130);
+
+    if (isLanded) {
+      ctx.fillStyle = '#888';
+      ctx.font = '12px monospace';
+      ctx.fillText('Upgrading...', CANVAS_WIDTH / 2, boxY + boxH + 20);
+    }
+  } else {
+    // Card selection phase
+    renderer.drawLevelUpMenu(train.level, levelUpChoices, hoveredPowerup, train);
+  }
+
   renderer.drawAutoWeaponHUD(train);
   renderer.updateAndDrawConfetti(0.016);
   renderer.flush();
