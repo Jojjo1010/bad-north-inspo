@@ -10,7 +10,7 @@ export const CANVAS_HEIGHT = 640;
 export const CAR_WIDTH = T('CAR_WIDTH', 32);
 export const CAR_HEIGHT = T('CAR_HEIGHT', 14);
 export const CAR_GAP = T('CAR_GAP', 6);
-export const TRAIN_MAX_HP = T('TRAIN_MAX_HP', 100);
+export const TRAIN_MAX_HP = T('TRAIN_MAX_HP', 150);
 export const TRAIN_SPEED = T('TRAIN_SPEED', 167);
 export const CARGO_BOXES_START = T('CARGO_BOXES_START', 4);
 export const CARGO_MULTIPLIER_PER_BOX = T('CARGO_MULTIPLIER_PER_BOX', 0.25);
@@ -43,7 +43,7 @@ export const ENEMY_BASE_SPEED = T('ENEMY_BASE_SPEED', 50);
 export const ENEMY_RADIUS = T('ENEMY_RADIUS', 6);
 export const ENEMY_CONTACT_DAMAGE = T('ENEMY_CONTACT_DAMAGE', 8);
 export const ENEMY_SPAWN_INTERVAL_START = T('ENEMY_SPAWN_INTERVAL_START', 2.0);
-export const ENEMY_SPAWN_INTERVAL_MIN = T('ENEMY_SPAWN_INTERVAL_MIN', 0.25);
+export const ENEMY_SPAWN_INTERVAL_MIN = T('ENEMY_SPAWN_INTERVAL_MIN', 0.5);
 
 // Enemy tier multipliers (read by enemies.js)
 export const ENEMY_RADIUS_MULT = [
@@ -154,10 +154,10 @@ export const BRAWLER_DAMAGE_MULT = T('BRAWLER_DAMAGE_MULT', 0.6);        // -40%
 export const GUNNER_FIGHT_DURATION_MULT = T('GUNNER_FIGHT_DURATION_MULT', 2.0); // 2x bandit fight time
 
 // Wave system
-export const WAVE_CYCLE_DURATION = T('WAVE_CYCLE_DURATION', 10);       // seconds between surge starts
-export const WAVE_SURGE_DURATION = T('WAVE_SURGE_DURATION', 6);        // seconds a surge lasts
+export const WAVE_CYCLE_DURATION = T('WAVE_CYCLE_DURATION', 12);       // seconds between surge starts
+export const WAVE_SURGE_DURATION = T('WAVE_SURGE_DURATION', 5);        // seconds a surge lasts
 export const WAVE_CALM_DURATION = T('WAVE_CALM_DURATION', 5);          // real breathing room
-export const WAVE_SURGE_SPAWN_MULT = T('WAVE_SURGE_SPAWN_MULT', 2.5);  // intense but not overwhelming
+export const WAVE_SURGE_SPAWN_MULT = T('WAVE_SURGE_SPAWN_MULT', 2.0);  // noticeable but manageable
 export const WAVE_CALM_SPAWN_MULT = T('WAVE_CALM_SPAWN_MULT', 0.5);    // light pressure, clear contrast with surge
 export const WAVE_ESCALATION = T('WAVE_ESCALATION', 0.10);             // per-wave difficulty increase
 export const WAVE_WARNING_DURATION = T('WAVE_WARNING_DURATION', 3);    // seconds of warning before surge

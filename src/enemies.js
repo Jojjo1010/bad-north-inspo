@@ -232,7 +232,7 @@ export class Spawner {
     const waveMult = this.getWaveSpawnMultiplier();
 
     // Difficulty scales with distance AND station depth (unchanged)
-    const distDiff = 1 + (distance / TARGET_DISTANCE) * 2;
+    const distDiff = 1 + (distance / TARGET_DISTANCE) * 1.2;
     const difficulty = distDiff + (stationDifficulty - 1);
     // Modifier spawn multiplier (swarm=2x faster, armored=0.5x, etc.)
     const modSpawnMult = this.modifier ? this.modifier.spawnMult : 1;
