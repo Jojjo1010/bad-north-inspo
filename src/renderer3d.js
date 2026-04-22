@@ -1501,9 +1501,9 @@ export class Renderer3D {
 
     // Role bonus text per role
     const roleBonusMap = {
-      Gunner:   '+20% damage',
-      Engineer: '-15% cooldown',
-      Medic:    '+2 HP/s regen',
+      Gunner:   '2x damage (manual)',
+      Engineer: '2x fire rate (auto)',
+      Medic:    '+2 HP/s (3s still)',
     };
     const roleBonus = roleBonusMap[crew.role] || '';
 
