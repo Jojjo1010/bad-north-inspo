@@ -163,15 +163,17 @@ export class Bandit {
         }
 
         // Brawler kick: land when timer expires
-        if (this._brawlerKicked && !this._kickLanded && this.timer <= 0) {
-          this._kickLanded = true;
+        if (this._brawlerKicked && !this._hasLandedVisual && this.timer <= 0) {
+          this._kickLanded = true; // consumed by main.js for AOE damage
+          this._hasLandedVisual = true; // permanent flag for renderer
           this._landX = this.x;
           this._landY = this.y;
-          // Stay visible briefly after landing
-          this.timer = 0.3;
+          this.timer = 0.3; // brief fade then disappear
           this.deathVx = 0;
           this.deathVy = 0;
-        } else if (this.timer <= 0) {
+        } else if (this._hasLandedVisual && this.timer <= 0) {
+          this.active = false;
+        } else if (!this._brawlerKicked && this.timer <= 0) {
           this.active = false;
         }
         break;
@@ -196,6 +198,7 @@ export class Bandit {
     this.justDied = true;
     this._brawlerKicked = false;
     this._kickLanded = false;
+    this._hasLandedVisual = false;
     this._landX = 0;
     this._landY = 0;
     this._landTimer = 0;

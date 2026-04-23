@@ -1512,16 +1512,16 @@ export class Renderer3D {
           mesh.children.forEach(c => { if (c.material) c.material.color.setHex(color); });
           // Fade on death
           if (b.state === 4) {
-            if (b._brawlerKicked && !b._kickLanded) {
+            if (b._brawlerKicked && !b._hasLandedVisual) {
               // Flying phase: fully visible, spinning, arc upward
               mesh.children.forEach(c => {
                 if (c.material) { c.material.transparent = false; c.material.opacity = 1; }
               });
               mesh.rotation.y += 0.5;
-              const flightTotal = 0.6; // must match bandits.js kick timer
+              const flightTotal = 0.6;
               const tProgress = 1 - Math.max(0, b.timer) / flightTotal;
               mesh.position.y = 4 + Math.sin(tProgress * Math.PI) * 30;
-            } else if (b._brawlerKicked && b._kickLanded) {
+            } else if (b._brawlerKicked && b._hasLandedVisual) {
               // Landed: fade out quickly on the ground
               const alpha = Math.max(0, b.timer / 0.3);
               mesh.children.forEach(c => {
