@@ -4069,14 +4069,6 @@ export class Renderer3D {
     ctx.fillStyle = vig;
     ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
-    // Animated dust/star particles (simple dots)
-    ctx.fillStyle = 'rgba(200,180,120,0.25)';
-    for (let i = 0; i < 40; i++) {
-      const px = ((i * 137.5 + t * 8) % CANVAS_WIDTH);
-      const py = ((i * 97.3 + t * 3) % CANVAS_HEIGHT);
-      ctx.fillRect(px, py, 1.5, 1.5);
-    }
-
     // Title (static, no animation)
     ctx.fillStyle = '#f5a623';
     ctx.font = 'bold 64px monospace';
