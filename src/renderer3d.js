@@ -2768,6 +2768,45 @@ export class Renderer3D {
     if (!filled) ctx.setLineDash([]);
   }
 
+  drawControlsLegend() {
+    const ctx = this.ctx;
+    const x = 10;
+    const y = CANVAS_HEIGHT / 2 - 80;
+    const lineH = 15;
+
+    ctx.save();
+    // Background
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.45)';
+    this.roundRect(x, y, 145, lineH * 8 + 12, 6);
+    ctx.fill();
+
+    ctx.font = 'bold 9px monospace';
+    ctx.textAlign = 'left';
+
+    const controls = [
+      ['LClick', 'Select crew'],
+      ['RClick', 'Move crew to slot'],
+      ['Mouse', 'Aim selected crew'],
+      ['Tab', 'Cycle crew'],
+      ['Space', 'Tactical pause'],
+      ['WASD', 'Aim weapon'],
+      ['Esc', 'Pause menu'],
+    ];
+
+    ctx.fillStyle = '#f5a623';
+    ctx.fillText('CONTROLS', x + 8, y + 12);
+
+    for (let i = 0; i < controls.length; i++) {
+      const [key, action] = controls[i];
+      const ly = y + 24 + i * lineH;
+      ctx.fillStyle = '#ddd';
+      ctx.fillText(key, x + 8, ly);
+      ctx.fillStyle = '#888';
+      ctx.fillText(action, x + 55, ly);
+    }
+    ctx.restore();
+  }
+
   drawAutoWeaponHUD(train) {
     const ctx = this.ctx;
     const startX = 16;

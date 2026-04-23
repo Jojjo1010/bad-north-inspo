@@ -882,6 +882,7 @@ function renderRun() {
   renderer.drawHUD(train);
   renderer.drawWaveHUD(spawner.waveInfo);
   renderer.drawAutoWeaponHUD(train);
+  renderer.drawControlsLegend();
   // Bandit alert banner — escalates visually with dwell time
   let banditCount = 0;
   let maxDwell = 0;
@@ -1266,6 +1267,7 @@ function renderLevelUp() {
   }
 
   renderer.drawAutoWeaponHUD(train);
+  renderer.drawControlsLegend();
   renderer.updateAndDrawConfetti(0.016);
   renderer.flush();
 }
