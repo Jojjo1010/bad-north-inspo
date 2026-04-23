@@ -298,7 +298,8 @@ export class CombatSystem {
         }
         playShoot();
       } else {
-        // --- Unmanned: degraded auto-fire, stacks with bandit suppression ---
+        // Unmanned mounts don't fire — crew must be present
+        continue;
         const target = this.findTarget(mount, enemies, areaMult);
         if (!target) continue;
         const angle = this.leadAngle(mount, target);
