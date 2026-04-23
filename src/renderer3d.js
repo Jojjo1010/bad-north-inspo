@@ -1171,48 +1171,6 @@ export class Renderer3D {
       ring.visible = !disabled;
     }
 
-    // Draw 2D overlay for ALL brawler mounts
-    for (const m of brawlerMounts) {
-      const isBanditDisabled = m._bandit;
-      const pulse = isBanditDisabled ? 1.0 : 1 + Math.sin(now * 0.004) * 0.12;
-      const r = baseR * (train.totalAreaMultiplier || 1) * pulse;
-      const scrX = m.screenX !== undefined ? m.screenX : CANVAS_WIDTH / 2;
-      const scrY = m.screenY !== undefined ? m.screenY : CANVAS_HEIGHT / 2;
-
-      if (isBanditDisabled) {
-        const flicker = Math.sin(now * 0.02) > 0 ? 0.25 : 0.08;
-        ctx.strokeStyle = `rgba(230, 60, 60, ${flicker})`;
-        ctx.lineWidth = 2;
-        ctx.setLineDash([6, 8]);
-        ctx.beginPath();
-        ctx.arc(scrX, scrY, r * 0.8, 0, Math.PI * 2);
-        ctx.stroke();
-        ctx.setLineDash([]);
-        ctx.fillStyle = `rgba(230, 60, 60, ${0.5 + Math.sin(now * 0.008) * 0.3})`;
-        ctx.font = 'bold 10px monospace';
-        ctx.textAlign = 'center';
-        ctx.fillText('GARLIC DISABLED', scrX, scrY - r * 0.8 - 8);
-      } else {
-        const alpha = 0.08 + Math.sin(now * 0.005) * 0.04;
-        ctx.fillStyle = `rgba(142, 230, 180, ${alpha})`;
-        ctx.beginPath();
-        ctx.arc(scrX, scrY, r, 0, Math.PI * 2);
-        ctx.fill();
-
-        ctx.strokeStyle = `rgba(142, 230, 180, ${0.25 + Math.sin(now * 0.006) * 0.1})`;
-        ctx.lineWidth = 2.5;
-        ctx.beginPath();
-        ctx.arc(scrX, scrY, r, 0, Math.PI * 2);
-        ctx.stroke();
-
-        const innerR = r * (0.4 + Math.sin(now * 0.003) * 0.1);
-        ctx.strokeStyle = `rgba(142, 230, 180, ${0.12 + Math.sin(now * 0.008) * 0.06})`;
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.arc(scrX, scrY, innerR, 0, Math.PI * 2);
-        ctx.stroke();
-      }
-    }
   }
 
   drawWorldCoins(coins) {
