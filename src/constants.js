@@ -151,6 +151,13 @@ export const GUNNER_FIGHT_DURATION_MULT = T('GUNNER_FIGHT_DURATION_MULT', 2.0); 
 export const BRAWLER_KICK_DAMAGE = T('BRAWLER_KICK_DAMAGE', 60);   // AOE damage on bandit kick — big moment
 export const BRAWLER_KICK_RADIUS = T('BRAWLER_KICK_RADIUS', 160);  // AOE radius on bandit kick
 
+// Brawler garlic AOE weapon (smaller than old auto-weapon, strong early game)
+export const BRAWLER_GARLIC = {
+  radius: T('BRAWLER_GARLIC_RADIUS', 50),
+  damage: T('BRAWLER_GARLIC_DAMAGE', 14),
+  tickRate: T('BRAWLER_GARLIC_TICK_RATE', 0.4),
+};
+
 // Wave system
 export const WAVE_CYCLE_DURATION = T('WAVE_CYCLE_DURATION', 12);       // seconds between surge starts
 export const WAVE_SURGE_DURATION = T('WAVE_SURGE_DURATION', 5);        // seconds a surge lasts

@@ -145,6 +145,7 @@ export class CrewMember {
     this.panelY = 0;
 
     this.gunLevel = 1; // personal manual gun level (1-5)
+    this._garlicTickTimer = 0; // Brawler garlic AOE cooldown
     this.weaponId = null;
     this.weaponLevel = 0;
 

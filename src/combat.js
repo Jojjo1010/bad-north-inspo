@@ -2,7 +2,7 @@ import {
   CANVAS_WIDTH, CANVAS_HEIGHT,
   MAX_PROJECTILES, PROJECTILE_SPEED, PROJECTILE_LIFETIME, PROJECTILE_RADIUS,
   DRIVER_DAMAGE_BUFF, XP_PER_KILL, MAX_RICOCHET_BOLTS, MAX_DAMAGE_NUMBERS,
-  UNMANNED_EFFECTIVENESS, GUNNER_DAMAGE_MULT, BRAWLER_DAMAGE_MULT
+  UNMANNED_EFFECTIVENESS, GUNNER_DAMAGE_MULT, BRAWLER_DAMAGE_MULT, BRAWLER_GARLIC
 } from './constants.js';
 import { playShoot, playEnemyHit, playEnemyKill, playTrainDamage } from './audio.js';
 import { spawnDamageNumber as spawnAttribution } from './damageAttribution.js';
@@ -234,13 +234,36 @@ export class CombatSystem {
       }
       if (banditMult <= 0) continue;
 
+      if (manned && mount.crew.role === 'Brawler') {
+        // --- Brawler: garlic AOE instead of projectiles ---
+        const brawler = mount.crew;
+        brawler._garlicTickTimer -= dt;
+        if (brawler._garlicTickTimer <= 0) {
+          brawler._garlicTickTimer = BRAWLER_GARLIC.tickRate * train.totalCooldownMultiplier / banditMult;
+          const r = BRAWLER_GARLIC.radius * areaMult;
+          const r2 = r * r;
+          const mx = mount.worldX, my = mount.worldY;
+          let dmg = BRAWLER_GARLIC.damage * train.totalDamageMultiplier * banditMult;
+          if (hasDriver) dmg *= DRIVER_DAMAGE_BUFF;
+          if (train.hasBuddyBonus(mount)) dmg *= 1.15;
+          for (const e of enemies) {
+            if (!e.active) continue;
+            const dx = e.x - mx, dy = e.y - my;
+            if (dx * dx + dy * dy <= r2) {
+              this.spawnDamageNumber(e.x, e.y, dmg);
+              const ex = e.x, ey = e.y, ecolor = e.color;
+              e.takeDamage(dmg);
+              this.handleEnemyDamageResult(e, train, ex, ey, ecolor);
+            }
+          }
+        }
+        continue;
+      }
+
       mount.cooldownTimer -= dt;
       if (mount.cooldownTimer > 0) continue;
 
       if (manned) {
-        // Brawler doesn't shoot — their value is the kick AOE
-        if (mount.crew.role === 'Brawler') continue;
-
         // --- Manned: full power, crew bonuses apply ---
         let angle;
         if (mount.crew === selectedCrew && mount._fireAngle2D !== undefined) {

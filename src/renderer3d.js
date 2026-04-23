@@ -43,7 +43,7 @@ import {
   WEAPON_RANGE, TARGET_DISTANCE, COIN_RADIUS,
   AUTO_WEAPONS, MANUAL_GUN, COAL_SHOP_COST, COAL_SHOP_AMOUNT,
   MAX_ENEMIES, MAX_PROJECTILES, MAX_RICOCHET_BOLTS,
-  MAX_COINS, MAX_FLYING_COINS, MAX_BANDITS
+  MAX_COINS, MAX_FLYING_COINS, MAX_BANDITS, BRAWLER_GARLIC
 } from './constants.js';
 
 // Role-based crew emoji: visually distinct per role
@@ -726,7 +726,9 @@ export class Renderer3D {
         if (mount.hasAutoWeapon) {
           const modelMap = { turret: 'AutoGun', steamBlast: 'Laser', ricochetShot: 'Laser' };
           desiredType = modelMap[mount.autoWeaponId] || null;
-        } else if (mount.isManned && !(mount.crew && mount.crew.role === 'Brawler')) {
+        } else if (mount.isManned && mount.crew && mount.crew.role === 'Brawler') {
+          desiredType = 'Garlic';
+        } else if (mount.isManned) {
           desiredType = 'Gun';
         }
         // Empty mount = no model
@@ -1127,14 +1129,27 @@ export class Renderer3D {
   }
 
   drawSteamBlastAura(train) {
-    if (!train.autoWeapons.steamBlast) {
+    // Check for steamBlast auto-weapon OR Brawler garlic
+    const brawlerMount = train.allMounts.find(mt => mt.isManned && mt.crew && mt.crew.role === 'Brawler');
+    const hasAutoGarlic = !!train.autoWeapons.steamBlast;
+    const hasBrawlerGarlic = !!brawlerMount;
+
+    if (!hasAutoGarlic && !hasBrawlerGarlic) {
       this.steamRing.visible = false;
       return;
     }
-    const stats = train.getAutoWeaponStats('steamBlast');
-    if (!stats) { this.steamRing.visible = false; return; }
 
-    const m = train.getAutoWeaponMount('steamBlast');
+    let stats, m;
+    if (hasBrawlerGarlic) {
+      // Brawler garlic — use BRAWLER_GARLIC constants
+      m = brawlerMount;
+      stats = { radius: BRAWLER_GARLIC.radius };
+    } else {
+      m = train.getAutoWeaponMount('steamBlast');
+      stats = train.getAutoWeaponStats('steamBlast');
+      if (!stats) { this.steamRing.visible = false; return; }
+    }
+
     const isBanditDisabled = m && m._bandit;
     const now = performance.now();
 
@@ -1886,7 +1901,7 @@ export class Renderer3D {
     // Role bonus text per role
     const roleBonusMap = {
       Gunner:   '+60% dmg, slow bandit fight',
-      Brawler:  'No gun — AOE kick on bandit kill',
+      Brawler:  'Garlic AOE + kick on bandit kill',
     };
     const roleBonus = roleBonusMap[crew.role] || '';
 
@@ -2478,7 +2493,7 @@ export class Renderer3D {
       {
         id: 'Brawler', avatar: '\u26C4\uFE0F',
         color: '#66bb6a', bg: 'rgba(80, 200, 90, 0.15)',
-        title: 'BRAWLER', tagline: 'No gun — AOE kick on bandit kill',
+        title: 'BRAWLER', tagline: 'Garlic AOE + kick on bandit kill',
         statBars: [
           { label: 'KICK DMG', value: 4, max: 5, color: '#e57373' },
           { label: 'KICK AOE', value: 4, max: 5, color: '#64b5f6' },
