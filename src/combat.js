@@ -246,11 +246,16 @@ export class CombatSystem {
             for (const e of enemies) {
               if (!e.active) continue;
               const dx = e.x - mx, dy = e.y - my;
-              if (dx * dx + dy * dy <= r2) {
+              const distSq = dx * dx + dy * dy;
+              if (distSq <= r2) {
                 this.spawnDamageNumber(e.x, e.y, dmg);
                 const ex = e.x, ey = e.y, ecolor = e.color;
-                e.takeDamage(dmg);
+                // Knockback away from brawler
+                const dist = Math.sqrt(distSq) || 1;
+                e.takeDamage(dmg, dx / dist * 60, dy / dist * 60);
                 this.handleEnemyDamageResult(e, train, ex, ey, ecolor);
+                // Hit spark for visibility
+                if (e.active) this.hitSparks.push({ x: e.x, y: e.y });
               }
             }
           }
