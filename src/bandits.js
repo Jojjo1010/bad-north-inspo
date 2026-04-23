@@ -158,22 +158,20 @@ export class Bandit {
         this.timer -= dt;
         this.x += this.deathVx * dt;
         this.y += this.deathVy * dt;
-        this.deathVy += 200 * dt; // gravity
+        if (!this._brawlerKicked) {
+          this.deathVy += 200 * dt; // gravity for normal death
+        }
 
-        // Brawler kick: land after a fixed delay (0.7s into the 1.8s flight)
-        if (this._brawlerKicked && !this._kickLanded && this.timer < 1.1) {
+        // Brawler kick: land when timer expires
+        if (this._brawlerKicked && !this._kickLanded && this.timer <= 0) {
           this._kickLanded = true;
           this._landX = this.x;
           this._landY = this.y;
-          this._landTimer = 0.6;
-        }
-
-        // Count down land timer
-        if (this._landTimer > 0) {
-          this._landTimer -= dt;
-        }
-
-        if (this.timer <= 0) {
+          // Stay visible briefly after landing
+          this.timer = 0.3;
+          this.deathVx = 0;
+          this.deathVy = 0;
+        } else if (this.timer <= 0) {
           this.active = false;
         }
         break;
@@ -202,13 +200,15 @@ export class Bandit {
     this._landTimer = 0;
     this._kickTrail = [];
     if (wasKicked) {
-      // Brawler kick: dramatic launch — AOE triggers on landing
+      // Brawler kick: visible arc, lands nearby with AOE
       this._brawlerKicked = true;
-      this._kickTrail = []; // screen-space trail points
-      this.timer = 1.8;
-      // Much more extreme velocity — bandit should visibly arc across the screen
-      this.deathVx = (Math.random() < 0.5 ? -1 : 1) * (400 + Math.random() * 200);
-      this.deathVy = -500 - Math.random() * 200;
+      this._kickTrail = [];
+      this.timer = 0.6; // shorter flight so it's visible
+      // Kick away from train center, stay on screen
+      const trainCenterY = CANVAS_HEIGHT / 2;
+      const awayDir = this.y <= trainCenterY ? -1 : 1;
+      this.deathVx = -(80 + Math.random() * 60); // fly backward (left)
+      this.deathVy = awayDir * (150 + Math.random() * 80); // fly away from track
     } else {
       this.timer = 0.6;
       this.deathVx = (Math.random() - 0.5) * 100;
