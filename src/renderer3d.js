@@ -1518,7 +1518,7 @@ export class Renderer3D {
                 if (c.material) { c.material.transparent = false; c.material.opacity = 1; }
               });
               mesh.rotation.y += 0.5;
-              const flightTotal = 0.6;
+              const flightTotal = 0.4;
               const tProgress = 1 - Math.max(0, b.timer) / flightTotal;
               mesh.position.y = 4 + Math.sin(tProgress * Math.PI) * 30;
             } else if (b._brawlerKicked && b._hasLandedVisual) {

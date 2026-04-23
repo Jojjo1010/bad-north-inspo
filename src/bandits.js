@@ -207,12 +207,12 @@ export class Bandit {
       // Brawler kick: visible arc, lands nearby with AOE
       this._brawlerKicked = true;
       this._kickTrail = [];
-      this.timer = 0.6; // shorter flight so it's visible
-      // Kick away from train center, stay on screen
+      this.timer = 0.4;
+      // Kick away from train, shorter distance
       const trainCenterY = CANVAS_HEIGHT / 2;
       const awayDir = this.y <= trainCenterY ? -1 : 1;
-      this.deathVx = -(80 + Math.random() * 60); // fly backward (left)
-      this.deathVy = awayDir * (150 + Math.random() * 80); // fly away from track
+      this.deathVx = -(40 + Math.random() * 30);
+      this.deathVy = awayDir * (80 + Math.random() * 40);
     } else {
       this.timer = 0.6;
       this.deathVx = (Math.random() - 0.5) * 100;
