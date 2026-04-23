@@ -63,10 +63,15 @@ export class Enemy {
     this.x += (this.vx + this.knockbackVX) * dt;
     this.y += (this.vy + this.knockbackVY) * dt;
 
-    // Decay knockback
-    const KNOCKBACK_DECAY = 12;
-    this.knockbackVX *= Math.max(0, 1 - KNOCKBACK_DECAY * dt);
-    this.knockbackVY *= Math.max(0, 1 - KNOCKBACK_DECAY * dt);
+    // Decay knockback — brief "stick" phase keeps full force for first 60ms,
+    // then slower decay (8 instead of 12) for a punchier feel.
+    const KNOCKBACK_DECAY = 8;
+    if (this.flashTimer > 0.06) {
+      // Stick phase: no decay while flash is fresh (first ~60ms after hit)
+    } else {
+      this.knockbackVX *= Math.max(0, 1 - KNOCKBACK_DECAY * dt);
+      this.knockbackVY *= Math.max(0, 1 - KNOCKBACK_DECAY * dt);
+    }
 
     if (this.flashTimer > 0) this.flashTimer -= dt;
   }
@@ -74,14 +79,14 @@ export class Enemy {
   // pvx/pvy: projectile velocity direction (used for knockback impulse)
   takeDamage(amount, pvx = 0, pvy = 0) {
     this.hp -= amount;
-    this.flashTimer = 0.05;
+    this.flashTimer = 0.12;
     if (this.hp <= 0) {
       this.active = false;
     } else {
       // Apply knockback in the direction the projectile was travelling
       const pSpeed = Math.sqrt(pvx * pvx + pvy * pvy);
       if (pSpeed > 0) {
-        const KNOCKBACK_STRENGTH = 80;
+        const KNOCKBACK_STRENGTH = 120;
         this.knockbackVX += (pvx / pSpeed) * KNOCKBACK_STRENGTH;
         this.knockbackVY += (pvy / pSpeed) * KNOCKBACK_STRENGTH;
       }

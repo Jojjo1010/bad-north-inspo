@@ -2,8 +2,12 @@ import * as THREE from 'three';
 import { FBXLoader } from 'three/addons/loaders/FBXLoader.js';
 import { toWorld, toWorldX, toWorldZ, toPixelX, toPixelZ } from './coordMap.js';
 
+// === DEV TOOLS FLAG ===
+// Append ?debug=1 to URL to enable dev tools (F4 mount tuning, F3 hitboxes, etc.)
+window.DEVTOOLS = window.DEVTOOLS || new URLSearchParams(window.location.search).has('debug');
+
 // === DEBUG MOUNT TUNING ===
-// Press F4 to toggle debug panel. Use keys to adjust:
+// Press F4 to toggle debug panel (requires ?debug=1 in URL). Use keys to adjust:
 //   Q/W: upper cone angle ±5°    E/R: lower cone angle ±5°
 //   A/S: gun rotation offset ±5° D/F: cone half-angle ±5°
 window.__mountDebug = window.__mountDebug || {
@@ -18,6 +22,7 @@ window.__mountDebug = window.__mountDebug || {
 };
 const MD = window.__mountDebug;
 document.addEventListener('keydown', (e) => {
+  if (!window.DEVTOOLS) return;
   if (e.code === 'F4') { MD.enabled = !MD.enabled; e.preventDefault(); return; }
   if (!MD.enabled) return;
   // Use number keys (no conflict with game controls)
@@ -933,8 +938,10 @@ export class Renderer3D {
       mesh.visible = true;
 
       // Scale based on enemy radius (relative to base ENEMY_RADIUS of 6)
+      // Bump up 15% during hit flash for visible impact feedback
       const radiusRatio = e.radius / 6;
-      const baseScale = 0.045 * radiusRatio;
+      const flashScale = e.flashTimer > 0 ? 1.15 : 1.0;
+      const baseScale = 0.045 * radiusRatio * flashScale;
       mesh.scale.setScalar(baseScale);
 
       // Flash white on hit
@@ -2641,17 +2648,30 @@ export class Renderer3D {
     const bottomY = rosterY + cardH + 16;
 
     if (allChosen) {
-      // Confirm button
+      // Confirmation summary
+      const summary = crew.map(c => `${c.name}: ${c.role}`).join(', ');
+      ctx.fillStyle = '#ddd';
+      ctx.font = 'bold 12px monospace';
+      ctx.textAlign = 'center';
+      ctx.fillText(summary + ' \u2014 Confirm?', CANVAS_WIDTH / 2, bottomY + 6);
+
+      ctx.fillStyle = '#777';
+      ctx.font = '10px monospace';
+      ctx.fillText('Click a crew slot above to change', CANVAS_WIDTH / 2, bottomY + 20);
+
+      // Confirm button (shifted down for summary text)
+      const summaryOffset = 28;
       const btnW = 200;
       const btnH = 44;
       const btnX = CANVAS_WIDTH / 2 - btnW / 2;
+      const btnY = bottomY + summaryOffset;
       const confirmKey = 'confirm';
       const confirmHovered = hoveredBtn === confirmKey;
       const pulse = 0.85 + Math.sin(now * 0.006) * 0.15;
 
       ctx.fillStyle = confirmHovered ? '#e09520' : `rgba(245, 166, 35, ${pulse})`;
       ctx.beginPath();
-      this.roundRect(btnX, bottomY, btnW, btnH, 8);
+      this.roundRect(btnX, btnY, btnW, btnH, 8);
       ctx.fill();
       if (confirmHovered) {
         ctx.shadowColor = '#f5a623';
@@ -2660,16 +2680,16 @@ export class Renderer3D {
       ctx.strokeStyle = '#f5a623';
       ctx.lineWidth = 2;
       ctx.beginPath();
-      this.roundRect(btnX, bottomY, btnW, btnH, 8);
+      this.roundRect(btnX, btnY, btnW, btnH, 8);
       ctx.stroke();
       ctx.shadowBlur = 0;
 
       ctx.fillStyle = '#000';
       ctx.font = 'bold 18px monospace';
       ctx.textAlign = 'center';
-      ctx.fillText('CONFIRM', CANVAS_WIDTH / 2, bottomY + btnH / 2 + 6);
+      ctx.fillText('CONFIRM', CANVAS_WIDTH / 2, btnY + btnH / 2 + 6);
 
-      buttons.push({ type: 'confirm', x: btnX, y: bottomY, w: btnW, h: btnH, key: confirmKey });
+      buttons.push({ type: 'confirm', x: btnX, y: btnY, w: btnW, h: btnH, key: confirmKey });
     } else {
       const emptyCrewCount = crew.filter(c => c.role === null).length;
 

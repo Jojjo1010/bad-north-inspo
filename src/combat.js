@@ -4,7 +4,7 @@ import {
   DRIVER_DAMAGE_BUFF, XP_PER_KILL, MAX_RICOCHET_BOLTS, MAX_DAMAGE_NUMBERS,
   UNMANNED_EFFECTIVENESS, GUNNER_DAMAGE_MULT, BRAWLER_DAMAGE_MULT, BRAWLER_GARLIC
 } from './constants.js';
-import { playShoot, playEnemyHit, playEnemyKill, playTrainDamage } from './audio.js';
+import { playShoot, playEnemyHit, playEnemyKill, playTrainDamage, playGarlicTick } from './audio.js';
 import { spawnDamageNumber as spawnAttribution } from './damageAttribution.js';
 
 export class Projectile {
@@ -237,6 +237,7 @@ export class CombatSystem {
           brawler._garlicTickTimer -= dt;
           if (brawler._garlicTickTimer <= 0) {
             brawler._garlicTickTimer = BRAWLER_GARLIC.tickRate * train.totalCooldownMultiplier / banditMult;
+            playGarlicTick();
             const r = BRAWLER_GARLIC.radius * areaMult;
             const r2 = r * r;
             const mx = mount.worldX, my = mount.worldY;
@@ -252,7 +253,7 @@ export class CombatSystem {
                 const ex = e.x, ey = e.y, ecolor = e.color;
                 // Strong knockback away from brawler
                 const dist = Math.sqrt(distSq) || 1;
-                const pushStr = 200;
+                const pushStr = 250;
                 e.knockbackVX += (dx / dist) * pushStr;
                 e.knockbackVY += (dy / dist) * pushStr;
                 e.takeDamage(dmg);

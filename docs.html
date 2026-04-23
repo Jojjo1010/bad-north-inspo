@@ -228,6 +228,18 @@
       <h2 style="color:var(--accent); margin-bottom:24px;">Changelog</h2>
 
       <div class="card" style="margin-bottom:16px; padding:16px; background:var(--bg-1); border:1px solid var(--border); border-radius:var(--radius-lg);">
+        <h3 style="color:var(--text); font-size:15px; margin-bottom:8px;">2026-04-23 — Hit feedback tuning</h3>
+        <ul style="color:var(--text-muted); font-size:13px; line-height:1.8; padding-left:20px;">
+          <li><strong>Hit flash:</strong> Duration increased from 0.05s to 0.12s (visible for ~7 frames instead of ~3)</li>
+          <li><strong>Scale bump:</strong> Enemies scale up 15% during hit flash for visible impact feedback</li>
+          <li><strong>Knockback strength:</strong> Projectile knockback increased from 80 to 120</li>
+          <li><strong>Garlic knockback:</strong> Brawler garlic push increased from 200 to 250</li>
+          <li><strong>Knockback decay:</strong> Reduced from 12 to 8 for longer, more visible knockback</li>
+          <li><strong>Knockback easing:</strong> Added 60ms "stick" phase — full force maintained before decay kicks in for punchier feel</li>
+        </ul>
+      </div>
+
+      <div class="card" style="margin-bottom:16px; padding:16px; background:var(--bg-1); border:1px solid var(--border); border-radius:var(--radius-lg);">
         <h3 style="color:var(--text); font-size:15px; margin-bottom:8px;">2026-04-23</h3>
         <ul style="color:var(--text-muted); font-size:13px; line-height:1.8; padding-left:20px;">
           <li><strong>Crew roles:</strong> Pick Gunner or Brawler before each world — no weapon slot at start, no more Engineer/Medic</li>
@@ -531,7 +543,7 @@
       { section: 'Zombies', group: 'Shared', key: 'ENEMY_RADIUS', label: 'Base Size', desc: 'Base collision radius before tier multipliers', default: 6, min: 2, max: 30, step: 1 },
       { section: 'Zombies', group: 'Shared', key: 'ENEMY_CONTACT_DAMAGE', label: 'Contact Damage', desc: 'Damage when a zombie reaches your train', default: 8, min: 1, max: 30, step: 1 },
       { section: 'Zombies', group: 'Spawning', key: 'ENEMY_SPAWN_INTERVAL_START', label: 'Spawn Rate (start)', desc: 'Seconds between spawns at start — lower = more', default: 2.0, min: 0.2, max: 5, step: 0.1 },
-      { section: 'Zombies', group: 'Spawning', key: 'ENEMY_SPAWN_INTERVAL_MIN', label: 'Spawn Rate (fastest)', desc: 'Minimum interval at max difficulty', default: 0.25, min: 0.05, max: 2, step: 0.05 },
+      { section: 'Zombies', group: 'Spawning', key: 'ENEMY_SPAWN_INTERVAL_MIN', label: 'Spawn Rate (fastest)', desc: 'Minimum interval at max difficulty', default: 0.5, min: 0.05, max: 2, step: 0.05 },
       { section: 'Zombies', group: 'Purple (easy)', key: 'ENEMY_PURPLE_RADIUS_MULT', label: 'Size Multiplier', desc: 'How big relative to base size', default: 1.5, min: 0.5, max: 5, step: 0.25 },
       { section: 'Zombies', group: 'Purple (easy)', key: 'ENEMY_PURPLE_HP_MULT', label: 'HP Multiplier', desc: 'HP relative to base HP', default: 1, min: 0.5, max: 5, step: 0.5 },
       { section: 'Zombies', group: 'Red — medium', key: 'ENEMY_RED_RADIUS_MULT', label: 'Size Multiplier', desc: 'How big relative to base size', default: 5, min: 1, max: 10, step: 0.5 },
@@ -586,7 +598,6 @@
 
       // Crew Roles
       { section: 'Crew Roles', color: 'amber', key: 'GUNNER_DAMAGE_MULT', label: 'Gunner Damage Mult', desc: 'Damage multiplier for Gunner role', default: 1.6, min: 1, max: 3, step: 0.1 },
-      { section: 'Crew Roles', key: 'BRAWLER_DAMAGE_MULT', label: 'Brawler Damage Mult', desc: 'Gun damage multiplier for Brawler (unused - Brawler has garlic)', default: 0.6, min: 0.1, max: 1.5, step: 0.1 },
       { section: 'Crew Roles', key: 'GUNNER_FIGHT_DURATION_MULT', label: 'Gunner Fight Duration', desc: 'Multiplier for bandit fight time (Gunner takes longer)', default: 2.0, min: 1, max: 5, step: 0.5 },
 
       // Progression
@@ -596,7 +607,15 @@
       { section: 'Progression', key: 'WAVE_CYCLE_DURATION', label: 'Wave Cycle Duration', desc: 'Total seconds per wave cycle (surge + calm)', default: 12, min: 5, max: 60, step: 1 },
       { section: 'Progression', key: 'WAVE_SURGE_DURATION', label: 'Wave Surge Duration', desc: 'Seconds of heavy spawning per cycle', default: 5, min: 1, max: 30, step: 1 },
       { section: 'Progression', key: 'WAVE_CALM_DURATION', label: 'Wave Calm Duration', desc: 'Seconds of reduced spawning per cycle', default: 5, min: 1, max: 30, step: 1 },
+      { section: 'Progression', key: 'WAVE_SURGE_SPAWN_MULT', label: 'Surge Spawn Mult', desc: 'Spawn rate multiplier during surge phase', default: 2.0, min: 0.5, max: 5, step: 0.25 },
+      { section: 'Progression', key: 'WAVE_CALM_SPAWN_MULT', label: 'Calm Spawn Mult', desc: 'Spawn rate multiplier during calm phase', default: 0.5, min: 0.1, max: 2, step: 0.1 },
+      { section: 'Progression', key: 'WAVE_ESCALATION', label: 'Wave Escalation', desc: 'Per-wave difficulty increase (0.10 = +10% each wave)', default: 0.10, min: 0, max: 0.5, step: 0.01 },
+      { section: 'Progression', key: 'WAVE_WARNING_DURATION', label: 'Wave Warning', desc: 'Seconds of warning before a surge begins', default: 3, min: 0, max: 10, step: 0.5 },
+      { section: 'Progression', key: 'WAVE_BOSS_SURGE_MULT', label: 'Boss Surge Mult', desc: 'Extra intense spawn multiplier for boss waves', default: 3.5, min: 1, max: 8, step: 0.25 },
+      { section: 'Progression', key: 'UNMANNED_EFFECTIVENESS', label: 'Unmanned Effectiveness', desc: 'Weapon effectiveness without crew (0.10 = near-useless)', default: 0.10, min: 0, max: 1, step: 0.05 },
       { section: 'Progression', key: 'BANDIT_SPAWN_INTERVAL', label: 'Bandit Spawn Interval', desc: 'Seconds between bandit spawns', default: 12, min: 5, max: 60, step: 1 },
+      { section: 'Progression', key: 'BANDIT_SPEED', label: 'Bandit Speed', desc: 'How fast bandits approach your train', default: 110, min: 30, max: 300, step: 5 },
+      { section: 'Progression', key: 'BANDIT_FIGHT_DURATION', label: 'Bandit Fight Duration', desc: 'Seconds to fight off a bandit at a mount', default: 0.5, min: 0.1, max: 3, step: 0.1 },
       { section: 'Progression', key: 'BANDIT_STEAL_RATE', label: 'Bandit Steal Rate', desc: 'Gold per second stolen by bandits (0 = disabled)', default: 0, min: 0, max: 20, step: 1 },
 
       // World
