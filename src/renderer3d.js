@@ -732,9 +732,7 @@ export class Renderer3D {
         if (mount.hasAutoWeapon) {
           const modelMap = { turret: 'AutoGun', autoLaser: 'Garlic', ricochetShot: 'Laser' };
           desiredType = modelMap[mount.autoWeaponId] || null;
-        } else if (mount.isManned && mount.crew && mount.crew.role === 'Brawler') {
-          desiredType = 'Garlic';
-        } else if (mount.isManned) {
+        } else if (mount.isManned && !(mount.crew && mount.crew.role === 'Brawler')) {
           desiredType = 'Gun';
         }
         // Empty mount = no model
