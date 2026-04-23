@@ -79,6 +79,7 @@ export class InputManager {
 
     // Keyboard
     window.addEventListener('keydown', (e) => {
+      if (e.code === 'Tab') e.preventDefault();
       if (!this.keysDown.has(e.code)) {
         this._keysPressed.add(e.code);
       }

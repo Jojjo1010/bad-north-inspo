@@ -318,7 +318,7 @@ function getSelectedMount() {
 
 // Cycle crew selection with Shift key
 function handleShiftCycle() {
-  if (!input.keyPressed('ShiftLeft') && !input.keyPressed('ShiftRight')) return;
+  if (!input.keyPressed('Tab')) return;
   if (!train || train.crew.length === 0) return;
   if (!selectedCrew) {
     selectedCrew = train.crew[0];
@@ -1837,7 +1837,7 @@ function updateZoneMap() {
   const reachable = getReachableStations();
 
   // Keyboard navigation through reachable stations
-  if (input.keyPressed('ArrowRight') || input.keyPressed('KeyD') || input.keyPressed('Tab')) {
+  if (input.keyPressed('ArrowRight') || input.keyPressed('KeyD')) {
     kbZoneIndex = Math.min(reachable.length - 1, kbZoneIndex + 1);
   }
   if (input.keyPressed('ArrowLeft') || input.keyPressed('KeyA')) {
