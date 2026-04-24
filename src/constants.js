@@ -7,6 +7,7 @@ export const CANVAS_WIDTH = 960;
 export const CANVAS_HEIGHT = 640;
 
 // Camera zoom — scales the orthographic frustum (and all 2D overlays proportionally).
+// 1.0 = original, 1.5 = 50% closer. Adjust this single value to zoom in/out.
 export const CAMERA_ZOOM = 1.5;
 
 // Train
