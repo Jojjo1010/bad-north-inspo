@@ -1,16 +1,15 @@
 import {
   CANVAS_WIDTH, CANVAS_HEIGHT,
   BANDIT_SPEED, BANDIT_SPAWN_INTERVAL, BANDIT_JUMP_DURATION,
-  BANDIT_STEAL_RATE, BANDIT_FIGHT_DURATION, MAX_BANDITS,
-  GUNNER_FIGHT_DURATION_MULT
+  BANDIT_STEAL_RATE, BANDIT_FIGHT_DURATION, BANDIT_CARGO_DAMAGE_RATE, MAX_BANDITS
 } from './constants.js';
-import { startStealLoop, stopStealLoop, playStealCoin } from './audio.js';
+import { stopStealLoop } from './audio.js';
 import { spawnDamageNumber as spawnAttribution } from './damageAttribution.js';
 
 const STATES = {
   RUNNING: 0,    // running alongside the track
   JUMPING: 1,    // leaping onto the train
-  ON_TRAIN: 2,   // sitting on a slot (stealing or disabling)
+  ON_TRAIN: 2,   // sitting on a cargo car (damaging it)
   FIGHTING: 3,   // crew is fighting them off
   DEAD: 4,       // kicked off, dying animation
 };
@@ -18,8 +17,8 @@ const STATES = {
 export { STATES as BANDIT_STATES };
 
 // Escalation: smooth ramps, not step functions
-const BANDIT_GRACE_PERIOD = 2.5;     // 0–2.5s: no stealing (just settled in; was 4)
-const BANDIT_STEAL_RAMP = 3;         // seconds after grace to reach full steal rate (was 5)
+const BANDIT_GRACE_PERIOD = 2.5;     // 0-2.5s: no cargo damage (just settled in)
+const BANDIT_STEAL_RAMP = 3;         // seconds after grace to reach full damage rate
 const BANDIT_HP_START = 10;          // seconds before HP drain begins
 const BANDIT_HP_RAMP = 4;            // seconds to reach max HP drain rate
 const BANDIT_MAX_HP_RATE = 0.5;      // max HP/s per bandit (was 1.0 instant)
@@ -30,7 +29,8 @@ export class Bandit {
     this.state = STATES.RUNNING;
     this.x = 0;
     this.y = 0;
-    this.targetSlot = null;
+    this.targetSlot = null;   // the cargo car's banditSlot
+    this.targetCar = null;    // the cargo TrainCar object
     this.timer = 0;
     this.runSpeed = 0;
     this.side = 1; // 1 = below track, -1 = above track
@@ -38,7 +38,7 @@ export class Bandit {
     this.jumpStartY = 0;
     this.stealAccumulator = 0;
     this.flashTimer = 0;
-    this.stealFlash = 0; // timer for showing "-gold" number
+    this.stealFlash = 0;
     this.totalStolen = 0;
     this.deathVx = 0;
     this.deathVy = 0;
@@ -46,12 +46,13 @@ export class Bandit {
     this.justDied = false; // flag for BanditSystem spawn cooldown
   }
 
-  spawn(x, y, targetSlot, side) {
+  spawn(x, y, targetSlot, side, targetCar) {
     this.active = true;
     this.state = STATES.RUNNING;
     this.x = x;
     this.y = y;
     this.targetSlot = targetSlot;
+    this.targetCar = targetCar;
     this.side = side;
     this.runSpeed = BANDIT_SPEED * (0.9 + Math.random() * 0.2);
     this.timer = 0;
@@ -111,32 +112,42 @@ export class Bandit {
       }
 
       case STATES.ON_TRAIN: {
-        // Stay on the slot
+        // Stay on the cargo car
         this.x = this.targetSlot.worldX;
         this.y = this.targetSlot.worldY;
         this.timeOnSlot += dt;
         this.dwellTime += dt;
 
-        // PROTOTYPE: bandits ONLY degrade the mount (handled in combat.js).
-        // No gold stealing, no HP drain.
+        // Damage the cargo car over time (with grace period ramp)
+        if (this.targetCar && this.targetCar.alive) {
+          const dmgRampT = Math.max(0, this.dwellTime - BANDIT_GRACE_PERIOD);
+          const dmgFactor = Math.min(1, dmgRampT / BANDIT_STEAL_RAMP);
+          const damage = BANDIT_CARGO_DAMAGE_RATE * dmgFactor * dt;
+          this.targetCar.hp -= damage;
+          if (this.targetCar.hp <= 0) {
+            this.targetCar.hp = 0;
+            this.targetCar.alive = false;
+            // Cargo destroyed — bandit leaves
+            this.die();
+            break;
+          }
+        }
 
         if (this.stealFlash > 0) this.stealFlash -= dt;
 
         // Check if crew just arrived at this slot
         if (this.targetSlot.crew) {
           const crew = this.targetSlot.crew;
-          if (crew.role === 'Brawler') {
-            // Brawler: instant kick-off + AOE damage burst
-            this._brawlerKick = true; // signal for main.js to apply AOE
+          if (crew.isBrawler) {
+            // Brawler upgrade: instant kick-off + AOE damage burst
+            this._brawlerKick = true;
             this._kickWorldX = this.targetSlot.worldX;
             this._kickWorldY = this.targetSlot.worldY;
             this._kickCrew = crew;
             this.die();
           } else {
             this.state = STATES.FIGHTING;
-            this.timer = crew.role === 'Gunner'
-              ? BANDIT_FIGHT_DURATION * GUNNER_FIGHT_DURATION_MULT
-              : BANDIT_FIGHT_DURATION;
+            this.timer = BANDIT_FIGHT_DURATION;
           }
         }
         break;
@@ -182,6 +193,7 @@ export class Bandit {
   }
 
   getWeaponFactor() {
+    // Bandits no longer sit on weapon mounts, but keep this for compat
     if (this.state !== STATES.ON_TRAIN && this.state !== STATES.FIGHTING) return null;
     if (this.timeOnSlot < 2) return 0.75;
     if (this.timeOnSlot < 5) return 0.30;
@@ -194,6 +206,7 @@ export class Bandit {
       this.targetSlot._bandit = null;
       this.targetSlot = null; // clear so renderer uses b.x/b.y for positioning
     }
+    this.targetCar = null;
     this.state = STATES.DEAD;
     this.justDied = true;
     this._brawlerKicked = false;
@@ -259,17 +272,18 @@ export class BanditSystem {
   }
 
   trySpawn(train) {
-    // Find unmanned slots (no crew, and no bandit already there)
-    const availableSlots = train.allMounts.filter(
-      m => !m.crew && !m._bandit
+    // Find alive cargo cars with no bandit already on them
+    const availableCars = train.aliveCargoCars.filter(
+      car => car.banditSlot && !car.banditSlot._bandit
     );
-    if (availableSlots.length === 0) return;
+    if (availableCars.length === 0) return;
 
     const bandit = this.pool.find(b => !b.active);
     if (!bandit) return;
 
-    // Pick a random available slot
-    const slot = availableSlots[Math.floor(Math.random() * availableSlots.length)];
+    // Pick a random available cargo car
+    const car = availableCars[Math.floor(Math.random() * availableCars.length)];
+    const slot = car.banditSlot;
 
     // Spawn from ahead of the train (right side), above or below track
     const side = Math.random() < 0.5 ? -1 : 1;
@@ -277,10 +291,18 @@ export class BanditSystem {
     const trackY = CANVAS_HEIGHT / 2;
     const y = trackY + side * (40 + Math.random() * 30);
 
-    bandit.spawn(x, y, slot, side);
+    bandit.spawn(x, y, slot, side, car);
   }
 
-  // Check if a mount has a bandit on it (used to disable weapons)
+  // Check if a cargo car's bandit slot has a bandit on it
+  hasBanditOnCar(car) {
+    if (!car.banditSlot) return false;
+    const b = car.banditSlot._bandit;
+    return b != null && b.active &&
+      (b.state === STATES.ON_TRAIN || b.state === STATES.FIGHTING);
+  }
+
+  // Legacy compat — check if a mount has a bandit (bandits no longer target mounts)
   hasBandit(mount) {
     return mount._bandit != null && mount._bandit.active &&
       (mount._bandit.state === STATES.ON_TRAIN || mount._bandit.state === STATES.FIGHTING);
@@ -294,6 +316,7 @@ export class BanditSystem {
         b.targetSlot._bandit = null;
         b.targetSlot = null;
       }
+      b.targetCar = null;
     }
     this.spawnTimer = 15;
   }

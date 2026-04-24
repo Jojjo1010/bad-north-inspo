@@ -135,6 +135,11 @@ export class Spawner {
     this.wavePhaseTimer = 0; // time remaining in current phase
     this.isBossStation = false;
     this.postSurgeSilenceTimer = 0; // seconds of near-silence after surge ends
+
+    // Wave targeting — which car indices this wave attacks
+    // Train layout: [weapon(0), cargo(1), weapon(2), cargo(3), weapon(4)]
+    this.targetCarIndices = [];
+    this.targetCarWorldBounds = []; // {x, y, w, h} for each targeted car
   }
 
   get activeEnemies() {
@@ -161,6 +166,9 @@ export class Spawner {
       surgeLabel,
       modifier: this.modifier || null,
       direction: this.waveDirection || 'right',
+      targetCarIndices: this.targetCarIndices,
+      targetCarWorldBounds: this.targetCarWorldBounds,
+      targetApproachDir: this.targetApproachDir || 'both',
     };
   }
 
@@ -184,6 +192,9 @@ export class Spawner {
             else if (r < 0.80) this.waveDirection = 'bottom';
             else               this.waveDirection = 'both';
           }
+          // Pick which cars this wave targets
+          // Layout: [weapon(0), cargo(1), weapon(2), cargo(3), weapon(4)]
+          this._pickTargetCars();
         }
         break;
 
@@ -211,6 +222,35 @@ export class Spawner {
     }
   }
 
+  /** Pick 1-2 target car indices for the upcoming wave */
+  _pickTargetCars() {
+    // Dynamic based on actual car count
+    const numCars = this._allCarBounds ? this._allCarBounds.length : 8;
+    const cargoIndices = [1, 4, 7].filter(i => i < numCars);
+    const weaponIndices = [0, 2, 3, 5, 6].filter(i => i < numCars);
+    const roll = Math.random();
+    if (roll < 0.50 && cargoIndices.length > 0) {
+      // One cargo car
+      this.targetCarIndices = [cargoIndices[Math.floor(Math.random() * cargoIndices.length)]];
+    } else if (roll < 0.80 && weaponIndices.length > 0) {
+      // One weapon car
+      this.targetCarIndices = [weaponIndices[Math.floor(Math.random() * weaponIndices.length)]];
+    } else {
+      // Two cars — one from each end of the train
+      const front = Math.floor(Math.random() * Math.min(3, numCars));
+      const back = numCars - 1 - Math.floor(Math.random() * Math.min(3, numCars));
+      this.targetCarIndices = front !== back ? [front, back] : [front];
+    }
+    // Bounds will be set in update() when allCarBounds is available
+    this.targetCarWorldBounds = [];
+
+    // Pick approach direction: 40% top, 40% bottom, 20% both
+    const dirRoll = Math.random();
+    if (dirRoll < 0.40)      this.targetApproachDir = 'top';
+    else if (dirRoll < 0.80) this.targetApproachDir = 'bottom';
+    else                     this.targetApproachDir = 'both';
+  }
+
   /** Get the spawn rate multiplier based on current wave phase */
   getWaveSpawnMultiplier() {
     const escalation = 1 + this.waveNumber * WAVE_ESCALATION;
@@ -229,12 +269,20 @@ export class Spawner {
     }
   }
 
-  update(dt, distance, carBounds, stationDifficulty = 1) {
+  update(dt, distance, carBounds, stationDifficulty = 1, allCarBounds = null) {
+    this._allCarBounds = allCarBounds;
     // Update wave state
     this.updateWave(dt);
     // Tick post-surge silence timer
     if (this.postSurgeSilenceTimer > 0) this.postSurgeSilenceTimer -= dt;
     const waveMult = this.getWaveSpawnMultiplier();
+
+    // Refresh targeted car world bounds from allCarBounds each frame
+    if (allCarBounds && this.targetCarIndices.length > 0) {
+      this.targetCarWorldBounds = this.targetCarIndices
+        .filter(i => i < allCarBounds.length)
+        .map(i => allCarBounds[i]);
+    }
 
     // Difficulty scales with distance AND station depth (unchanged)
     const distDiff = 1 + (distance / TARGET_DISTANCE) * 1.2;
@@ -273,9 +321,32 @@ export class Spawner {
     let x, y;
     const margin = 30;
     const dir = this.waveDirection || 'right';
+    const isDirectedPhase = this.wavePhase === WAVE_PHASE.WARNING || this.wavePhase === WAVE_PHASE.SURGE;
+    const approachDir = this.targetApproachDir || 'both';
 
-    if (dir === 'right') {
-      // Original multi-edge spawning (tutorial/right waves)
+    if (isDirectedPhase && this.targetCarWorldBounds.length > 0) {
+      // During WARNING/SURGE: spawn from approach direction, near targeted car's x
+      const targetCar = this.targetCarWorldBounds[
+        Math.floor(Math.random() * this.targetCarWorldBounds.length)
+      ];
+      const carCenterX = targetCar.x + targetCar.w / 2;
+      // Spread x position around the targeted car (±80px)
+      x = carCenterX + (Math.random() - 0.5) * 160;
+
+      let spawnSide;
+      if (approachDir === 'both') {
+        spawnSide = Math.random() < 0.5 ? 'top' : 'bottom';
+      } else {
+        spawnSide = approachDir;
+      }
+
+      if (spawnSide === 'top') {
+        y = -margin;
+      } else {
+        y = CANVAS_HEIGHT + margin;
+      }
+    } else if (dir === 'right') {
+      // Calm phase / tutorial: original multi-edge spawning
       const edge = Math.random();
       if (edge < 0.30) {
         x = Math.random() * CANVAS_WIDTH;
@@ -291,24 +362,20 @@ export class Spawner {
         y = Math.random() * CANVAS_HEIGHT;
       }
     } else {
-      // Directional wave spawn
-      const trainX = CANVAS_WIDTH * 0.3;
-      const trainY = CANVAS_HEIGHT / 2;
-
-      let spawnSide;
-      if (dir === 'both') {
-        spawnSide = Math.random() < 0.5 ? 'top' : 'bottom';
-      } else {
-        spawnSide = dir; // 'top' or 'bottom'
-      }
-
-      if (spawnSide === 'top') {
+      // Calm phase with directional wave (general threat from all sides)
+      const edge = Math.random();
+      if (edge < 0.30) {
         x = Math.random() * CANVAS_WIDTH;
         y = -margin;
-      } else {
-        // bottom
+      } else if (edge < 0.60) {
         x = Math.random() * CANVAS_WIDTH;
         y = CANVAS_HEIGHT + margin;
+      } else if (edge < 0.85) {
+        x = -margin;
+        y = Math.random() * CANVAS_HEIGHT;
+      } else {
+        x = CANVAS_WIDTH + margin;
+        y = Math.random() * CANVAS_HEIGHT;
       }
     }
 
@@ -323,16 +390,29 @@ export class Spawner {
     enemy.name = ENEMY_TIER_NAMES[colorIdx];
     enemy.kind = Math.random() < 0.6 ? 'zombie' : 'bug';
 
-    // Pick target: 70% cargo, 15% rear weapon, 15% front weapon
-    let targetBounds = carBounds.cargo; // default
-    const targetRoll = Math.random();
-    if (targetRoll < 0.70) {
-      targetBounds = carBounds.cargo;
-    } else if (targetRoll < 0.85) {
-      targetBounds = carBounds.rearWeapon;
+    // Pick target: use wave-targeted car bounds if available, else fall back to old behavior
+    let targetBounds;
+    if (this.targetCarWorldBounds.length > 0 &&
+        (this.wavePhase === WAVE_PHASE.WARNING || this.wavePhase === WAVE_PHASE.SURGE)) {
+      // Pick a random targeted car
+      targetBounds = this.targetCarWorldBounds[
+        Math.floor(Math.random() * this.targetCarWorldBounds.length)
+      ];
     } else {
-      targetBounds = carBounds.frontWeapon;
+      // Calm phase / fallback: 70% cargo, 15% rear weapon, 15% front weapon
+      const targetRoll = Math.random();
+      if (targetRoll < 0.70) {
+        targetBounds = carBounds.cargo;
+      } else if (targetRoll < 0.85) {
+        targetBounds = carBounds.rearWeapon;
+      } else {
+        targetBounds = carBounds.frontWeapon;
+      }
     }
+
+    // Store the target center on the enemy for indicator use
+    enemy.targetCarCenterX = targetBounds.x + targetBounds.w / 2;
+    enemy.targetCarCenterY = targetBounds.y + targetBounds.h / 2;
 
     enemy.spawn(x, y, hp, speed, targetBounds);
   }
@@ -349,6 +429,9 @@ export class Spawner {
     this.postSurgeSilenceTimer = 0;
     this.modifier = null;
     this.waveDirection = 'right';
+    this.targetApproachDir = 'both';
+    this.targetCarIndices = [];
+    this.targetCarWorldBounds = [];
   }
 
   /** Apply Ambush modifier — skip calm, start immediately in surge */

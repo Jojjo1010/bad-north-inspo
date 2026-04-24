@@ -1,4 +1,4 @@
-import { MOUNT_RADIUS, CREW_RADIUS } from './constants.js';
+import { MOUNT_RADIUS, CREW_RADIUS, CAMERA_ZOOM } from './constants.js';
 
 export class InputManager {
   constructor(canvas) {
@@ -132,10 +132,11 @@ export class InputManager {
            this.mouseY >= y && this.mouseY <= y + h;
   }
 
-  findSlotAtMouse(train) {
+  findSlotAtMouse(train, cameraOffsetX = 0) {
     for (const slot of train.allSlots) {
-      const r = slot.isDriverSeat ? CREW_RADIUS + 4 : MOUNT_RADIUS + 6;
-      const sx = slot.screenX !== undefined ? slot.screenX : slot.worldX;
+      const r = (slot.isDriverSeat ? CREW_RADIUS + 4 : MOUNT_RADIUS + 6) * CAMERA_ZOOM;
+      // screenX is already in screen space; worldX needs camera offset
+      const sx = slot.screenX !== undefined ? slot.screenX : (slot.worldX - cameraOffsetX);
       const sy = slot.screenY !== undefined ? slot.screenY : slot.worldY;
       if (this.hitCircle(sx, sy, r)) return slot;
     }
@@ -144,7 +145,7 @@ export class InputManager {
 
   findCrewInPanel(crew) {
     for (const c of crew) {
-      if (c.assignment || c.isMoving) continue;
+      if (!c.alive || c.assignment || c.isMoving) continue;
       if (c.panelX !== undefined && this.hitCircle(c.panelX, c.panelY, CREW_RADIUS + 6)) return c;
     }
     return null;

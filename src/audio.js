@@ -212,47 +212,12 @@ export function playZoneCompleteMp3() { playMp3('assets/zonecomplete.mp3', 0.7);
 export function playWinWorldMp3() { playMp3('assets/winworld.mp3', 0.7); }
 export function playDefeatMp3() { playMp3('assets/loose.mp3', 0.7); }
 
-export function playWeaponAcquire() {
-  const c = getCtx();
-  // Three ascending tones: C5 → E5 → G5 (523Hz → 659Hz → 784Hz)
-  const tones = [523, 659, 784];
-  const noteDuration = 0.08;
-  tones.forEach((freq, i) => {
-    const osc = c.createOscillator();
-    const g = sfxGain(0.15);
-    osc.type = 'triangle';
-    osc.frequency.value = freq;
-    const start = c.currentTime + i * noteDuration;
-    const end = start + noteDuration;
-    g.gain.setValueAtTime(0.15, start);
-    g.gain.exponentialRampToValueAtTime(0.001, end + 0.05);
-    osc.connect(g);
-    osc.start(start);
-    osc.stop(end + 0.05);
-  });
-}
-
-export function playStealCoin() {
-  // Try MP3 first, fallback to synth
-  playMp3('assets/steal.mp3', 1.0).catch(() => {});
-  // Also play a synth coin-loss sound so it's always audible
-  const c = getCtx();
-  const osc = c.createOscillator();
-  const g = sfxGain(0.4);
-  osc.type = 'sine';
-  osc.frequency.setValueAtTime(600, c.currentTime);
-  osc.frequency.exponentialRampToValueAtTime(200, c.currentTime + 0.15);
-  g.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.18);
-  osc.connect(g);
-  osc.start(c.currentTime);
-  osc.stop(c.currentTime + 0.18);
-}
 
 // Preload all MP3 SFX so first play is instant
 export async function preloadSfx() {
   const c = getCtx();
   const urls = [
-    'assets/coin.mp3', 'assets/steal.mp3', 'assets/levelup.mp3',
+    'assets/coin.mp3', 'assets/levelup.mp3',
     'assets/zonecomplete.mp3', 'assets/winworld.mp3', 'assets/loose.mp3',
     'assets/kick.mp3'
   ];
@@ -264,45 +229,11 @@ export async function preloadSfx() {
       mp3Cache[url] = await c.decodeAudioData(arrayBuf);
     } catch (e) { /* ignore missing files */ }
   }));
-  // Also preload steal loop buffer
-  await loadStealBuffer().catch(() => {});
 }
 
-// --- LOOPING STEAL SFX ---
-let stealSource = null;
-let stealBuffer = null;
-let stealPlaying = false;
+// stopStealLoop is called defensively by bandits.js — keep as no-op
+export function stopStealLoop() {}
 
-async function loadStealBuffer() {
-  if (stealBuffer) return stealBuffer;
-  const c = getCtx();
-  const resp = await fetch('assets/steal.mp3');
-  const arrayBuf = await resp.arrayBuffer();
-  stealBuffer = await c.decodeAudioData(arrayBuf);
-  return stealBuffer;
-}
-
-export async function startStealLoop() {
-  if (stealPlaying) return;
-  const c = getCtx();
-  stealPlaying = true;
-  const buf = await loadStealBuffer();
-  if (!stealPlaying) return;
-  stealSource = c.createBufferSource();
-  stealSource.buffer = buf;
-  stealSource.loop = true;
-  stealSource.connect(sfxGainNode);
-  stealSource.start();
-}
-
-export function stopStealLoop() {
-  stealPlaying = false;
-  if (stealSource) {
-    try { stealSource.stop(); } catch(e) {}
-    try { stealSource.disconnect(); } catch(e) {}
-    stealSource = null;
-  }
-}
 
 // --- BACKGROUND MUSIC (MP3 file, looping) ---
 async function loadMusicBuffer() {

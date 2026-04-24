@@ -1,19 +1,15 @@
 import {
   CANVAS_WIDTH, CANVAS_HEIGHT,
   MAX_PROJECTILES, PROJECTILE_SPEED, PROJECTILE_LIFETIME, PROJECTILE_RADIUS,
-  DRIVER_DAMAGE_BUFF, XP_PER_KILL, MAX_RICOCHET_BOLTS, MAX_DAMAGE_NUMBERS,
-  UNMANNED_EFFECTIVENESS, GUNNER_DAMAGE_MULT, BRAWLER_DAMAGE_MULT, BRAWLER_GARLIC
 } from './constants.js';
 import { playShoot, playEnemyHit, playEnemyKill, playTrainDamage, playGarlicTick } from './audio.js';
-import { spawnDamageNumber as spawnAttribution } from './damageAttribution.js';
+import { BANDIT_STATES } from './bandits.js';
 
 export class Projectile {
   constructor() {
     this.active = false;
-    this.x = 0;
-    this.y = 0;
-    this.vx = 0;
-    this.vy = 0;
+    this.x = 0; this.y = 0;
+    this.vx = 0; this.vy = 0;
     this.damage = 0;
     this.lifetime = 0;
     this.radius = PROJECTILE_RADIUS;
@@ -23,8 +19,7 @@ export class Projectile {
 
   spawn(x, y, angle, damage, source = 'crew', color = '#ffeeaa') {
     this.active = true;
-    this.x = x;
-    this.y = y;
+    this.x = x; this.y = y;
     this.vx = Math.cos(angle) * PROJECTILE_SPEED;
     this.vy = Math.sin(angle) * PROJECTILE_SPEED;
     this.damage = damage;
@@ -48,124 +43,28 @@ function normalizeAngle(a) {
   return a;
 }
 
-class DamageNumber {
-  constructor() {
-    this.active = false;
-    this.x = 0;
-    this.y = 0;
-    this.damage = 0;
-    this.life = 0;
-    this.maxLife = 0.6;
-    this.vy = -40; // float upward
-  }
-
-  spawn(x, y, damage) {
-    this.active = true;
-    this.x = x + (Math.random() - 0.5) * 16; // slight spread
-    this.y = y - 10;
-    this.damage = damage;
-    this.life = this.maxLife;
-  }
-
-  update(dt) {
-    if (!this.active) return;
-    this.y += this.vy * dt;
-    this.life -= dt;
-    if (this.life <= 0) this.active = false;
-  }
-}
-
-// MAX_DAMAGE_NUMBERS imported from constants
-
-class RicochetBolt {
-  constructor() {
-    this.active = false;
-    this.x = 0; this.y = 0;
-    this.vx = 0; this.vy = 0;
-    this.damage = 0;
-    this.speed = 300;
-    this.bouncesLeft = 0;
-    this.hitEnemies = new Set();
-  }
-
-  spawn(x, y, angle, damage, bounces, speed) {
-    this.active = true;
-    this.x = x; this.y = y;
-    this.prevX = x; this.prevY = y;
-    this.vx = Math.cos(angle) * speed;
-    this.vy = Math.sin(angle) * speed;
-    this.damage = damage;
-    this.speed = speed;
-    this.bouncesLeft = bounces;
-    this.lifetime = 4; // seconds before expiring if no hits
-    this.hitEnemies.clear();
-  }
-
-  update(dt) {
-    if (!this.active) return;
-    this.prevX = this.x;
-    this.prevY = this.y;
-    this.x += this.vx * dt;
-    this.y += this.vy * dt;
-    this.lifetime -= dt;
-    if (this.lifetime <= 0) { this.active = false; return; }
-
-    // Bounce off screen edges (free, doesn't cost a bounce)
-    if (this.x < 0) { this.x = 0; this.vx = Math.abs(this.vx); }
-    else if (this.x > CANVAS_WIDTH) { this.x = CANVAS_WIDTH; this.vx = -Math.abs(this.vx); }
-    if (this.y < 0) { this.y = 0; this.vy = Math.abs(this.vy); }
-    else if (this.y > CANVAS_HEIGHT) { this.y = CANVAS_HEIGHT; this.vy = -Math.abs(this.vy); }
-  }
-
-  redirectToward(tx, ty) {
-    const dx = tx - this.x;
-    const dy = ty - this.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
-    if (dist > 0) {
-      this.vx = (dx / dist) * this.speed;
-      this.vy = (dy / dist) * this.speed;
-    }
-  }
-}
-
 export class CombatSystem {
   constructor() {
     this.projectiles = [];
     for (let i = 0; i < MAX_PROJECTILES; i++) {
       this.projectiles.push(new Projectile());
     }
+    // Legacy compat — empty arrays
     this.ricochetBolts = [];
-    for (let i = 0; i < MAX_RICOCHET_BOLTS; i++) {
-      this.ricochetBolts.push(new RicochetBolt());
-    }
-    this.damageNumbers = [];
-    for (let i = 0; i < MAX_DAMAGE_NUMBERS; i++) {
-      this.damageNumbers.push(new DamageNumber());
-    }
+    this.damageNumbers = []; // kept empty for renderer compat
     this.pendingLevelUp = false;
-    // Kill effects: consumed each frame by the renderer
-    this.killEffects = []; // { x, y, color }
-    // Muzzle flashes: queued when a crew (manual) weapon fires, consumed each frame
-    this.muzzleFlashes = []; // { x, y }
-    // Hit sparks: queued when a projectile deals non-lethal damage, consumed each frame
-    this.hitSparks = []; // { x, y }
+    this.killEffects = [];
+    this.muzzleFlashes = [];
+    this.hitSparks = [];
   }
 
   handleEnemyDamageResult(e, train, ex = 0, ey = 0, ecolor = '#2d6a2e') {
     if (!e.active) {
       playEnemyKill();
-      const leveled = train.addXP(XP_PER_KILL);
-      if (leveled) this.pendingLevelUp = true;
-      // Queue a kill effect at the enemy's last position
       this.killEffects.push({ x: ex, y: ey, color: ecolor });
     } else {
       playEnemyHit();
     }
-  }
-
-  spawnDamageNumber(x, y, damage) {
-    const d = this.damageNumbers.find(n => !n.active);
-    if (d) d.spawn(x, y, damage);
   }
 
   leadAngle(mount, target) {
@@ -178,207 +77,160 @@ export class CombatSystem {
     return Math.atan2(ly - mount.worldY, lx - mount.worldX);
   }
 
-  update(dt, train, enemies, selectedCrew = null) {
-    // Update existing projectiles
+  update(dt, train, enemies) {
+    // Update projectiles
     for (const p of this.projectiles) p.update(dt);
-    // Update damage numbers
-    for (const d of this.damageNumbers) d.update(dt);
 
-    // Manned weapons — selected crew aims manually, unselected crew auto-targets
-    const hasDriver = train.hasDriver;
     const areaMult = train.totalAreaMultiplier;
 
-    // Unmanned crew mounts: near-useless without crew
-    const UNMANNED_DAMAGE_MULT = UNMANNED_EFFECTIVENESS;
-    const UNMANNED_RATE_MULT = UNMANNED_EFFECTIVENESS * 2;
-
-    // Phase 1: rotate cones — manned crew, auto-weapons, AND unmanned crew mounts
+    // All manned mounts autofire
     for (const mount of train.allMounts) {
-      if (mount.crew === selectedCrew) continue; // selected crew aims via mouse
-      const isAutoWeapon = mount.hasAutoWeapon && !mount.isManned;
-      const isCrew = mount.isManned && !mount.hasAutoWeapon;
-      const isUnmanned = !mount.isManned && !mount.hasAutoWeapon;
-      if (!isAutoWeapon && !isCrew && !isUnmanned) continue;
-      const nearest = this.findClosestEnemy(mount, enemies, areaMult);
+      if (!mount.isManned) continue;
+      const crew = mount.crew;
+
+      // Bandit suppression — use bandit's own degradation factor
+      let banditMult = 1.0;
+      if (mount._bandit) {
+        if (mount._bandit.state !== BANDIT_STATES.ON_TRAIN) { banditMult = 0; }
+        else { banditMult = mount._bandit.getWeaponFactor ? mount._bandit.getWeaponFactor() : 1.0; }
+      }
+      if (banditMult <= 0) continue;
+
+      // Brawler crew: melee AOE instead of projectiles
+      if (crew.isBrawler) {
+        crew._garlicTickTimer -= dt;
+        if (crew._garlicTickTimer <= 0) {
+          const upg = crew.upgrade;
+          crew._garlicTickTimer = upg.garlicTickRate;
+          playGarlicTick();
+          const r = upg.garlicRadius * areaMult;
+          const r2 = r * r;
+          const mx = mount.worldX, my = mount.worldY;
+          const dmg = upg.damage * train.totalDamageMultiplier * banditMult;
+          for (const e of enemies) {
+            if (!e.active) continue;
+            const dx = e.x - mx, dy = e.y - my;
+            const distSq = dx * dx + dy * dy;
+            if (distSq <= r2) {
+              const ex = e.x, ey = e.y, ecolor = e.color;
+              const dist = Math.sqrt(distSq) || 1;
+              e.knockbackVX += (dx / dist) * 250;
+              e.knockbackVY += (dy / dist) * 250;
+              e.takeDamage(dmg);
+              this.handleEnemyDamageResult(e, train, ex, ey, ecolor);
+              if (e.active) this.hitSparks.push({ x: e.x, y: e.y });
+            }
+          }
+        }
+        continue;
+      }
+
+      // Rotate toward nearest enemy (auto-aim, no cone check for rotation)
+      const nearest = this.findTarget(mount, enemies, areaMult, false);
       if (nearest) {
         const desiredAngle = mount.clampAngle(
           Math.atan2(nearest.y - mount.worldY, nearest.x - mount.worldX)
         );
         const diff = normalizeAngle(desiredAngle - mount.coneDirection);
-        // Unmanned rotates slower (sloppy aim without crew)
-        const rotSpeed = isAutoWeapon ? 1.5 : (isCrew ? 2.0 : 0.8);
-        const maxRot = rotSpeed * dt;
+        const maxRot = 2.0 * dt;
         if (Math.abs(diff) < maxRot) {
           mount.coneDirection = desiredAngle;
         } else {
           mount.coneDirection = mount.clampAngle(mount.coneDirection + Math.sign(diff) * maxRot);
         }
       }
-    }
 
-    // Phase 2: fire crew weapons (manned at full power, unmanned at reduced)
-    for (const mount of train.allMounts) {
-      if (mount.hasAutoWeapon) continue; // auto-weapons handled separately
-      // Brawler mounts NEVER fire projectiles — garlic AOE only
-      if (mount.isManned && mount.crew.role === 'Brawler') {
-        const brawler = mount.crew;
-        // Bandit suppression
-        let banditMult = 1.0;
-        if (mount._bandit) {
-          if (mount._bandit.state !== 2) { banditMult = 0; }
-          else {
-            const dwell = mount._bandit.dwellTime;
-            if (dwell < 2) banditMult = 0.75;
-            else if (dwell < 5) banditMult = 0.3;
-            else banditMult = 0;
-          }
-        }
-        if (banditMult > 0) {
-          brawler._garlicTickTimer -= dt;
-          if (brawler._garlicTickTimer <= 0) {
-            brawler._garlicTickTimer = BRAWLER_GARLIC.tickRate * train.totalCooldownMultiplier / banditMult;
-            playGarlicTick();
-            const r = BRAWLER_GARLIC.radius * areaMult;
-            const r2 = r * r;
-            const mx = mount.worldX, my = mount.worldY;
-            let dmg = BRAWLER_GARLIC.damage * train.totalDamageMultiplier * banditMult;
-            if (hasDriver) dmg *= DRIVER_DAMAGE_BUFF;
-            if (train.hasBuddyBonus(mount)) dmg *= 1.15;
-            for (const e of enemies) {
-              if (!e.active) continue;
-              const dx = e.x - mx, dy = e.y - my;
-              const distSq = dx * dx + dy * dy;
-              if (distSq <= r2) {
-                this.spawnDamageNumber(e.x, e.y, Math.min(dmg, e.hp));
-                const ex = e.x, ey = e.y, ecolor = e.color;
-                // Strong knockback away from brawler
-                const dist = Math.sqrt(distSq) || 1;
-                const pushStr = 250;
-                e.knockbackVX += (dx / dist) * pushStr;
-                e.knockbackVY += (dy / dist) * pushStr;
-                e.takeDamage(dmg);
-                this.handleEnemyDamageResult(e, train, ex, ey, ecolor);
-                // Hit spark for visibility
-                if (e.active) this.hitSparks.push({ x: e.x, y: e.y });
-              }
-            }
-          }
-        }
-        continue; // NEVER fall through to projectile firing
-      }
-      const manned = mount.isManned;
-
-      // Bandit suppression: fast degradation (PROTOTYPE timeline)
-      let banditMult = 1.0;
-      if (mount._bandit) {
-        if (mount._bandit.state !== 2) { banditMult = 0; }
-        else {
-          const dwell = mount._bandit.dwellTime;
-          if (dwell < 2)       banditMult = 0.75; // minor (0-2s)
-          else if (dwell < 5)  banditMult = 0.3;  // strong (2-5s)
-          else                 banditMult = 0;     // disabled (5s+)
-        }
-      }
-      if (banditMult <= 0) continue;
-
+      // Fire
       mount.cooldownTimer -= dt;
       if (mount.cooldownTimer > 0) continue;
 
-      if (manned) {
-        // --- Manned: full power, crew bonuses apply ---
-        let angle;
-        if (mount.crew === selectedCrew && mount._fireAngle2D !== undefined) {
-          angle = mount._fireAngle2D;
-        } else {
-          const target = this.findTarget(mount, enemies, areaMult);
-          if (!target) continue;
-          angle = this.leadAngle(mount, target);
-        }
+      const target = this.findTarget(mount, enemies, areaMult);
+      if (!target) continue;
 
-        let damage = mount.damage * train.totalDamageMultiplier * banditMult;
-        if (hasDriver) damage *= DRIVER_DAMAGE_BUFF;
-        if (mount.crew.role === 'Gunner') damage *= GUNNER_DAMAGE_MULT;
-        if (train.hasBuddyBonus(mount)) damage *= 1.15;
+      const angle = this.leadAngle(mount, target);
+      const damage = mount.damage * train.totalDamageMultiplier * banditMult;
 
-        this.fireProjectile(mount.worldX, mount.worldY, angle, damage, 'crew', mount.crew.color);
-        mount.cooldownTimer = (1 / (mount.fireRate * banditMult)) * train.totalCooldownMultiplier;
-        if (mount.screenX !== undefined && mount.screenY !== undefined) {
-          this.muzzleFlashes.push({ x: mount.screenX, y: mount.screenY });
+      // Shotgun spread
+      const upg = crew.upgrade;
+      if (upg && upg.spread) {
+        for (let s = 0; s < upg.spread; s++) {
+          const spreadAngle = angle + (s - (upg.spread - 1) / 2) * 0.12;
+          this.fireProjectile(mount.worldX, mount.worldY, spreadAngle, damage, 'crew', crew.color);
         }
-        playShoot();
       } else {
-        // Unmanned mounts don't fire — crew must be present
-        continue;
-        const target = this.findTarget(mount, enemies, areaMult);
-        if (!target) continue;
-        const angle = this.leadAngle(mount, target);
+        this.fireProjectile(mount.worldX, mount.worldY, angle, damage, 'crew', crew.color);
+      }
 
-        const baseDmg = mount.damage;
-        const damage = baseDmg * train.totalDamageMultiplier * UNMANNED_DAMAGE_MULT * banditMult;
+      mount.cooldownTimer = (1 / (mount.fireRate * banditMult)) * train.totalCooldownMultiplier;
+      if (mount.screenX !== undefined && mount.screenY !== undefined) {
+        this.muzzleFlashes.push({ x: mount.screenX, y: mount.screenY });
+      }
+      playShoot();
+    }
 
-        this.fireProjectile(mount.worldX, mount.worldY, angle, damage, 'unmanned', '#888888');
-        const effectiveRate = mount.fireRate * UNMANNED_RATE_MULT * banditMult;
-        mount.cooldownTimer = (1 / effectiveRate) * train.totalCooldownMultiplier;
+    // Walking brawlers: garlic AOE from their walk position
+    for (const crew of train.crew) {
+      if (!crew.alive || !crew.isMoving || !crew.isBrawler) continue;
+      const upg = crew.upgrade;
+      crew._garlicTickTimer -= dt;
+      if (crew._garlicTickTimer <= 0) {
+        crew._garlicTickTimer = upg.garlicTickRate;
+        playGarlicTick();
+        const r = upg.garlicRadius * areaMult;
+        const r2 = r * r;
+        const mx = crew.moveX, my = crew.moveY;
+        const dmg = upg.damage * train.totalDamageMultiplier;
+        for (const e of enemies) {
+          if (!e.active) continue;
+          const dx = e.x - mx, dy = e.y - my;
+          const distSq = dx * dx + dy * dy;
+          if (distSq <= r2) {
+            const ex = e.x, ey = e.y, ecolor = e.color;
+            const dist = Math.sqrt(distSq) || 1;
+            e.knockbackVX += (dx / dist) * 250;
+            e.knockbackVY += (dy / dist) * 250;
+            e.takeDamage(dmg);
+            this.handleEnemyDamageResult(e, train, ex, ey, ecolor);
+            if (e.active) this.hitSparks.push({ x: e.x, y: e.y });
+          }
+        }
       }
     }
 
     // Projectile-enemy collision
     this.checkProjectileHits(enemies, train);
 
-    // Auto-weapons (VS-style)
-    this.updateAutoWeapons(dt, train, enemies);
-
     // Enemy-train collision
     this.checkEnemyTrainCollision(enemies, train);
   }
 
-  // Find nearest enemy in range, no cone restriction (for auto-aiming crew)
-  findClosestEnemy(mount, enemies, areaMult = 1) {
+  // Single pass: find closest enemy in range. If checkCone, also requires cone match.
+  findTarget(mount, enemies, areaMult = 1, checkCone = true) {
     let closest = null;
     const range = mount.range * areaMult;
     let closestDist = range * range;
-
     for (const e of enemies) {
       if (!e.active) continue;
       const dx = e.x - mount.worldX;
       const dy = e.y - mount.worldY;
       const distSq = dx * dx + dy * dy;
-      if (distSq < closestDist) {
-        closest = e;
-        closestDist = distSq;
+      if (distSq >= closestDist) continue;
+      if (checkCone) {
+        const angleToEnemy = Math.atan2(dy, dx);
+        const diff = Math.abs(normalizeAngle(angleToEnemy - mount.coneDirection));
+        if (diff > mount.coneHalfAngle) continue;
       }
-    }
-    return closest;
-  }
-
-  findTarget(mount, enemies, areaMult = 1) {
-    let closest = null;
-    const range = mount.range * areaMult;
-    let closestDist = range * range;
-
-    for (const e of enemies) {
-      if (!e.active) continue;
-
-      const dx = e.x - mount.worldX;
-      const dy = e.y - mount.worldY;
-      const distSq = dx * dx + dy * dy;
-
-      if (distSq > closestDist) continue;
-
-      // Cone check
-      const angleToEnemy = Math.atan2(dy, dx);
-      const diff = Math.abs(normalizeAngle(angleToEnemy - mount.coneDirection));
-      if (diff <= mount.coneHalfAngle) {
-        closest = e;
-        closestDist = distSq;
-      }
+      closest = e;
+      closestDist = distSq;
     }
     return closest;
   }
 
   fireProjectile(x, y, angle, damage, source = 'crew', color = '#ffeeaa') {
-    const proj = this.projectiles.find(p => !p.active);
-    if (proj) proj.spawn(x, y, angle, damage, source, color);
+    for (let i = 0; i < this.projectiles.length; i++) {
+      const proj = this.projectiles[i];
+      if (!proj.active) { proj.spawn(x, y, angle, damage, source, color); return; }
+    }
   }
 
   checkProjectileHits(enemies, train) {
@@ -391,13 +243,11 @@ export class CombatSystem {
         const dist = dx * dx + dy * dy;
         const minDist = p.radius + e.radius;
         if (dist <= minDist * minDist) {
-          this.spawnDamageNumber(e.x, e.y, Math.min(p.damage, e.hp));
           const ex = e.x, ey = e.y, ecolor = e.color;
           const hitX = p.x, hitY = p.y;
           e.takeDamage(p.damage, p.vx, p.vy);
           p.active = false;
           this.handleEnemyDamageResult(e, train, ex, ey, ecolor);
-          // Queue hit spark when enemy survives (non-lethal hit)
           if (e.active) this.hitSparks.push({ x: hitX, y: hitY });
           break;
         }
@@ -414,14 +264,7 @@ export class CombatSystem {
         const dx = e.x - cx;
         const dy = e.y - cy;
         if (dx * dx + dy * dy <= e.radius * e.radius) {
-          const actualDmg = e.damage * train.lastStandDamageMultiplier;
-          train.hp -= actualDmg;
-          train.damageFlash = 0.25;
-          train.shakeTimer = 0.2;
-          train.hpFlashTimer = 0.4;
-          playTrainDamage();
-          // Floating damage attribution (red — enemy contact)
-          spawnAttribution(`-${Math.round(actualDmg)}`, e.x, e.y, '#ff4444');
+          this._applyTrainHit(e, car, train);
           e.active = false;
           break;
         }
@@ -429,160 +272,63 @@ export class CombatSystem {
     }
   }
 
-  // === AUTO-WEAPONS (fire from their mount position) ===
-  updateAutoWeapons(dt, train, enemies) {
-    const dmgMult = train.totalDamageMultiplier;
-    let cdMult = train.totalCooldownMultiplier;
-    const areaMult = train.totalAreaMultiplier;
+  /** Route enemy damage to the correct target: crew, cargo car, or nearest cargo. */
+  _applyTrainHit(enemy, car, train) {
+    const dmg = enemy.damage;
+    train.shakeTimer = 0.2;
+    train.damageFlash = 0.25;
+    playTrainDamage();
 
-    // --- TURRET ---
-    if (train.hasAutoWeapon('turret')) {
-      const w = train.autoWeapons.turret;
-      const m = w.mount;
-      const tbm = this._banditMult(m);
-      if (tbm > 0) {
-        const mx = m.worldX, my = m.worldY;
-        const stats = train.getAutoWeaponStats('turret');
-        w.cooldownTimer -= dt;
-        if (w.cooldownTimer <= 0) {
-          let closest = null;
-          const range = stats.range * areaMult;
-          let closestDist = range * range;
-          for (const e of enemies) {
-            if (!e.active) continue;
-            const dx = e.x - mx, dy = e.y - my;
-            const d = dx * dx + dy * dy;
-            if (d >= closestDist) continue;
-            const angleToE = Math.atan2(dy, dx);
-            const diff = Math.abs(normalizeAngle(angleToE - m.coneDirection));
-            if (diff > m.coneHalfAngle) continue;
-            closest = e; closestDist = d;
-          }
-          if (closest) {
-            const dmg = stats.damage * dmgMult * tbm;
-            for (let s = 0; s < stats.shotsPerBurst; s++) {
-              const dist = Math.sqrt(closestDist);
-              const t = dist / PROJECTILE_SPEED;
-              const lx = closest.x + (closest.vx || 0) * t;
-              const ly = closest.y + (closest.vy || 0) * t;
-              const angle = Math.atan2(ly - my, lx - mx) + (s - (stats.shotsPerBurst - 1) / 2) * 0.08;
-              this.fireProjectile(mx, my, angle, dmg, 'auto', '#ff8800');
-            }
-            m.coneDirection = m.clampAngle(Math.atan2(closest.y - my, closest.x - mx));
-            playShoot();
-            w.cooldownTimer = stats.fireInterval * cdMult / tbm;
-          }
+    if (car.type === 'cargo') {
+      // Damage the cargo car
+      if (car.alive) {
+        car.hp -= dmg;
+        if (car.hp <= 0) {
+          car.hp = 0;
+          car.alive = false;
         }
       }
+      return;
     }
 
-    // --- AUTO LASER ---
-    if (train.hasAutoWeapon('autoLaser')) {
-      const w = train.autoWeapons.autoLaser;
-      const m = w.mount;
-      const alm = this._banditMult(m);
-      if (alm > 0) {
-        const mx = m.worldX, my = m.worldY;
-        const stats = train.getAutoWeaponStats('autoLaser');
-        w.cooldownTimer -= dt;
-        if (w.cooldownTimer <= 0) {
-          // Find nearest enemy in range (no cone restriction)
-          let closest = null;
-          const range = stats.range * areaMult;
-          let closestDist = range * range;
-          for (const e of enemies) {
-            if (!e.active) continue;
-            const dx = e.x - mx, dy = e.y - my;
-            const d = dx * dx + dy * dy;
-            if (d < closestDist) { closest = e; closestDist = d; }
-          }
-          if (closest) {
-            const dmg = stats.damage * dmgMult * alm;
-            const dist = Math.sqrt(closestDist);
-            const t = dist / PROJECTILE_SPEED;
-            const lx = closest.x + (closest.vx || 0) * t;
-            const ly = closest.y + (closest.vy || 0) * t;
-            const angle = Math.atan2(ly - my, lx - mx);
-            this.fireProjectile(mx, my, angle, dmg, 'auto', '#8ecae6');
-            m.coneDirection = m.clampAngle(Math.atan2(closest.y - my, closest.x - mx));
-            playShoot();
-            w.cooldownTimer = stats.fireInterval * cdMult / alm;
-          }
+    // Weapon car — find if there's a manned mount on this car
+    const mannedMount = car.mounts.find(m => m.crew && m.crew.alive);
+    if (mannedMount) {
+      // Damage the crew member on the nearest manned mount
+      const crew = mannedMount.crew;
+      crew.hp -= dmg;
+      if (crew.hp <= 0) {
+        crew.hp = 0;
+        crew.alive = false;
+        // Unassign dead crew from mount
+        if (crew.assignment) {
+          crew.assignment.crew = null;
+          crew.assignment = null;
         }
       }
+      return;
     }
 
-    // --- RICOCHET SHOT ---
-    if (train.hasAutoWeapon('ricochetShot')) {
-      const w = train.autoWeapons.ricochetShot;
-      const m = w.mount;
-      const rbm = this._banditMult(m);
-      if (rbm > 0) {
-        const mx = m.worldX, my = m.worldY;
-        const stats = train.getAutoWeaponStats('ricochetShot');
-        w.cooldownTimer -= dt;
-        if (w.cooldownTimer <= 0) {
-          w.cooldownTimer = stats.fireInterval * cdMult / rbm;
-          const angle = Math.random() * Math.PI * 2;
-          const bolt = this.ricochetBolts.find(b => !b.active);
-          if (bolt) bolt.spawn(mx, my, angle, stats.damage * dmgMult * rbm, stats.bounces, stats.speed);
-        }
+    // Weapon car with no crew — damage nearest alive cargo car
+    const cargoCars = train.aliveCargoCars;
+    if (cargoCars.length > 0) {
+      // Find nearest cargo car by index distance
+      let nearest = cargoCars[0];
+      let bestDist = Math.abs(nearest.index - car.index);
+      for (let i = 1; i < cargoCars.length; i++) {
+        const d = Math.abs(cargoCars[i].index - car.index);
+        if (d < bestDist) { bestDist = d; nearest = cargoCars[i]; }
+      }
+      nearest.hp -= dmg;
+      if (nearest.hp <= 0) {
+        nearest.hp = 0;
+        nearest.alive = false;
       }
     }
-
-    // Update ricochet bolts
-    for (const bolt of this.ricochetBolts) {
-      if (!bolt.active) continue;
-      bolt.update(dt);
-      // Check collision with enemies
-      for (const e of enemies) {
-        if (!e.active || bolt.hitEnemies.has(e)) continue;
-        const dx = bolt.x - e.x;
-        const dy = bolt.y - e.y;
-        if (dx * dx + dy * dy <= (e.radius + 6) * (e.radius + 6)) {
-          this.spawnDamageNumber(e.x, e.y, Math.min(bolt.damage, e.hp));
-          const ex = e.x, ey = e.y, ecolor = e.color;
-          e.takeDamage(bolt.damage, bolt.vx, bolt.vy);
-          bolt.hitEnemies.add(e);
-          this.handleEnemyDamageResult(e, train, ex, ey, ecolor);
-          bolt.bouncesLeft--;
-          if (bolt.bouncesLeft <= 0) {
-            bolt.active = false;
-          } else {
-            // Find nearest un-hit enemy to bounce toward
-            let nextTarget = null;
-            let nextDist = 500 * 500;
-            for (const e2 of enemies) {
-              if (!e2.active || bolt.hitEnemies.has(e2)) continue;
-              const d2 = (bolt.x - e2.x) ** 2 + (bolt.y - e2.y) ** 2;
-              if (d2 < nextDist) { nextTarget = e2; nextDist = d2; }
-            }
-            if (nextTarget) {
-              bolt.redirectToward(nextTarget.x, nextTarget.y);
-            }
-            // No nearby target: bolt keeps flying in current direction
-            // and can still bounce off screen edges or hit enemies later
-          }
-          break;
-        }
-      }
-    }
-  }
-
-  // Returns 1.0 (no bandit) down to 0.0 — PROTOTYPE timeline
-  _banditMult(mount) {
-    if (!mount._bandit) return 1.0;
-    if (mount._bandit.state !== 2) return 0.0;
-    const dwell = mount._bandit.dwellTime;
-    if (dwell < 2)  return 0.75;
-    if (dwell < 5)  return 0.3;
-    return 0.0;
   }
 
   reset() {
     for (const p of this.projectiles) p.active = false;
-    for (const b of this.ricochetBolts) b.active = false;
-    for (const d of this.damageNumbers) d.active = false;
     this.pendingLevelUp = false;
     this.killEffects.length = 0;
     this.muzzleFlashes.length = 0;

@@ -48,14 +48,15 @@ import {
   WEAPON_RANGE, TARGET_DISTANCE, COIN_RADIUS,
   AUTO_WEAPONS, MANUAL_GUN, COAL_SHOP_COST, COAL_SHOP_AMOUNT,
   MAX_ENEMIES, MAX_PROJECTILES, MAX_RICOCHET_BOLTS,
-  MAX_COINS, MAX_FLYING_COINS, MAX_BANDITS, BRAWLER_GARLIC
+  MAX_COINS, MAX_FLYING_COINS, MAX_BANDITS, BRAWLER_GARLIC,
+  CAMERA_ZOOM
 } from './constants.js';
 
 // Role-based crew emoji: visually distinct per role
 function crewEmoji(crew) {
   if (!crew) return '\uD83D\uDC31'; // default cat
-  if (crew.role === 'Gunner')  return '\uD83D\uDC31'; // 🐱 cat
-  if (crew.role === 'Brawler') return '\u26C4\uFE0F'; // ⛄️ snowman
+  if (crew.upgrade && !crew.isBrawler) return '\uD83D\uDC31'; // 🐱 ranged crew
+  if (crew.isBrawler) return '\u26C4\uFE0F'; // ⛄️ snowman (brawler)
   return '\uD83D\uDC31'; // 🐱 default
 }
 
@@ -94,7 +95,8 @@ export class Renderer3D {
 
     // --- Camera (isometric view matching Blender reference) ---
     // Camera frustum must match UI canvas aspect (960/640 = 1.5) for projection to align
-    this.frustumSize = 300;
+    this.frustumSize = 300 / CAMERA_ZOOM;
+    this.Z = CAMERA_ZOOM; // scale factor for 2D overlay pixel sizes
     const aspect = CANVAS_WIDTH / CANVAS_HEIGHT; // always 1.5
     this.camera = new THREE.OrthographicCamera(
       -this.frustumSize * aspect / 2, this.frustumSize * aspect / 2,
@@ -107,6 +109,8 @@ export class Renderer3D {
     this.camera.position.set(-180, 220, 180);
     this.camera.lookAt(0, 0, 0);
     this.cameraBasePos = this.camera.position.clone();
+    this.cameraBaseLookAt = new THREE.Vector3(0, 0, 0);
+    this._cameraOffsetX = 0; // pixel-space horizontal offset
 
     // --- Lights ---
     const ambient = new THREE.AmbientLight(0x404040);
@@ -319,37 +323,54 @@ export class Renderer3D {
       this.banditPool.push(group);
     }
 
-    // Train — single FBX model (contains all cars), centered at origin
-    const placeholderTrain = new THREE.Mesh(
-      new THREE.BoxGeometry(200, 15, 30),
-      new THREE.MeshLambertMaterial({ color: 0x444444 })
-    );
-    placeholderTrain.position.y = 8;
-    this.trainMesh = placeholderTrain;
+    // Train — 8 cars using the Train.fbx model (cloned when loaded)
+    // Layout: [weapon, cargo, weapon, weapon, cargo, weapon, weapon, cargo]
+    this._carWidth3D = 50;
+    this._carGap3D = 10;
+    this._numCars = 8;
+    const totalTrainWidth3D = this._numCars * this._carWidth3D + (this._numCars - 1) * this._carGap3D;
+    this._carStartX = -totalTrainWidth3D / 2 + this._carWidth3D / 2;
+
+    this.trainGroup = new THREE.Group();
+    this.carMeshes = [];
+    this.cargoCarMaterials = [];
+    // Placeholder boxes until Train.fbx loads — all same style, FBX replaces them
+    for (let i = 0; i < this._numCars; i++) {
+      const mat = new THREE.MeshLambertMaterial({ color: 0x555555 });
+      const box = new THREE.Mesh(
+        new THREE.BoxGeometry(this._carWidth3D, 15, 28),
+        mat
+      );
+      box.position.set(
+        this._carStartX + i * (this._carWidth3D + this._carGap3D),
+        8, 0
+      );
+      this.trainGroup.add(box);
+      this.carMeshes.push(box);
+    }
+    this.scene.add(this.trainGroup);
+    this.trainMesh = this.trainGroup;
     this._trainOrigRotY = 0;
-    this.scene.add(placeholderTrain);
 
-    // Fixed 3D mount positions ON the train (offsets from train center)
-    // 8 weapon mounts: 4 on rear weapon car, 4 on front weapon car
-    // Train layout (along X): rear weapon (-80) | cargo (-27) | front weapon (27) | locomotive (80)
-    this.mountOffsets3D = [
-      // Rear weapon car (4 mounts: corners)
-      { x: -76, y: 16, z: -6 },   // rear top-left
-      { x: -62, y: 16, z: -6 },   // rear top-right
-      { x: -76, y: 16, z: 6 },    // rear bottom-left
-      { x: -62, y: 16, z: 6 },    // rear bottom-right
-      // Front weapon car (4 mounts: corners)
-      { x: 10, y: 16, z: -6 },    // front top-left
-      { x: 26, y: 16, z: -6 },    // front top-right
-      { x: 10, y: 16, z: 6 },     // front bottom-left
-      { x: 26, y: 16, z: 6 },     // front bottom-right
-    ];
-    // Driver seat on locomotive
-    this.driverOffset3D = { x: 75, y: 16, z: 0 };
+    // Mount 3D positions — only on weapon cars (indices 0, 2, 3, 5, 6)
+    // Train layout: [weapon(0), cargo(1), weapon(2), weapon(3), cargo(4), weapon(5), weapon(6), cargo(7)]
+    const weaponCarIndices = [0, 2, 3, 5, 6];
+    const mountDx = 7;
+    this.mountOffsets3D = [];
+    for (const i of weaponCarIndices) {
+      const cx = this._carStartX + i * (this._carWidth3D + this._carGap3D);
+      this.mountOffsets3D.push(
+        { x: cx - mountDx, y: 16, z: -6 },
+        { x: cx + mountDx, y: 16, z: -6 },
+        { x: cx - mountDx, y: 16, z: 6 },
+        { x: cx + mountDx, y: 16, z: 6 },
+      );
+    }
+    this.driverOffset3D = { x: 130, y: 16, z: 0 };
 
-    // Mount meshes — one group per mount slot, model swapped based on state
+    // Mount meshes — one group per mount slot (5 weapon cars × 4 = 20 mounts)
     this.mountGroups = [];
-    for (let i = 0; i < 12; i++) {
+    for (let i = 0; i < 24; i++) {
       const group = new THREE.Group();
       group.visible = false;
       group.position.y = 16;
@@ -402,16 +423,34 @@ export class Renderer3D {
       }
     }
 
-    // Replace train placeholder with Train.fbx (single model, all cars)
+    // Replace ALL placeholder car boxes with cloned Train.fbx models
     if (this.models.Train) {
-      const old = this.trainMesh;
-      this.scene.remove(old);
-      old.geometry?.dispose();
-      const trainModel = this.models.Train.clone();
-      trainModel.visible = true;
-      this.trainMesh = trainModel;
-      this._trainOrigRotY = trainModel.rotation.y;
-      this.scene.add(trainModel);
+      const cargoIndices = new Set([1, 4, 7]);
+      for (let i = 0; i < this._numCars; i++) {
+        const old = this.carMeshes[i];
+        this.trainGroup.remove(old);
+        old.geometry?.dispose();
+        const clone = this.models.Train.clone();
+        clone.scale.copy(this.models.Train.scale);
+        clone.rotation.copy(this.models.Train.rotation);
+        clone.position.set(
+          this._carStartX + i * (this._carWidth3D + this._carGap3D),
+          0, 0
+        );
+        this.trainGroup.add(clone);
+        this.carMeshes[i] = clone;
+        // Store cargo car materials for HP tinting
+        if (cargoIndices.has(i)) {
+          const mats = [];
+          clone.traverse(child => {
+            if (child.isMesh && child.material) {
+              child.material = child.material.clone(); // clone so we can tint independently
+              mats.push(child.material);
+            }
+          });
+          this.cargoCarMaterials.push({ index: i, materials: mats });
+        }
+      }
     }
 
     // Mount models are now swapped dynamically in drawWeaponMounts
@@ -429,9 +468,9 @@ export class Renderer3D {
     };
   }
 
-  // Convert 2D game pixel coords to screen coords (for overlays)
+  // Convert 2D game pixel coords to screen coords (for overlays, includes camera offset)
   pixelToScreen(px, py, worldY = 4) {
-    const w = toWorld(px, py);
+    const w = this._toWorldOffset(px, py);
     return this._project(w.x, w.z, worldY);
   }
 
@@ -480,6 +519,19 @@ export class Renderer3D {
   // =============================================
   // GAME WORLD METHODS (3D)
   // =============================================
+
+  /**
+   * Set horizontal camera offset (in pixel/game units).
+   * Offsets all rendered positions so the viewport appears to pan horizontally.
+   */
+  setCameraOffset(offsetPx) {
+    this._cameraOffsetX = offsetPx;
+  }
+
+  /** Convert pixel coords to 3D world coords, accounting for camera offset */
+  _toWorldOffset(px, py) {
+    return toWorld(px - this._cameraOffsetX, py);
+  }
 
   applyShake(train, dt) {
     if (train.shakeTimer > 0) {
@@ -605,14 +657,14 @@ export class Renderer3D {
 
       // Green ring (thick, fading)
       ctx.strokeStyle = `rgba(102, 187, 106, ${alpha})`;
-      ctx.lineWidth = 4 * (1 - t) + 1;
+      ctx.lineWidth = (4 * (1 - t) + 1) * this.Z;
       ctx.beginPath();
       ctx.arc(sw.x, sw.y, sw.radius, 0, Math.PI * 2);
       ctx.stroke();
 
       // Inner bright ring
       ctx.strokeStyle = `rgba(200, 255, 200, ${alpha * 0.5})`;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 2 * this.Z;
       ctx.beginPath();
       ctx.arc(sw.x, sw.y, sw.radius * 0.6, 0, Math.PI * 2);
       ctx.stroke();
@@ -665,7 +717,7 @@ export class Renderer3D {
       ctx.beginPath();
       ctx.arc(r.x, r.y, r.radius, 0, Math.PI * 2);
       ctx.strokeStyle = r.color;
-      ctx.lineWidth = 2;
+      ctx.lineWidth = 2 * this.Z;
       ctx.globalAlpha = alpha;
       ctx.stroke();
     }
@@ -683,27 +735,42 @@ export class Renderer3D {
     // Scroll only by one sleeper spacing cycle so track never disappears
     const sleeperSpacing = 15;
     const offset = (scrollOffset * 0.5) % sleeperSpacing;
-    this.railGroup.position.x = -offset;
+    this.railGroup.position.x = -offset - this._cameraOffsetX;
   }
 
   drawTrain(train) {
     if (!this.trainMesh) return;
-    // Train always at scene origin, restore original rotation from FBX
-    this.trainMesh.position.set(0, 0, 0);
-    if (this._trainOrigRotY !== undefined) {
-      this.trainMesh.rotation.y = this._trainOrigRotY;
-    }
+    this.trainMesh.position.set(-this._cameraOffsetX, 0, 0);
     this.trainMesh.visible = true;
 
-    // Project driver seat to screen coords
+    // Update cargo car bandit slot screen positions
     for (const car of train.cars) {
-      if (car.driverSeat) {
-        const d = this.driverOffset3D;
-        const ds = this._project(d.x, d.z);
-        car.driverSeat.screenX = ds.x;
-        car.driverSeat.screenY = ds.y;
-        car.driverSeat.worldX = toPixelX(d.x);
-        car.driverSeat.worldY = toPixelZ(d.z);
+      if (car.type !== 'cargo' || !car.banditSlot) continue;
+      const cx3d = this._carStartX + car.index * (this._carWidth3D + this._carGap3D);
+      const s = this._project(cx3d - this._cameraOffsetX, 0, 20);
+      car.banditSlot.screenX = s.x;
+      car.banditSlot.screenY = s.y;
+    }
+
+    // Tint cargo car meshes based on HP
+    for (const entry of this.cargoCarMaterials) {
+      const car = train.cars[entry.index];
+      if (!car || car.type !== 'cargo') continue;
+      const mats = entry.materials;
+      if (!mats || mats.length === 0) continue;
+      for (const mat of mats) {
+        if (!car.alive) {
+          mat.color.setHex(0x222222);
+          mat.opacity = 0.5;
+          mat.transparent = true;
+        } else {
+          const ratio = car.hp / car.maxHp;
+          // Darken as damage increases — multiply original color by ratio
+          const tint = 0.4 + 0.6 * ratio; // 1.0 at full, 0.4 at zero
+          mat.color.setRGB(tint, tint, tint);
+          mat.opacity = 1;
+          mat.transparent = false;
+        }
       }
     }
   }
@@ -724,7 +791,7 @@ export class Renderer3D {
       if (mountIdx < this.mountGroups.length) {
         const entry = this.mountGroups[mountIdx];
         const group = entry.group;
-        group.position.set(offset.x, offset.y, offset.z);
+        group.position.set(offset.x - this._cameraOffsetX, offset.y, offset.z);
         // Direct rotation.y from tuned values
         const defaultRot = (offset.z < 0 ? MD.upperGunRot : MD.lowerGunRot) * Math.PI / 180;
         if (mount.screenAimAngle !== undefined) {
@@ -742,7 +809,7 @@ export class Renderer3D {
         if (mount.hasAutoWeapon) {
           const modelMap = { turret: 'AutoGun', autoLaser: 'Garlic', ricochetShot: 'Laser' };
           desiredType = modelMap[mount.autoWeaponId] || null;
-        } else if (mount.isManned && !(mount.crew && mount.crew.role === 'Brawler')) {
+        } else if (mount.isManned && !(mount.crew && mount.crew.isBrawler)) {
           desiredType = 'Gun';
         }
         // Empty mount = no model
@@ -761,7 +828,7 @@ export class Renderer3D {
         group.visible = desiredType !== null;
 
         // DEBUG: show cone center (yellow) and gun rotation value
-        if (MD.enabled && mount.isManned && !(mount.crew && mount.crew.role === 'Brawler')) {
+        if (MD.enabled && mount.isManned && !(mount.crew && mount.crew.isBrawler)) {
           try {
             const coneCenter = offset.z < 0 ? MD.upperConeAngle : MD.lowerConeAngle;
             const ccRad = coneCenter * Math.PI / 180;
@@ -787,8 +854,8 @@ export class Renderer3D {
         mountIdx++;
       }
 
-      // Project to screen for overlay + input
-      const screenPos = this._project(offset.x, offset.z);
+      // Project to screen for overlay + input (apply camera offset)
+      const screenPos = this._project(offset.x - this._cameraOffsetX, offset.z);
       const sx = screenPos.x;
       const sy = screenPos.y;
 
@@ -798,7 +865,7 @@ export class Renderer3D {
           (mount._bandit.state === 2 /* ON_TRAIN */ || mount._bandit.state === 3 /* FIGHTING */);
         let glowColor = null;
         let glowAlpha = 0;
-        let glowRadius = 14;
+        let glowRadius = 14 * this.Z;
 
         if (hasBandit) {
           const dwellTime = mount._bandit.dwellTime || 0;
@@ -806,7 +873,7 @@ export class Renderer3D {
             const pulse = 0.25 + 0.2 * Math.sin(performance.now() * 0.006);
             glowColor = '255, 50, 30';
             glowAlpha = pulse;
-            glowRadius = 15 + 2 * Math.sin(performance.now() * 0.006);
+            glowRadius = (15 + 2 * Math.sin(performance.now() * 0.006)) * this.Z;
           } else {
             glowColor = '220, 50, 30';
             glowAlpha = 0.22;
@@ -836,7 +903,7 @@ export class Renderer3D {
       // Firing cone — perpendicular to the train edge this mount sits on
       // Upper side (z<0) → upper-left (-135°), Lower side (z>0) → lower-right (45°)
       const hasAuto = mount.hasAutoWeapon;
-      const showCone = mount.isManned && !(mount.crew && mount.crew.role === 'Brawler');
+      const showCone = mount.isManned && !(mount.crew && mount.crew.isBrawler);
       if (showCone) {
         const upperRad = MD.upperConeAngle * Math.PI / 180;
         const lowerRad = MD.lowerConeAngle * Math.PI / 180;
@@ -844,7 +911,7 @@ export class Renderer3D {
         const screenHalf = MD.coneHalf * Math.PI / 180;
 
         const coneColor = mount.crew.color;
-        const coneRadius = 70;
+        const coneRadius = 70 * this.Z;
 
         ctx.save();
         ctx.beginPath();
@@ -865,7 +932,7 @@ export class Renderer3D {
       const active = mount.isManned || hasAuto;
       if (!hasAuto && !mount.isManned) {
         // Empty mount slot — visible circle
-        const slotR = 10;
+        const slotR = 10 * this.Z;
         ctx.beginPath();
         ctx.arc(sx, sy, slotR, 0, Math.PI * 2);
         ctx.fillStyle = 'rgba(80, 80, 80, 0.6)';
@@ -876,9 +943,9 @@ export class Renderer3D {
       }
 
       if (mount.crew) {
-        ctx.font = '12px serif';
+        ctx.font = `${12 * this.Z}px serif`;
         ctx.textAlign = 'center';
-        ctx.fillText(crewEmoji(mount.crew), sx, sy + 4);
+        ctx.fillText(crewEmoji(mount.crew), sx, sy + 4 * this.Z);
 
         // PROTOTYPE: buddy bonus "+" removed for cleaner visuals
 
@@ -888,17 +955,17 @@ export class Renderer3D {
           ctx.save();
           // Orange pulsing circle
           ctx.beginPath();
-          ctx.arc(sx, sy - 16, 10, 0, Math.PI * 2);
+          ctx.arc(sx, sy - 16 * this.Z, 10 * this.Z, 0, Math.PI * 2);
           ctx.fillStyle = `rgba(255, 165, 0, ${warn * 0.4})`;
           ctx.fill();
           // Warning icon + text
-          ctx.font = 'bold 11px monospace';
+          ctx.font = `bold ${11 * this.Z}px monospace`;
           ctx.textAlign = 'center';
           ctx.strokeStyle = 'rgba(0,0,0,0.7)';
           ctx.lineWidth = 2;
-          ctx.strokeText('⚠ IDLE', sx, sy - 13);
+          ctx.strokeText('⚠ IDLE', sx, sy - 13 * this.Z);
           ctx.fillStyle = `rgba(255, 200, 50, ${warn})`;
-          ctx.fillText('⚠ IDLE', sx, sy - 13);
+          ctx.fillText('⚠ IDLE', sx, sy - 13 * this.Z);
           ctx.restore();
         }
 
@@ -920,6 +987,18 @@ export class Renderer3D {
     for (let i = mountIdx; i < this.mountGroups.length; i++) {
       this.mountGroups[i].group.visible = false;
     }
+
+    // Draw crew on cargo car bandit slots (fighting bandits)
+    for (const car of train.cars) {
+      if (car.type !== 'cargo' || !car.banditSlot) continue;
+      const slot = car.banditSlot;
+      if (!slot.crew || !slot.crew.alive) continue;
+      const sx = slot.screenX, sy = slot.screenY;
+      if (sx === undefined) continue;
+      ctx.font = `${12 * this.Z}px serif`;
+      ctx.textAlign = 'center';
+      ctx.fillText(crewEmoji(slot.crew), sx, sy + 4 * this.Z);
+    }
   }
 
   drawEnemies(enemies) {
@@ -932,7 +1011,7 @@ export class Renderer3D {
         idx++;
         continue;
       }
-      const w = toWorld(e.x, e.y);
+      const w = this._toWorldOffset(e.x, e.y);
       mesh.position.x = w.x;
       mesh.position.z = w.z;
       mesh.visible = true;
@@ -960,15 +1039,15 @@ export class Renderer3D {
       const ctx = this.ctx;
 
       // Enemy emoji
-      const emojiSize = Math.round(12 + (e.radius - 6) * 2);
+      const emojiSize = Math.round((12 + (e.radius - 6) * 2) * this.Z);
       ctx.font = `${emojiSize}px serif`;
       ctx.textAlign = 'center';
-      ctx.fillText(e.kind === 'bug' ? '\uD83E\uDD9F' : '\uD83E\uDDDF', screenPos.x, screenPos.y + 4);
+      ctx.fillText(e.kind === 'bug' ? '\uD83E\uDD9F' : '\uD83E\uDDDF', screenPos.x, screenPos.y + 4 * this.Z);
 
-      const barW = Math.max(20, e.radius * 1.5);
-      const barH = 3;
+      const barW = Math.max(20, e.radius * 1.5) * this.Z;
+      const barH = 3 * this.Z;
       const barX = screenPos.x - barW / 2;
-      const barY = screenPos.y - 18;
+      const barY = screenPos.y - 18 * this.Z;
       ctx.fillStyle = '#222';
       ctx.fillRect(barX - 1, barY - 1, barW + 2, barH + 2);
       const hpRatio = Math.max(0, e.hp / e.maxHp);
@@ -993,7 +1072,7 @@ export class Renderer3D {
         idx++;
         continue;
       }
-      const w = toWorld(p.x, p.y);
+      const w = this._toWorldOffset(p.x, p.y);
       mesh.position.x = w.x;
       mesh.position.z = w.z;
       mesh.visible = true;
@@ -1021,11 +1100,11 @@ export class Renderer3D {
       if (speed < 1) continue;
 
       // Project head and tail through isometric camera
-      const headW = toWorld(b.x, b.y);
-      const trailLen = 35;
+      const headW = this._toWorldOffset(b.x, b.y);
+      const trailLen = 35 * this.Z;
       const tailX = b.x - (b.vx / speed) * trailLen;
       const tailY = b.y - (b.vy / speed) * trailLen;
-      const tailW = toWorld(tailX, tailY);
+      const tailW = this._toWorldOffset(tailX, tailY);
 
       const head = this._project(headW.x, headW.z);
       const tail = this._project(tailW.x, tailW.z);
@@ -1033,9 +1112,9 @@ export class Renderer3D {
       // Bright glowing bolt line
       ctx.save();
       ctx.strokeStyle = '#d4b8ff';
-      ctx.lineWidth = 3;
+      ctx.lineWidth = 3 * this.Z;
       ctx.shadowColor = '#b388ff';
-      ctx.shadowBlur = 10;
+      ctx.shadowBlur = 10 * this.Z;
       ctx.beginPath();
       ctx.moveTo(tail.x, tail.y);
       ctx.lineTo(head.x, head.y);
@@ -1043,7 +1122,7 @@ export class Renderer3D {
 
       // Bright head dot
       ctx.beginPath();
-      ctx.arc(head.x, head.y, 4, 0, Math.PI * 2);
+      ctx.arc(head.x, head.y, 4 * this.Z, 0, Math.PI * 2);
       ctx.fillStyle = '#ffffff';
       ctx.fill();
       ctx.shadowBlur = 0;
@@ -1115,10 +1194,10 @@ export class Renderer3D {
     if (activePips.length === 0) return;
 
     // Place pips as a small row just above-left of the train center
-    const startX = CANVAS_WIDTH / 2 - (activePips.length * 10) / 2 - 80;
-    const pipY = CANVAS_HEIGHT / 2 - 38;
-    const pipSpacing = 10;
-    const pipR = 3.5;
+    const startX = CANVAS_WIDTH / 2 - (activePips.length * 10 * this.Z) / 2 - 80 * this.Z;
+    const pipY = CANVAS_HEIGHT / 2 - 38 * this.Z;
+    const pipSpacing = 10 * this.Z;
+    const pipR = 3.5 * this.Z;
 
     ctx.save();
     for (let i = 0; i < activePips.length; i++) {
@@ -1145,39 +1224,47 @@ export class Renderer3D {
   }
 
   drawSteamBlastAura(train) {
-    const brawlerMounts = train.allMounts.filter(mt => mt.isManned && mt.crew && mt.crew.role === 'Brawler');
-
-    // Hide all aura rings first
     for (const ring of this.auraRings) ring.visible = false;
 
-    if (brawlerMounts.length === 0) return;
-
     const now = performance.now();
-    const ctx = this.ctx;
     const baseR = BRAWLER_GARLIC.radius;
+    let ringIdx = 0;
 
-    // Position 3D rings for each brawler mount
-    for (let bi = 0; bi < brawlerMounts.length && bi < this.auraRings.length; bi++) {
-      const m = brawlerMounts[bi];
-      const ring = this.auraRings[bi];
+    // Stationed brawlers (on mounts)
+    for (const m of train.allMounts) {
+      if (!m.isManned || !m.crew || !m.crew.isBrawler) continue;
+      if (ringIdx >= this.auraRings.length) break;
+      const ring = this.auraRings[ringIdx++];
       const disabled = m._bandit;
       const pulse = disabled ? 1.0 : 1 + Math.sin(now * 0.004) * 0.12;
       const r = baseR * (train.totalAreaMultiplier || 1) * pulse;
       const mIdx = train.allMounts.indexOf(m);
       const off = mIdx >= 0 && mIdx < this.mountOffsets3D.length ? this.mountOffsets3D[mIdx] : null;
       if (off) {
-        ring.position.x = off.x;
+        ring.position.x = off.x - this._cameraOffsetX;
         ring.position.z = off.z;
       } else {
-        const w = toWorld(m.worldX, m.worldY);
+        const w = this._toWorldOffset(m.worldX, m.worldY);
         ring.position.x = w.x;
         ring.position.z = w.z;
       }
-      const scale = r / 40;
-      ring.scale.set(scale, scale, scale);
+      ring.scale.setScalar(r / 40);
       ring.visible = !disabled;
     }
 
+    // Walking brawlers (moving between mounts)
+    for (const c of train.crew) {
+      if (!c.alive || !c.isMoving || !c.isBrawler) continue;
+      if (ringIdx >= this.auraRings.length) break;
+      const ring = this.auraRings[ringIdx++];
+      const pulse = 1 + Math.sin(now * 0.004) * 0.12;
+      const r = baseR * (train.totalAreaMultiplier || 1) * pulse;
+      const w = this._toWorldOffset(c.moveX, c.moveY);
+      ring.position.x = w.x;
+      ring.position.z = w.z;
+      ring.scale.setScalar(r / 40);
+      ring.visible = true;
+    }
   }
 
   drawWorldCoins(coins) {
@@ -1192,7 +1279,7 @@ export class Renderer3D {
         continue;
       }
       const bobY = Math.sin(t + c.bobPhase) * 1.5;
-      const w = toWorld(c.x, c.y);
+      const w = this._toWorldOffset(c.x, c.y);
       mesh.position.x = w.x;
       mesh.position.z = w.z;
       mesh.position.y = 4 + bobY;
@@ -1211,18 +1298,18 @@ export class Renderer3D {
     for (const m of magnets) {
       if (!m.active) continue;
       const bobY = Math.sin(t + m.bobPhase) * 2;
-      const w = toWorld(m.x, m.y);
+      const w = this._toWorldOffset(m.x, m.y);
       const s = this._project(w.x, w.z);
       // Pulsing glow
       const pulse = 0.6 + Math.sin(t * 3 + m.bobPhase) * 0.4;
       ctx.beginPath();
-      ctx.arc(s.x, s.y + bobY * 0.5, 16, 0, Math.PI * 2);
+      ctx.arc(s.x, s.y + bobY * 0.5, 16 * this.Z, 0, Math.PI * 2);
       ctx.fillStyle = `rgba(230, 50, 50, ${pulse * 0.25})`;
       ctx.fill();
       // Magnet emoji
-      ctx.font = '18px serif';
+      ctx.font = `${18 * this.Z}px serif`;
       ctx.textAlign = 'center';
-      ctx.fillText('\uD83E\uDDF2', s.x, s.y + bobY * 0.5 + 6);
+      ctx.fillText('\uD83E\uDDF2', s.x, s.y + bobY * 0.5 + 6 * this.Z);
     }
   }
 
@@ -1244,7 +1331,7 @@ export class Renderer3D {
         idx++;
         continue;
       }
-      const w = toWorld(fc.x, fc.y);
+      const w = this._toWorldOffset(fc.x, fc.y);
       mesh.position.x = w.x;
       mesh.position.z = w.z;
       mesh.position.y = 8;
@@ -1270,15 +1357,16 @@ export class Renderer3D {
       if (x !== undefined) {
         sx = x; sy = y;
       } else {
-        const projected = this._project(c.moveX - CANVAS_WIDTH / 2, c.moveY - CANVAS_HEIGHT / 2, 16);
+        const mw = this._toWorldOffset(c.moveX, c.moveY);
+        const projected = this._project(mw.x, mw.z, 16);
         sx = projected.x; sy = projected.y;
       }
 
       const pulse = 0.8 + Math.sin(performance.now() * 0.008) * 0.2;
       ctx.globalAlpha = pulse;
-      ctx.font = '20px serif';
+      ctx.font = `${20 * this.Z}px serif`;
       ctx.textAlign = 'center';
-      ctx.fillText(crewEmoji(c), sx, sy + 6);
+      ctx.fillText(crewEmoji(c), sx, sy + 6 * this.Z);
       ctx.globalAlpha = 1;
     }
   }
@@ -1306,12 +1394,12 @@ export class Renderer3D {
       const excBob = Math.sin(now * 0.009) * 3;
       ctx.save();
       ctx.textAlign = 'center';
-      ctx.font = 'bold 18px monospace';
+      ctx.font = `bold ${18 * this.Z}px monospace`;
       ctx.strokeStyle = 'rgba(0,0,0,0.8)';
       ctx.lineWidth = 3;
-      ctx.strokeText('!', sx, sy - 30 + excBob);
+      ctx.strokeText('!', sx, sy - 30 * this.Z + excBob);
       ctx.fillStyle = `rgba(255, 50, 30, ${excPulse})`;
-      ctx.fillText('!', sx, sy - 30 + excBob);
+      ctx.fillText('!', sx, sy - 30 * this.Z + excBob);
       ctx.restore();
 
       // --- Crew-hint arrow: nearest unassigned crew → bandit mount ---
@@ -1341,8 +1429,8 @@ export class Renderer3D {
           const len = Math.hypot(dx, dy);
           const ux = dx / len;
           const uy = dy / len;
-          const startGap = 16;
-          const endGap = 14;
+          const startGap = 16 * this.Z;
+          const endGap = 14 * this.Z;
           const x1 = cx + ux * startGap;
           const y1 = cy + uy * startGap;
           const x2 = sx - ux * endGap;
@@ -1405,7 +1493,7 @@ export class Renderer3D {
     ctx.fillStyle = '#fff';
     ctx.font = 'bold 13px monospace';
     ctx.textAlign = 'center';
-    ctx.fillText('Click crew \u2192 click mount to fight bandits!', CANVAS_WIDTH / 2, tipY + 26);
+    ctx.fillText('Click crew \u2192 click cargo car to fight bandits!', CANVAS_WIDTH / 2, tipY + 26);
     ctx.restore();
   }
 
@@ -1426,7 +1514,7 @@ export class Renderer3D {
       let worldX3d = null, worldZ3d = null;
       if (b.state <= 1) {
         // RUNNING or JUMPING — use world coords
-        const w = toWorld(b.x, b.y);
+        const w = this._toWorldOffset(b.x, b.y);
         worldX3d = w.x;
         worldZ3d = w.z;
         const s = this._project(w.x, w.z);
@@ -1435,22 +1523,29 @@ export class Renderer3D {
         // For jumping, apply the arc in screen space
         if (b.state === 1) {
           const progress = 1 - Math.max(0, b.timer / 0.4);
-          sy -= Math.sin(progress * Math.PI) * 20;
+          sy -= Math.sin(progress * Math.PI) * 20 * this.Z;
         }
       } else if (b.targetSlot) {
         // ON_TRAIN, FIGHTING — use slot screen coords + find 3D offset
-        sx = b.targetSlot.screenX ?? b.targetSlot.worldX;
+        const slotSx = b.targetSlot.screenX ?? b.targetSlot.worldX;
+        sx = slotSx;
         sy = b.targetSlot.screenY ?? b.targetSlot.worldY;
-        if (allMounts) {
+        if (b.targetSlot._isCargoBanditSlot && b.targetCar) {
+          // Cargo car bandit slot — compute 3D position from car index
+          const carIdx = b.targetCar.index;
+          const cx3d = this._carStartX + carIdx * (this._carWidth3D + this._carGap3D);
+          worldX3d = cx3d - this._cameraOffsetX;
+          worldZ3d = 0;
+        } else if (allMounts) {
           const mi = allMounts.indexOf(b.targetSlot);
           if (mi >= 0 && this.mountOffsets3D[mi]) {
-            worldX3d = this.mountOffsets3D[mi].x;
+            worldX3d = this.mountOffsets3D[mi].x - this._cameraOffsetX;
             worldZ3d = this.mountOffsets3D[mi].z;
           }
         }
       } else {
         // DEAD — project world coords
-        const w = toWorld(b.x, b.y);
+        const w = this._toWorldOffset(b.x, b.y);
         worldX3d = w.x;
         worldZ3d = w.z;
         const s = this._project(w.x, w.z);
@@ -1520,9 +1615,9 @@ export class Renderer3D {
           const bobY = b.state === 0 ? Math.sin(performance.now() * 0.015) * 2 : 0;
           ctx.save();
           ctx.translate(sx, sy + bobY);
-          ctx.font = '16px serif';
+          ctx.font = `${16 * this.Z}px serif`;
           ctx.textAlign = 'center';
-          ctx.fillText('\uD83C\uDFCE\uFE0F', 0, 4);
+          ctx.fillText('\uD83C\uDFCE\uFE0F', 0, 4 * this.Z);
           ctx.restore();
           break;
         }
@@ -1538,105 +1633,63 @@ export class Renderer3D {
           if (fighting && b.flashTimer % 0.3 < 0.15) {
             ctx.globalAlpha = 0.5;
           }
-          ctx.font = '16px serif';
+          ctx.font = `${16 * this.Z}px serif`;
           ctx.textAlign = 'center';
-          ctx.fillText('\uD83C\uDFCE\uFE0F', 0, 4);
+          ctx.fillText('\uD83C\uDFCE\uFE0F', 0, 4 * this.Z);
           ctx.globalAlpha = 1;
           ctx.restore();
 
-          // Status labels and effects
-          if (!fighting && !b.targetSlot?.autoWeaponId) {
-            // Gold coins flowing from gold counter to bandit
-            const goldHudX = CANVAS_WIDTH - 94;
-            const goldHudY = 26;
-            const t = performance.now() * 0.003;
-            for (let i = 0; i < 6; i++) {
-              const age = (t + i * 0.35) % 2;
-              if (age > 1.5) continue;
-              const progress = age / 1.5;
-              const px = goldHudX + (sx - goldHudX) * progress + Math.sin(progress * Math.PI * 2 + i) * 10;
-              const py = goldHudY + (sy - goldHudY) * progress + Math.sin(progress * Math.PI) * -20;
-              const alpha = progress < 0.1 ? progress / 0.1 : progress > 0.85 ? (1 - progress) / 0.15 : 1;
-              ctx.globalAlpha = alpha * 0.9;
-              ctx.beginPath();
-              ctx.arc(px, py, 3, 0, Math.PI * 2);
-              ctx.fillStyle = '#f5a623';
-              ctx.fill();
-              ctx.strokeStyle = '#c88a1a';
-              ctx.lineWidth = 1;
-              ctx.stroke();
-            }
-            ctx.globalAlpha = 1;
-
-            // Stolen amount
-            if (b.stealFlash > 0) {
-              ctx.strokeStyle = `rgba(0, 0, 0, ${Math.min(1, b.stealFlash * 2) * 0.8})`;
-              ctx.lineWidth = 3;
-              ctx.font = 'bold 16px monospace';
-              ctx.textAlign = 'center';
-              ctx.strokeText(`-${b.totalStolen}g`, sx, sy - 40);
-              ctx.fillStyle = `rgba(231, 76, 60, ${Math.min(1, b.stealFlash * 2)})`;
-              ctx.fillText(`-${b.totalStolen}g`, sx, sy - 40);
-            }
-
-            // "STEALING!" label — large and urgent
+          // Status labels and effects — bandit is damaging a cargo car
+          if (!fighting) {
+            // "DAMAGING!" label — pulsing red/orange
             const pulse = 0.5 + Math.sin(performance.now() * 0.012) * 0.5;
-            const stealScale = 1 + Math.sin(performance.now() * 0.01) * 0.08;
+            const dmgScale = 1 + Math.sin(performance.now() * 0.01) * 0.08;
             ctx.save();
-            ctx.translate(sx, sy - 24);
-            ctx.scale(stealScale, stealScale);
+            ctx.translate(sx, sy - 24 * this.Z);
+            ctx.scale(dmgScale, dmgScale);
             ctx.strokeStyle = `rgba(0, 0, 0, ${pulse * 0.8})`;
             ctx.lineWidth = 3;
-            ctx.font = 'bold 15px monospace';
+            ctx.font = `bold ${15 * this.Z}px monospace`;
             ctx.textAlign = 'center';
-            ctx.strokeText('STEALING!', 0, 0);
-            ctx.fillStyle = `rgba(255, 60, 30, ${pulse})`;
-            ctx.fillText('STEALING!', 0, 0);
+            ctx.strokeText('DAMAGING!', 0, 0);
+            ctx.fillStyle = `rgba(255, 100, 30, ${pulse})`;
+            ctx.fillText('DAMAGING!', 0, 0);
             ctx.restore();
-          }
 
-          if (!fighting && b.targetSlot?.autoWeaponId) {
-            // Disabled weapon — large red glow + big X
-            const pulse = 0.6 + Math.sin(performance.now() * 0.008) * 0.4;
-            // Red glow circle behind
-            const glowR = 22 + Math.sin(performance.now() * 0.01) * 4;
-            ctx.beginPath();
-            ctx.arc(sx, sy, glowR, 0, Math.PI * 2);
-            ctx.fillStyle = `rgba(231, 50, 50, ${pulse * 0.35})`;
-            ctx.fill();
-            // Big X
-            ctx.strokeStyle = `rgba(255, 40, 40, ${pulse})`;
-            ctx.lineWidth = 5;
-            ctx.lineCap = 'round';
-            ctx.beginPath();
-            ctx.moveTo(sx - 14, sy - 14); ctx.lineTo(sx + 14, sy + 14);
-            ctx.moveTo(sx + 14, sy - 14); ctx.lineTo(sx - 14, sy + 14);
-            ctx.stroke();
-            ctx.lineCap = 'butt';
-            // DISABLED label
-            ctx.strokeStyle = `rgba(0,0,0,0.8)`;
-            ctx.lineWidth = 3;
-            ctx.font = 'bold 13px monospace';
-            ctx.textAlign = 'center';
-            ctx.strokeText('DISABLED!', sx, sy - 24);
-            ctx.fillStyle = '#ff4444';
-            ctx.fillText('DISABLED!', sx, sy - 24);
+            // Red damage particles around the cargo car
+            const t = performance.now() * 0.004;
+            for (let i = 0; i < 4; i++) {
+              const age = (t + i * 0.5) % 2;
+              if (age > 1.2) continue;
+              const progress = age / 1.2;
+              const angle = (i / 4) * Math.PI * 2 + t * 0.5;
+              const r = (10 + progress * 15) * this.Z;
+              const px = sx + Math.cos(angle) * r;
+              const py = sy + Math.sin(angle) * r - progress * 8;
+              const alpha = 1 - progress;
+              ctx.globalAlpha = alpha * 0.7;
+              ctx.beginPath();
+              ctx.arc(px, py, 2 * this.Z, 0, Math.PI * 2);
+              ctx.fillStyle = '#e74c3c';
+              ctx.fill();
+            }
+            ctx.globalAlpha = 1;
           }
 
           // "Move crew here!" prompt — pulsing arrow
           if (!fighting) {
             const bounce = Math.sin(performance.now() * 0.006) * 3;
             ctx.fillStyle = '#fff';
-            ctx.font = 'bold 9px monospace';
+            ctx.font = `bold ${9 * this.Z}px monospace`;
             ctx.textAlign = 'center';
-            ctx.fillText('▼ SEND CREW ▼', sx, sy + 18 + bounce);
+            ctx.fillText('▼ SEND CREW ▼', sx, sy + 18 * this.Z + bounce);
           }
 
           if (fighting) {
             ctx.fillStyle = '#fff';
-            ctx.font = 'bold 10px monospace';
+            ctx.font = `bold ${10 * this.Z}px monospace`;
             ctx.textAlign = 'center';
-            ctx.fillText('⚔ FIGHT!', sx, sy - 20);
+            ctx.fillText('⚔ FIGHT!', sx, sy - 20 * this.Z);
           }
           break;
         }
@@ -1672,12 +1725,12 @@ export class Renderer3D {
                 if (pass === 0) {
                   // Outer glow
                   ctx.strokeStyle = 'rgba(0, 255, 80, 0.25)';
-                  ctx.lineWidth = 16;
+                  ctx.lineWidth = 16 * this.Z;
                   ctx.stroke();
                 } else {
                   // Inner bright line
                   ctx.strokeStyle = 'rgba(100, 255, 120, 0.7)';
-                  ctx.lineWidth = 5;
+                  ctx.lineWidth = 5 * this.Z;
                   ctx.stroke();
                 }
               }
@@ -1694,9 +1747,9 @@ export class Renderer3D {
             // Big scaling: start at 1.5x, grow to 2.5x
             const scale = 1.5 + t * 1.0;
             ctx.scale(scale, scale);
-            ctx.font = '24px serif';
+            ctx.font = `${24 * this.Z}px serif`;
             ctx.textAlign = 'center';
-            ctx.fillText('\uD83C\uDFCE\uFE0F', 0, 4);
+            ctx.fillText('\uD83C\uDFCE\uFE0F', 0, 4 * this.Z);
             ctx.restore();
 
             // --- Ghost trail emojis behind the bandit ---
@@ -1711,9 +1764,9 @@ export class Renderer3D {
                 ctx.translate(sx + offsetX, sy + offsetY);
                 ctx.rotate(t * Math.PI * 8 - g * 0.5);
                 ctx.scale(Math.max(0.5, gScale), Math.max(0.5, gScale));
-                ctx.font = '20px serif';
+                ctx.font = `${20 * this.Z}px serif`;
                 ctx.textAlign = 'center';
-                ctx.fillText('\uD83C\uDFCE\uFE0F', 0, 4);
+                ctx.fillText('\uD83C\uDFCE\uFE0F', 0, 4 * this.Z);
                 ctx.restore();
               }
               ctx.globalAlpha = 1;
@@ -1724,13 +1777,13 @@ export class Renderer3D {
               const textPulse = 0.7 + Math.sin(performance.now() * 0.02) * 0.3;
               ctx.save();
               ctx.globalAlpha = textPulse;
-              ctx.font = 'bold 22px monospace';
+              ctx.font = `bold ${22 * this.Z}px monospace`;
               ctx.textAlign = 'center';
               ctx.strokeStyle = 'rgba(0, 0, 0, 0.8)';
-              ctx.lineWidth = 4;
-              ctx.strokeText('YEET!', sx, sy - 30);
+              ctx.lineWidth = 4 * this.Z;
+              ctx.strokeText('YEET!', sx, sy - 30 * this.Z);
               ctx.fillStyle = '#00ff55';
-              ctx.fillText('YEET!', sx, sy - 30);
+              ctx.fillText('YEET!', sx, sy - 30 * this.Z);
               ctx.restore();
             }
 
@@ -1741,7 +1794,7 @@ export class Renderer3D {
               const landSx = b._landX !== undefined ? b._landX : sx;
               const landSy = b._landY !== undefined ? b._landY : sy;
               // Project land position to screen
-              const lw = toWorld(landSx, landSy);
+              const lw = this._toWorldOffset(landSx, landSy);
               const ls = this._project(lw.x, lw.z);
 
               ctx.save();
@@ -1750,24 +1803,24 @@ export class Renderer3D {
 
               // Impact shockwave ring
               ctx.beginPath();
-              ctx.arc(0, 0, 20 * impactScale, 0, Math.PI * 2);
+              ctx.arc(0, 0, 20 * this.Z * impactScale, 0, Math.PI * 2);
               ctx.strokeStyle = `rgba(100, 255, 100, ${landAlpha * 0.6})`;
-              ctx.lineWidth = 3;
+              ctx.lineWidth = 3 * this.Z;
               ctx.stroke();
 
               // Splat emoji
-              ctx.font = `${Math.min(40, 24 * impactScale)}px serif`;
+              ctx.font = `${Math.min(40 * this.Z, 24 * this.Z * impactScale)}px serif`;
               ctx.textAlign = 'center';
-              ctx.fillText('\uD83D\uDCA5', 0, 8); // 💥
+              ctx.fillText('\uD83D\uDCA5', 0, 8 * this.Z); // 💥
 
               // "SPLAT!" text
               if (b._landTimer > 0.2) {
-                ctx.font = 'bold 18px monospace';
+                ctx.font = `bold ${18 * this.Z}px monospace`;
                 ctx.strokeStyle = 'rgba(0,0,0,0.8)';
                 ctx.lineWidth = 3;
-                ctx.strokeText('SPLAT!', 0, -20);
+                ctx.strokeText('SPLAT!', 0, -20 * this.Z);
                 ctx.fillStyle = '#ffcc00';
-                ctx.fillText('SPLAT!', 0, -20);
+                ctx.fillText('SPLAT!', 0, -20 * this.Z);
               }
 
               ctx.restore();
@@ -1779,9 +1832,9 @@ export class Renderer3D {
             ctx.globalAlpha = alpha;
             ctx.translate(sx, sy);
             ctx.rotate(performance.now() * 0.02);
-            ctx.font = '16px serif';
+            ctx.font = `${16 * this.Z}px serif`;
             ctx.textAlign = 'center';
-            ctx.fillText('\uD83C\uDFCE\uFE0F', 0, 4);
+            ctx.fillText('\uD83C\uDFCE\uFE0F', 0, 4 * this.Z);
             ctx.restore();
           }
           break;
@@ -1808,7 +1861,7 @@ export class Renderer3D {
     let x, y;
     if (crew.isMoving) {
       // Project moving crew position to screen
-      const w = toWorld(crew.moveX, crew.moveY);
+      const w = this._toWorldOffset(crew.moveX, crew.moveY);
       const s = this._project(w.x, w.z);
       x = s.x;
       y = s.y;
@@ -1823,7 +1876,7 @@ export class Renderer3D {
 
     // Pulsing selection ring
     const pulse = 1 + Math.sin(performance.now() * 0.006) * 0.15;
-    const r = (CREW_RADIUS + 8) * pulse;
+    const r = (CREW_RADIUS + 8) * this.Z * pulse;
     ctx.beginPath();
     ctx.arc(x, y, r, 0, Math.PI * 2);
     ctx.strokeStyle = '#fff';
@@ -1833,17 +1886,17 @@ export class Renderer3D {
     // Corner brackets
     ctx.strokeStyle = crew.color;
     ctx.lineWidth = 2.5;
-    const s = r + 4;
-    const l = 6;
+    const s = r + 4 * this.Z;
+    const l = 6 * this.Z;
     ctx.beginPath(); ctx.moveTo(x - s, y - s + l); ctx.lineTo(x - s, y - s); ctx.lineTo(x - s + l, y - s); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(x + s - l, y - s); ctx.lineTo(x + s, y - s); ctx.lineTo(x + s, y - s + l); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(x - s, y + s - l); ctx.lineTo(x - s, y + s); ctx.lineTo(x - s + l, y + s); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(x + s - l, y + s); ctx.lineTo(x + s, y + s); ctx.lineTo(x + s, y + s - l); ctx.stroke();
 
     ctx.fillStyle = '#fff';
-    ctx.font = 'bold 9px monospace';
+    ctx.font = `bold ${9 * this.Z}px monospace`;
     ctx.textAlign = 'center';
-    ctx.fillText('SELECTED', x, y - r - 8);
+    ctx.fillText('SELECTED', x, y - r - 8 * this.Z);
   }
 
   // =============================================
@@ -1880,54 +1933,54 @@ export class Renderer3D {
     const roleBonus = roleBonusMap[crew.role] || '';
 
     // Card dimensions
-    const cardW = 120;
-    const cardH = 62;
+    const cardW = 120 * this.Z;
+    const cardH = 62 * this.Z;
 
     // Position: offset to the right and slightly above the crew circle
     // Clamp so the card never goes off-screen
-    let cardX = cx + 20;
-    let cardY = cy - cardH - 8;
-    if (cardX + cardW > CANVAS_WIDTH - 4) cardX = cx - cardW - 20;
-    if (cardY < 4) cardY = cy + 20;
+    let cardX = cx + 20 * this.Z;
+    let cardY = cy - cardH - 8 * this.Z;
+    if (cardX + cardW > CANVAS_WIDTH - 4) cardX = cx - cardW - 20 * this.Z;
+    if (cardY < 4) cardY = cy + 20 * this.Z;
 
     ctx.save();
 
     // Background
     ctx.fillStyle = 'rgba(10, 14, 22, 0.82)';
     ctx.beginPath();
-    this.roundRect(cardX, cardY, cardW, cardH, 6);
+    this.roundRect(cardX, cardY, cardW, cardH, 6 * this.Z);
     ctx.fill();
 
     // Border in crew colour
     ctx.strokeStyle = crew.color;
     ctx.lineWidth = 1.5;
     ctx.beginPath();
-    this.roundRect(cardX, cardY, cardW, cardH, 6);
+    this.roundRect(cardX, cardY, cardW, cardH, 6 * this.Z);
     ctx.stroke();
 
     ctx.textAlign = 'left';
 
     // Name
     ctx.fillStyle = crew.color;
-    ctx.font = 'bold 13px monospace';
-    ctx.fillText(crew.name || `Crew ${crew.id + 1}`, cardX + 8, cardY + 17);
+    ctx.font = `bold ${13 * this.Z}px monospace`;
+    ctx.fillText(crew.name || `Crew ${crew.id + 1}`, cardX + 8 * this.Z, cardY + 17 * this.Z);
 
     // Role
     ctx.fillStyle = 'rgba(255,255,255,0.65)';
-    ctx.font = '10px monospace';
-    ctx.fillText(crew.role ? crew.role.toUpperCase() : '', cardX + 8, cardY + 30);
+    ctx.font = `${10 * this.Z}px monospace`;
+    ctx.fillText(crew.role ? crew.role.toUpperCase() : '', cardX + 8 * this.Z, cardY + 30 * this.Z);
 
     // Role bonus
     if (roleBonus) {
       ctx.fillStyle = '#f5a623';
-      ctx.font = 'bold 10px monospace';
-      ctx.fillText(roleBonus, cardX + 8, cardY + 43);
+      ctx.font = `bold ${10 * this.Z}px monospace`;
+      ctx.fillText(roleBonus, cardX + 8 * this.Z, cardY + 43 * this.Z);
     }
 
     // Gun level
     ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.font = '9px monospace';
-    ctx.fillText(`Gun Lv.${crew.gunLevel}`, cardX + 8, cardY + 56);
+    ctx.font = `${9 * this.Z}px monospace`;
+    ctx.fillText(`Gun Lv.${crew.gunLevel}`, cardX + 8 * this.Z, cardY + 56 * this.Z);
 
     ctx.restore();
   }
@@ -1950,7 +2003,7 @@ export class Renderer3D {
       f.life -= dt;
       if (f.life <= 0) { f.active = false; continue; }
       const t = f.life / f.maxLife; // 1→0
-      const radius = 8 * t;
+      const radius = 8 * this.Z * t;
       const alpha = t;
       ctx.save();
       ctx.globalAlpha = alpha;
@@ -1972,7 +2025,7 @@ export class Renderer3D {
   spawnHitSpark(pixelX, pixelY) {
     const s = this._hitSparks.find(s => !s.active);
     if (!s) return;
-    const w = toWorld(pixelX, pixelY);
+    const w = this._toWorldOffset(pixelX, pixelY);
     const screen = this._project(w.x, w.z, 5);
     s.active = true;
     s.x = screen.x;
@@ -1994,7 +2047,7 @@ export class Renderer3D {
       s.life -= dt;
       if (s.life <= 0) { s.active = false; continue; }
       const t = s.life / s.maxLife; // 1→0
-      const radius = 5 * t;
+      const radius = 5 * this.Z * t;
       ctx.save();
       ctx.globalAlpha = t * 0.9;
       ctx.beginPath();
@@ -2010,7 +2063,7 @@ export class Renderer3D {
           const pa = p.life / 0.1;
           ctx.globalAlpha = pa * 0.8;
           ctx.beginPath();
-          ctx.arc(p.x, p.y, 1.5 * pa, 0, Math.PI * 2);
+          ctx.arc(p.x, p.y, 1.5 * this.Z * pa, 0, Math.PI * 2);
           ctx.fill();
         }
       }
@@ -2030,7 +2083,7 @@ export class Renderer3D {
     if (dist < 1) return;
     const nx = dx / dist;
     const ny = dy / dist;
-    const lineLen = 150;
+    const lineLen = 150 * this.Z;
     const ex = sx + nx * lineLen;
     const ey = sy + ny * lineLen;
     const ctx = this.ctx;
@@ -2052,17 +2105,17 @@ export class Renderer3D {
     ctx.textAlign = 'center';
     for (const d of numbers) {
       if (!d.active) continue;
-      const w = toWorld(d.x, d.y);
+      const w = this._toWorldOffset(d.x, d.y);
       const s = this._project(w.x, w.z);
       const t = 1 - d.life / d.maxLife; // 0→1 over lifetime
       const alpha = Math.max(0, d.life / d.maxLife);
       // Float upward in screen space
-      const yOff = t * -35;
+      const yOff = t * -35 * this.Z;
       // Scale size and color by damage amount
       const dmg = Math.round(d.damage);
       const dmgScale = Math.min(2, 1 + dmg / 40); // bigger hits = bigger text
       const popScale = 1 + 0.4 * Math.max(0, 1 - t * 4);
-      const size = Math.round(18 * dmgScale * popScale);
+      const size = Math.round(18 * this.Z * dmgScale * popScale);
       ctx.font = `bold ${size}px monospace`;
       // Color shifts from yellow (low) → orange (mid) → red (high)
       let r, g, b;
@@ -2346,8 +2399,8 @@ export class Renderer3D {
   drawCrewPanel(crew, panelY) {
     const ctx = this.ctx;
 
-    // Don't draw panel if all crew are assigned
-    const unassigned = crew.filter(c => !c.assignment && !c.isMoving);
+    // Don't draw panel if all crew are assigned or dead
+    const unassigned = crew.filter(c => c.alive && !c.assignment && !c.isMoving);
     if (unassigned.length === 0) return;
 
     const spacing = 70;
@@ -2376,7 +2429,7 @@ export class Renderer3D {
       c.panelX = cx;
       c.panelY = cy;
 
-      if (c.assignment || c.isMoving) continue;
+      if (!c.alive || c.assignment || c.isMoving) continue;
 
       ctx.beginPath();
       ctx.arc(cx, cy, CREW_RADIUS + 4, 0, Math.PI * 2);
@@ -3749,9 +3802,10 @@ export class Renderer3D {
       const canTravel = zone.canTravelTo(station.id);
       const isEnd = station.type === 'exit';
       const isStart = station.type === 'start';
+      const isShop = station.type === 'shop';
 
-      const bw = isEnd ? 28 : isStart ? 24 : 20;
-      const bh = isEnd ? 22 : isStart ? 18 : 16;
+      const bw = isEnd ? 28 : isStart ? 24 : isShop ? 24 : 20;
+      const bh = isEnd ? 22 : isStart ? 18 : isShop ? 18 : 16;
 
       if (canTravel && !isCurrent) {
         ctx.shadowColor = isHovered ? '#f5a623' : '#f5a62366';
@@ -3759,15 +3813,17 @@ export class Renderer3D {
       }
 
       if (isCurrent) {
-        ctx.fillStyle = '#f5a623';
+        ctx.fillStyle = isShop ? '#4db6ac' : '#f5a623';
       } else if (station.visited) {
-        ctx.fillStyle = '#5a5040';
+        ctx.fillStyle = isShop ? '#3a5a56' : '#5a5040';
       } else {
-        ctx.fillStyle = '#6b5a48';
+        ctx.fillStyle = isShop ? '#4a7a72' : '#6b5a48';
       }
       ctx.fillRect(x - bw / 2, y - bh / 2, bw, bh);
 
-      ctx.fillStyle = isCurrent ? '#c88a1a' : station.visited ? '#4a4030' : '#8b7355';
+      ctx.fillStyle = isShop
+        ? (isCurrent ? '#358a80' : station.visited ? '#2a4a46' : '#5a9a8a')
+        : (isCurrent ? '#c88a1a' : station.visited ? '#4a4030' : '#8b7355');
       ctx.beginPath();
       ctx.moveTo(x - bw / 2 - 3, y - bh / 2);
       ctx.lineTo(x, y - bh / 2 - 8);
@@ -3793,6 +3849,7 @@ export class Renderer3D {
       ctx.textAlign = 'center';
       if (isStart) ctx.fillText('DEP', x, y + 3);
       else if (isEnd) ctx.fillText('ARR', x, y + 3);
+      else if (isShop) ctx.fillText('SHOP', x, y + 3);
       else if (station.type === 'empty' && !station.visited) {
         ctx.fillStyle = '#888';
         ctx.fillText('?', x, y + 3);
@@ -3911,6 +3968,7 @@ export class Renderer3D {
         combat: '#e74c3c',
         empty: '#888',
         exit: '#2ecc71',
+        shop: '#4db6ac',
       };
       ctx.fillStyle = colors[arrival.type] || '#fff';
       ctx.font = 'bold 32px monospace';
@@ -3923,6 +3981,7 @@ export class Renderer3D {
         combat: 'Defend the train! Deliver the cargo!',
         empty: 'The wasteland is quiet... for now.',
         exit: 'Cargo delivered! Time to resupply.',
+        shop: 'Pick an upgrade for one crew member.',
       };
       ctx.fillText(subtitles[arrival.type] || '', cx, cy + 30);
     }
@@ -4070,12 +4129,13 @@ export class Renderer3D {
     // Buttons — all same style, stacked vertically
     const buttons = [
       { key: 'start', label: 'START GAME' },
-      { key: 'powerups', label: '⚡ POWER UPS' },
-      { key: 'settings', label: '⚙ SETTINGS' },
+      { key: 'powerups', label: '\u26a1 POWER UPS' },
+      { key: 'settings', label: '\u2699 SETTINGS' },
     ];
     const glow = 0.6 + Math.sin(t * 3) * 0.4;
     for (const b of buttons) {
       const r = btn[b.key];
+      if (!r) continue; // skip removed buttons
       const hover = input.hitRect(r.x, r.y, r.w, r.h);
       ctx.fillStyle = hover ? '#3a2800' : '#2a1c00';
       ctx.strokeStyle = hover ? `rgba(245,166,35,${0.9 + glow * 0.1})` : `rgba(245,166,35,${0.5 + glow * 0.5})`;
