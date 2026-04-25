@@ -1055,84 +1055,158 @@ The web game manages phases with timer variables in the update loop. The UE5 ver
 
 ---
 
-## Step 13: Level-Up & Card System
+## Step 13: Crew Upgrade Pick Screen (`UPGRADE_PICK`)
 
-**Goal:** When XP threshold is reached, pause combat and present 3 upgrade cards.
+**Goal:** After winning a combat station, each crew member picks a new weapon class from 3 random options. The screen is inspired by Bad North's class-selection UI — a portrait bar, a vertical upgrade list on the left with tree connectors, and a detail panel on the right.
+
+### Design Reference — Bad North Influence
+
+Bad North's upgrade screen uses:
+- **Portrait bar** across the top — all characters visible; selected character's column is rose-highlighted
+- **Left panel** — upgrade options as nodes connected by a branching tree line
+- **Right panel** — hovered option detail: large icon, name, type label, description, stat block
+- Warm muted color palette; rose/pink accent for the active selection
+
+Our implementation maps this directly:
+- Portrait bar (108 px tall): crew silhouette avatars with color ring, name, current weapon
+- Left panel (420 px wide): rose tint `rgba(70,20,40,0.55)`, dashed tree line, 3 upgrade cards
+- Right panel (540 px wide): rotated diamond icon, word-wrapped description, 3-column stat block
+- Rose accent: `#7B2D48` / `#A84068`
 
 ### What to Create
-- **WBP_LevelUp** Widget Blueprint
-- Card generation logic (on GameMode)
+- **WBP_UpgradePick** Widget Blueprint
+- `S_CrewUpgrade` struct (one row per upgrade)
+- `E_WeaponClass` enum
+- `GM_TrainDefense` custom event: `GenerateUpgradeChoices` → Array of S_CrewUpgrade
 
-### Trigger
-In combat Tick or on enemy kill:
-1. Check: `CurrentXP >= CurrentLevel * 80`
-2. If true: increment `CurrentLevel`, call `ChangeState(LevelUp)`
+### `S_CrewUpgrade` Struct
 
-### Card Generation — GenerateCards() returns Array of Structs
-Define a **S_LevelUpCard** struct:
-| Field | Type |
-|---|---|
-| `CardType` | Enum (CrewGunUpgrade, NewAutoWeapon, UpgradeAutoWeapon, Shield, Regen, Repair) |
-| `TargetCrewIndex` | Integer |
-| `WeaponType` | Enum |
-| `DisplayName` | String |
-| `Description` | String |
-| `IconTexture` | Texture2D |
+| Field        | Type    | Notes |
+|--------------|---------|-------|
+| `ID`         | Name    | e.g. `longRifle` |
+| `DisplayName`| String  | e.g. `Long Rifle` |
+| `Color`      | LinearColor | Card accent and icon color |
+| `Description`| String  | Shown in detail panel |
+| `IsMelee`    | Boolean | Drives type badge and stat display |
+| `Damage`     | Float   |  |
+| `FireRate`   | Float   | Shots/sec (0 for melee) |
+| `Range`      | Float   | px equivalent — scale to UE5 units |
+| `AOERadius`  | Float   | Melee only |
 
-**Logic:**
-1. Build eligible card pool:
-   - For each crew: if `WeaponLevel < 5` → add CrewGunUpgrade card
-   - If auto-weapon count < 2 → add NewAutoWeapon cards (Turret, Auto Laser, Laser)
-   - For each equipped auto-weapon: if level < 5 → add UpgradeAutoWeapon card
-   - If defense slots < 2 → add Shield, Regen cards
-   - Always add Repair card
-2. Randomize the pool using a Fisher-Yates shuffle (see note below), then pick the first 3 (or fewer if pool is small)
+### Crew Upgrade Pool (tuning)
 
-### WBP_LevelUp Widget Layout
-- Dark semi-transparent overlay
-- 3 card slots horizontally centered
-- Each card: icon on top, name in bold, description below
-- Hover: card scales up 10%
-- Click: apply upgrade, play confetti, return to Running
+| ID           | DisplayName  | Melee | DMG | Fire Rate | Range  | AOE Radius |
+|--------------|--------------|-------|-----|-----------|--------|------------|
+| `longRifle`  | Long Rifle   | No    | 20  | 1.2/s     | 350 px | —          |
+| `shotgun`    | Shotgun      | No    | 8   | 1.0/s     | 120 px | — (5-pellet spread) |
+| `rapidFire`  | Rapid Fire   | No    | 6   | 5.0/s     | 180 px | —          |
+| `brawler`    | Brawler      | Yes   | 14  | —         | 50 px  | 50 px      |
+| `incendiary` | Incendiary   | No    | 10  | 1.5/s     | 200 px | —          |
 
-### Weapon Acquire Fanfare
-When a new auto-weapon is acquired (not an upgrade):
-1. Don't return to Running immediately
-2. Show black bars (cinematic letterbox) + weapon name text centered
-3. Play powerup sound
-4. **Delay** 1.5s
-5. Then transition to `PlaceWeapon` state (not Running)
+Store as a `DataTable` (row struct = `S_CrewUpgrade`). `GenerateUpgradeChoices` does a Fisher-Yates shuffle on all rows and returns the first 3.
 
-### Apply Upgrade — Custom Event: ApplyCard(Card: S_LevelUpCard)
-Switch on CardType:
-- **CrewGunUpgrade:** increment crew's `WeaponLevel` by 1
-- **NewAutoWeapon:** set `PendingWeaponType`, go to PlaceWeapon state
-- **UpgradeAutoWeapon:** increment the mount's `AutoWeaponLevel` by 1
-- **Shield:** occupy a defense slot with Shield, increment shield level
-- **Regen:** occupy a defense slot with Regen, increment regen level
-- **Repair:** add 30 HP to train immediately
+### Screen Flow
+
+```
+Enter UPGRADE_PICK
+  │
+  └─ choose_crew phase
+       Portrait bar shown. Click a portrait → generate choices for that crew.
+       │
+       └─ choose_upgrade phase
+            Left: 3 upgrade cards active. Hover → preview in right panel.
+            Click card → ApplyUpgrade(CrewRef, UpgradeID) → return to ZONE_MAP.
+            ESC → skip (no upgrade applied).
+```
+
+### WBP_UpgradePick Layout (UMG)
+
+```
+[Canvas Panel — full viewport]
+  ├─ [Image] dark overlay  (fill, ZOrder 0)
+  ├─ [Portrait Bar — Horizontal Box, 108 px tall, top-anchored]
+  │    ├─ [WBP_CrewPortrait × N]  (one per crew — selected gets rose tint)
+  │    └─ [Text] title + ESC hint (right-aligned)
+  ├─ [Left Panel — Overlay, 420 px wide, below portrait bar]
+  │    ├─ [Image] rose tint background
+  │    ├─ [Text] "WEAPON CLASS" label
+  │    └─ [Vertical Box] upgrade list
+  │         └─ [WBP_UpgradeListItem × 3]
+  └─ [Right Panel — Overlay, 540 px wide, to the right]
+       ├─ [Image] dark background
+       ├─ [Image] diamond icon (rotated 45°, upgrade color)
+       ├─ [Text] upgrade name (large)
+       ├─ [Text] type label (MELEE CLASS / RANGED CLASS)
+       ├─ [RichTextBlock] description (word-wrapped)
+       ├─ [Horizontal Box] stat columns (DMG / RATE / RNG or AOE / DMG / STYLE)
+       └─ [Text] "click upgrade to select" hint
+```
+
+### `WBP_CrewPortrait` Sub-Widget
+
+- **Border** or **Overlay** as root; rose fill when `bSelected`
+- Color ring: **Image** with circular mask, crew color
+- Silhouette: two overlapping circles (head + body arc) drawn with crew color
+- Name and current weapon in small monospace text below
+
+### `WBP_UpgradeListItem` Sub-Widget
+
+- Root: **Button** (so hover and click fire events automatically)
+- Left stripe: thin colored **Image** (upgrade color)
+- Node dot: small circular **Image** (upgrade color on hover, dim otherwise)
+- Name: **Text** bold, white on hover / warm on idle
+- Type badge: **Border** + **Text** (rose-tinted for MELEE, blue for RANGED)
+- Short description: **Text**, small
+- Stat row: **Text**, small
+
+On hover → broadcast **OnUpgradeHovered(S_CrewUpgrade)** event → right panel updates.
+On click → broadcast **OnUpgradeSelected(S_CrewUpgrade)** → GameMode applies and exits state.
+
+### Tree Connector Lines
+
+UMG has no canvas-draw-line API. Options:
+1. **Thin Image widgets** (1 px wide, vertical) — simplest; use a dashed texture
+2. **Retainer Box** with a custom material that draws a dashed line
+3. **Custom Canvas Renderer** (UMG Custom Widget) — most faithful to the web version
+
+Recommendation: option 1 (vertical 1-px Image with a dashed texture, plus small circular Image nodes).
+
+### Apply Upgrade — Custom Event: `ApplyCrewUpgrade(CrewActor, UpgradeID)`
+
+1. Look up `S_CrewUpgrade` row in the DataTable by `UpgradeID`
+2. Set `CrewActor.WeaponClass = UpgradeID`
+3. Copy stat fields onto the crew's weapon component (Damage, FireRate, Range, IsMelee)
+4. Play powerup sound cue
+5. Call `ChangeState(ZoneMap)`
 
 ### Key Blueprint Nodes
-- **Create Widget** (WBP_LevelUp, once, reuse)
-- **Set Game Paused** = true (freeze combat)
-- **Fisher-Yates shuffle** — UE5 Blueprints have no built-in Shuffle node. Implement with a **For Loop** (from LastIndex down to 1), **Random Integer in Range** (0 to current index), and **Swap** (array element at current index with element at random index). Alternatively, pick 3 random indices without replacement using **Random Integer in Range** + **Remove Index**.
-- **Play Animation** (UMG animation for card hover/select)
-- **Delay** (fanfare timing)
-- **Spawn Emitter at Location** (confetti on card select)
+- **Get Data Table Row** (look up S_CrewUpgrade by ID)
+- **Fisher-Yates shuffle** on the DataTable rows array (see Step 12 notes)
+- **Create Widget** (WBP_UpgradePick — create once, reuse)
+- **Set Input Mode UI Only** while the screen is open; restore **Set Input Mode Game Only** on exit
+- **On Clicked** / **On Hovered** (Button delegates on WBP_UpgradeListItem)
+- **Set Color and Opacity** (drive the rose tint on portrait selection)
 
 ### Web-to-UE5 Translation
-The web game generates cards as plain objects and renders them on canvas. In UE5, cards are structs displayed via a UMG widget. The pause uses SetGamePaused. The card pool filtering logic is identical.
+
+| Web (canvas 2D)                        | UE5 (UMG)                              |
+|----------------------------------------|----------------------------------------|
+| `fillRect` rose tint behind left panel | Image widget with rose fill, opacity   |
+| `arc()` crew avatar silhouette         | Two circular Image widgets, crew color |
+| Dashed `setLineDash` tree line         | 1-px Image with dashed texture         |
+| Rotated diamond `rotate(π/4)`          | Image widget with **Render Transform** Rotation = 45° |
+| `fillText` word-wrapped description    | **RichTextBlock** or **Wrap Text = true** on Text |
+| `measureText` for wrap                 | Auto-wrap built into UMG Text widget   |
 
 ### Verify
-- [ ] Level-up triggers at correct XP thresholds (level 1→2 at 80 XP, ~7 kills)
-- [ ] 3 cards displayed with correct names and descriptions
-- [ ] Cards respect constraints (no gun upgrade if already Lv5, no 3rd auto-weapon)
-- [ ] Clicking a card applies the upgrade immediately
-- [ ] Repair instantly heals 30 HP
-- [ ] New weapon acquisition shows fanfare then transitions to PlaceWeapon
-- [ ] Confetti plays on card selection
-- [ ] Game unpauses after selection (or after weapon placement)
-- [ ] Repair card is always available as an option
+- [ ] Portrait bar shows both crew; selected crew gets rose column highlight
+- [ ] Clicking a portrait generates 3 random upgrade choices from the DataTable
+- [ ] Hovering a list item updates the right detail panel (name, description, stats)
+- [ ] Diamond icon renders at 45° rotation in the upgrade's color
+- [ ] Clicking a list item calls `ApplyCrewUpgrade` and transitions to ZONE_MAP
+- [ ] ESC skips without applying any upgrade
+- [ ] Type badge shows MELEE (orange) or RANGED (blue) correctly
+- [ ] Powerup sound plays on confirm
 
 ---
 
@@ -1736,12 +1810,20 @@ DA_GameConstants
 │   ├── TurretLevels (Array of Struct)
 │   ├── AutoLaserLevels (Array of Struct)
 │   └── LaserLevels (Array of Struct)
+├── CrewUpgrades          ← DataTable (DT_CrewUpgrades), row struct = S_CrewUpgrade
+│   ├── longRifle  — DMG 20, Rate 1.2, Range 350, Melee false
+│   ├── shotgun    — DMG 8,  Rate 1.0, Range 120, Melee false, Spread 5
+│   ├── rapidFire  — DMG 6,  Rate 5.0, Range 180, Melee false
+│   ├── brawler    — DMG 14, Rate 0,   Range 50,  Melee true, AOE 50
+│   └── incendiary — DMG 10, Rate 1.5, Range 200, Melee false
 ├── Enemies
 │   ├── BaseHP, BaseSpeed, etc.
 │   └── TierMultipliers (Array)
 ├── Economy
-│   ├── CoinValue, XPPerKill, etc.
+│   ├── CoinValue, etc.
 │   └── ShopUpgrades (Array of Struct)
+│       ├── GunPower — Cost 40, MaxLevel 5, PerLevel +15% damage
+│       └── TrainHP  — Cost 30, MaxLevel 5, PerLevel +25 max HP
 └── Pools
     ├── MaxEnemies = 150
     ├── MaxProjectiles = 300
