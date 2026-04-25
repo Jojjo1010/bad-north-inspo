@@ -945,6 +945,7 @@ export class Renderer3D {
       if (mount.crew) {
         ctx.font = `${12 * this.Z}px serif`;
         ctx.textAlign = 'center';
+        ctx.fillStyle = 'white';
         ctx.fillText(crewEmoji(mount.crew), sx, sy + 4 * this.Z);
 
         // PROTOTYPE: buddy bonus "+" removed for cleaner visuals
@@ -997,6 +998,7 @@ export class Renderer3D {
       if (sx === undefined) continue;
       ctx.font = `${12 * this.Z}px serif`;
       ctx.textAlign = 'center';
+      ctx.fillStyle = 'white';
       ctx.fillText(crewEmoji(slot.crew), sx, sy + 4 * this.Z);
     }
   }
@@ -1366,6 +1368,7 @@ export class Renderer3D {
       ctx.globalAlpha = pulse;
       ctx.font = `${20 * this.Z}px serif`;
       ctx.textAlign = 'center';
+      ctx.fillStyle = 'white';
       ctx.fillText(crewEmoji(c), sx, sy + 6 * this.Z);
       ctx.globalAlpha = 1;
     }
@@ -2438,6 +2441,7 @@ export class Renderer3D {
 
       ctx.font = '18px serif';
       ctx.textAlign = 'center';
+      ctx.fillStyle = 'white';
       ctx.fillText(crewEmoji(c), cx, cy + 6);
 
       // Role badge below crew circle
