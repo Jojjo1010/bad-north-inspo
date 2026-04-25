@@ -29,42 +29,37 @@ Complete reference for game mechanics, systems, UI, and flow.
 
 ## 2. Game States & Flow
 
-The game uses 13 discrete states (indexed 0-12):
+The game uses 10 discrete states (indexed 0–9):
 
-| Index | State          | Description |
-|-------|----------------|-------------|
-| 0     | `ZONE_MAP`     | Navigate the procedural station graph |
-| 1     | `SETUP`        | Pre-combat crew/weapon assignment |
-| 2     | `RUNNING`      | Active combat gameplay |
-| 3     | `LEVELUP`      | Choose 1 of 3 upgrade cards |
-| 4     | `PLACE_WEAPON` | Click a mount to install a new auto-weapon |
-| 5     | `GAMEOVER`     | Death screen |
-| 6     | `PAUSED`       | Pause menu (resume / restart / quit) |
-| 7     | `SHOP`         | Persistent upgrade shop |
-| 8     | `SETTINGS`     | Volume sliders (music / SFX) |
-| 9     | `START_SCREEN` | Title screen with 3D train model |
-| 10    | `WORLD_SELECT` | Choose which world to enter |
-| 11    | `WORLD_MAP`    | World-level overview after completing a zone |
-| 12    | `RUN_PAUSE`    | Tactical pause during combat (can aim weapons) |
+| Index | State           | Description |
+|-------|-----------------|-------------|
+| 0     | `ZONE_MAP`      | Navigate the procedural station graph |
+| 1     | `SETUP`         | Pre-combat crew/weapon assignment |
+| 2     | `RUNNING`       | Active combat gameplay |
+| 3     | `GAMEOVER`      | Death or victory screen |
+| 4     | `PAUSED`        | Pause menu (resume / restart / quit) |
+| 5     | `SETTINGS`      | Volume sliders (music / SFX) |
+| 6     | `START_SCREEN`  | Title screen with 3D train model |
+| 7     | `WORLD_MAP`     | World-level overview after completing a zone |
+| 8     | `RUN_PAUSE`     | Tactical pause during combat (can aim weapons) |
+| 9     | `UPGRADE_PICK`  | Between-station crew weapon upgrade selection |
 
 ### Transition Diagram
 
 ```
-START_SCREEN ──┬──> WORLD_SELECT ──> ZONE_MAP ──> SETUP ──> RUNNING
-               ├──> SHOP ──> START_SCREEN                    │  │  │
-               └──> SETTINGS ──> START_SCREEN                │  │  │
-                                                             │  │  │
-                     ┌───────────────────────────────────────┘  │  │
-                     v                                          │  │
-                  LEVELUP ──> PLACE_WEAPON ──> RUNNING          │  │
-                  LEVELUP ──> RUNNING                           │  │
-                     ┌──────────────────────────────────────────┘  │
-                     v                                             │
-                  RUN_PAUSE ──> RUNNING                            │
-                  PAUSED ──> RUNNING / SETUP / START_SCREEN        │
-                     ┌─────────────────────────────────────────────┘
+START_SCREEN ──┬──> WORLD_MAP ──> ZONE_MAP ──> SETUP ──> RUNNING
+               └──> SETTINGS ──> START_SCREEN              │  │  │
+                                                           │  │  │
+                     ┌─────────────────────────────────────┘  │  │
+                     v                                        │  │
+                  UPGRADE_PICK ──> ZONE_MAP                   │  │
+                     ┌────────────────────────────────────────┘  │
+                     v                                           │
+                  RUN_PAUSE ──> RUNNING                          │
+                  PAUSED ──> RUNNING / SETUP / START_SCREEN      │
+                     ┌───────────────────────────────────────────┘
                      v
-                  Combat Win ──> ZONE_MAP ──> ... ──> WORLD_MAP ──> ZONE_MAP / START_SCREEN
+                  Combat Win ──> UPGRADE_PICK ──> ZONE_MAP ──> ... ──> WORLD_MAP
                   Death ──> GAMEOVER ──> START_SCREEN
 ```
 
@@ -517,32 +512,55 @@ Each station win grants a flat `GOLD_PER_STATION = 25` gold.
 
 ---
 
-## 14. Level-Up System
+## 14. Crew Upgrade Pick (`UPGRADE_PICK`)
 
-### XP
+After winning a combat station, each alive crew member gets to pick a new weapon class. The game enters `UPGRADE_PICK` state and presents the **Bad North-inspired upgrade screen**.
+
+### Layout
 
 ```
-XP_PER_KILL  = 12
-XP to next   = currentLevel * XP_PER_LEVEL
-XP_PER_LEVEL = 80
+┌─── Portrait bar (full width, 108px) ─────────────────────────────────┐
+│  [Rex]  [Kit]         UPGRADE CREW                       ESC  skip    │
+│  (highlighted if selected)                                            │
+├─── Left panel (420px) ──────────────┬─── Right panel (540px) ────────┤
+│  WEAPON CLASS                       │  [Large diamond icon]           │
+│                                     │                                 │
+│  ┆─ ◉ ─ Long Rifle  RANGED ──────── │  Upgrade Name                  │
+│  ┆     Short range, wide burst …    │  RANGED  CLASS                  │
+│  ┆     DMG 20  RNG 350  1.2/s       │                                 │
+│  ┆─ ◉ ─ Shotgun     RANGED          │  Full description, word-wrapped │
+│  ┆─ ◉ ─ Brawler     MELEE           │                                 │
+│                                     │  DMG  RATE  RNG                 │
+│                                     │  20   1.2/s  350px              │
+│                                     │                                 │
+│                                     │   click upgrade to select       │
+└─────────────────────────────────────┴─────────────────────────────────┘
 ```
 
-So level 1 requires 80 XP (about 7 kills), level 2 requires 160 XP, etc.
+### Phases
 
-### Card Selection
+| Phase            | Behaviour |
+|------------------|-----------|
+| `choose_crew`    | Both crew portraits shown. Click a portrait to select that crew member and generate 3 random weapon choices. |
+| `choose_upgrade` | Left panel shows the 3 upgrade items with tree connector lines. Hover to preview in the right detail panel. Click to confirm. |
 
-On level-up, the game pauses and presents **3 random cards** drawn from the pool:
+### Upgrade Pool (`CREW_UPGRADES`)
 
-| Card Type          | Effect |
-|--------------------|--------|
-| Manual Gun Upgrade | Increase a Gunner crew member's weapon level |
-| New Auto-Weapon    | Acquire Turret, Auto Laser, or Laser (Ricochet) (then place on mount) |
-| Auto-Weapon Upgrade| Level up an existing auto-weapon |
-| Shield (new/upgrade)| Add or upgrade Shield defense |
-| Regen (new/upgrade)| Add or upgrade Regen defense |
-| Repair             | Instant +30 HP (always available, no slot) |
+| ID           | Name        | Type   | DMG | Fire Rate | Range  | Notes |
+|--------------|-------------|--------|-----|-----------|--------|-------|
+| `longRifle`  | Long Rifle  | Ranged | 20  | 1.2/s     | 350 px | Long range, slow |
+| `shotgun`    | Shotgun     | Ranged | 8   | 1.0/s     | 120 px | Wide burst, 5-pellet spread |
+| `rapidFire`  | Rapid Fire  | Ranged | 6   | 5.0/s     | 180 px | Fast, low damage |
+| `brawler`    | Brawler     | Melee  | 14  | —         | 50 px  | AOE garlic aura, instant bandit kick |
+| `incendiary` | Incendiary  | Ranged | 10  | 1.5/s     | 200 px | DOT area, medium range |
 
-Cards are shuffled randomly. New auto-weapons trigger the `PLACE_WEAPON` state where the player clicks a mount to install it. A **weapon acquisition fanfare** plays with a freeze-frame effect.
+Three choices are drawn at random from this pool each time. ESC skips the upgrade without selecting.
+
+### Visual Design
+
+- **Portrait bar** — silhouette avatars with crew color ring, name, and current weapon label. Selected crew gets a rose-tinted column highlight extending the full height of the screen.
+- **Upgrade list** — vertical cards with a dashed tree connector line and colored node dots. Each card has a left color stripe, type badge (MELEE/RANGED), short description, and stat row. A rotated diamond in the upgrade color appears on hover.
+- **Detail panel** — large rotated diamond icon, full name, type label, word-wrapped description, and a three-column stat block (DMG / RATE / RNG or AOE / DMG / STYLE for melee).
 
 ---
 
