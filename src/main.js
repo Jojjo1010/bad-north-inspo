@@ -875,154 +875,254 @@ function renderUpgradePick() {
   renderer.setCameraOffset(0);
   renderer.drawTerrain(0);
   const c = renderer.ctx;
+  const W = CANVAS_WIDTH, H = CANVAS_HEIGHT;
 
-  // Dim overlay
-  c.fillStyle = 'rgba(0,0,0,0.7)';
-  c.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  // Warm dark background
+  c.fillStyle = 'rgba(10, 7, 6, 0.91)';
+  c.fillRect(0, 0, W, H);
 
-  if (upgradePickPhase === 'choose_crew') {
-    // --- Crew selection phase ---
-    c.fillStyle = '#4db6ac';
-    c.font = 'bold 24px monospace';
-    c.textAlign = 'center';
-    c.fillText('UPGRADE SHOP', CANVAS_WIDTH / 2, 100);
+  const aliveCrew = train.crew.filter(cr => cr.alive);
 
-    c.fillStyle = '#aaa';
-    c.font = '14px monospace';
-    c.fillText('Choose a crew member to upgrade', CANVAS_WIDTH / 2, 130);
+  // Layout
+  const PORT_H = 108;
+  const SPLIT_X = 420;
+  const ROSE = '#7B2D48';
+  const ROSE_LT = '#A84068';
 
-    const aliveCrew = train.crew.filter(cr => cr.alive);
-    const crewCardW = 160, crewCardH = 100, crewGap = 24;
-    const crewTotalW = aliveCrew.length * crewCardW + (aliveCrew.length - 1) * crewGap;
-    const crewStartX = CANVAS_WIDTH / 2 - crewTotalW / 2;
-    const crewCardY = 170;
+  // \u2500\u2500 Portrait bar \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  c.fillStyle = 'rgba(16, 11, 9, 0.97)';
+  c.fillRect(0, 0, W, PORT_H);
+  c.fillStyle = 'rgba(255,220,180,0.07)';
+  c.fillRect(0, PORT_H - 1, W, 1);
 
-    for (let i = 0; i < aliveCrew.length; i++) {
-      const crew = aliveCrew[i];
-      const cx = crewStartX + i * (crewCardW + crewGap);
-      crew._pickX = cx; crew._pickY = crewCardY; crew._pickW = crewCardW; crew._pickH = crewCardH;
+  const portW = 110, portH = 86, portPad = 16, portY = 11;
 
-      const hovered = upgradePickCrewHovered === i;
+  for (let i = 0; i < aliveCrew.length; i++) {
+    const crew = aliveCrew[i];
+    const selected = upgradePickPhase === 'choose_upgrade' && upgradePickCrew === crew;
+    const hov = upgradePickCrewHovered === i && upgradePickPhase === 'choose_crew';
+    const lit = selected || hov;
+    const px = portPad + i * (portW + portPad);
+    crew._pickX = px; crew._pickY = portY; crew._pickW = portW; crew._pickH = portH;
 
-      c.fillStyle = hovered ? 'rgba(40,60,70,0.95)' : 'rgba(20,30,40,0.9)';
-      c.beginPath();
-      renderer.roundRect(cx, crewCardY, crewCardW, crewCardH, 8);
-      c.fill();
-
-      c.strokeStyle = hovered ? crew.color : '#555';
-      c.lineWidth = hovered ? 2 : 1;
-      c.beginPath();
-      renderer.roundRect(cx, crewCardY, crewCardW, crewCardH, 8);
-      c.stroke();
-
-      // Crew color dot
-      c.fillStyle = crew.color;
-      c.beginPath();
-      c.arc(cx + crewCardW / 2, crewCardY + 30, 10, 0, Math.PI * 2);
-      c.fill();
-
-      // Name
-      c.fillStyle = '#fff';
-      c.font = 'bold 14px monospace';
-      c.textAlign = 'center';
-      c.fillText(crew.name, cx + crewCardW / 2, crewCardY + 58);
-
-      // Current upgrade
-      c.fillStyle = '#888';
-      c.font = '10px monospace';
-      c.fillText(crew.upgrade ? crew.upgrade.name : 'No upgrade', cx + crewCardW / 2, crewCardY + 78);
-
-      // HP bar
-      const barW = crewCardW - 30, barH = 4;
-      const bx = cx + 15, by = crewCardY + 88;
-      const ratio = Math.max(0, crew.hp / crew.maxHp);
-      c.fillStyle = 'rgba(0,0,0,0.5)';
-      c.fillRect(bx, by, barW, barH);
-      c.fillStyle = ratio > 0.5 ? '#4caf50' : ratio > 0.25 ? '#ff9800' : '#f44336';
-      c.fillRect(bx, by, barW * ratio, barH);
+    // Warm column tint extending down behind this portrait
+    if (selected) {
+      c.fillStyle = 'rgba(110, 28, 58, 0.32)';
+      c.fillRect(px - 4, portY, portW + 8, H - portY);
     }
 
-    c.fillStyle = '#555';
-    c.font = '11px monospace';
-    c.textAlign = 'center';
-    c.fillText('ESC to skip', CANVAS_WIDTH / 2, crewCardY + crewCardH + 30);
+    // Card
+    c.fillStyle = lit ? 'rgba(95, 28, 52, 0.92)' : 'rgba(32, 24, 20, 0.92)';
+    c.beginPath(); renderer.roundRect(px, portY, portW, portH, 7); c.fill();
+    c.strokeStyle = selected ? ROSE_LT : hov ? 'rgba(180,90,120,0.6)' : 'rgba(70,52,44,0.5)';
+    c.lineWidth = selected ? 2 : 1;
+    c.beginPath(); renderer.roundRect(px, portY, portW, portH, 7); c.stroke();
 
+    // Silhouette avatar
+    const ax = px + portW / 2, ay = portY + 34;
+    c.fillStyle = lit ? 'rgba(255,255,255,0.1)' : 'rgba(255,255,255,0.04)';
+    c.beginPath(); c.arc(ax, ay, 22, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = crew.color; c.lineWidth = selected ? 3 : 2;
+    c.beginPath(); c.arc(ax, ay, 22, 0, Math.PI * 2); c.stroke();
+    // head
+    c.fillStyle = crew.color;
+    c.beginPath(); c.arc(ax, ay - 7, 7, 0, Math.PI * 2); c.fill();
+    // body arc
+    c.beginPath(); c.arc(ax, ay + 13, 11, Math.PI, 0); c.fill();
+
+    // Name
+    c.fillStyle = lit ? '#fff' : '#999';
+    c.font = `${selected ? 'bold ' : ''}11px monospace`;
+    c.textAlign = 'center';
+    c.fillText(crew.name, ax, portY + 68);
+    // Current weapon
+    c.fillStyle = lit ? 'rgba(255,200,170,0.6)' : 'rgba(130,100,80,0.45)';
+    c.font = '9px monospace';
+    c.fillText(crew.upgrade ? crew.upgrade.name : '\u2014', ax, portY + 82);
+  }
+
+  // Header labels
+  const labelX = aliveCrew.length * (portW + portPad) + portPad + 20;
+  c.fillStyle = '#c8a070'; c.font = 'bold 12px monospace'; c.textAlign = 'left';
+  c.fillText('UPGRADE CREW', labelX, 30);
+  c.fillStyle = '#7a6050'; c.font = '10px monospace';
+  c.fillText(
+    upgradePickPhase === 'choose_crew' ? 'Select a crew member' : `Upgrading: ${upgradePickCrew.name}`,
+    labelX, 50
+  );
+  c.fillStyle = '#3a2820'; c.textAlign = 'right'; c.font = '9px monospace';
+  c.fillText('ESC  skip', W - 20, 30);
+
+  // \u2500\u2500 Choose-crew placeholder \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  if (upgradePickPhase === 'choose_crew') {
+    c.fillStyle = 'rgba(38, 16, 26, 0.52)';
+    c.fillRect(0, PORT_H, SPLIT_X, H - PORT_H);
+    c.fillStyle = 'rgba(255,255,255,0.04)';
+    c.fillRect(SPLIT_X, PORT_H, 1, H - PORT_H);
+    c.fillStyle = 'rgba(140,80,80,0.38)';
+    c.font = '12px monospace'; c.textAlign = 'center';
+    c.fillText('\u2190 select a crew member above', SPLIT_X / 2, PORT_H + 190);
     renderer.flush();
     return;
   }
 
-  // --- Upgrade choice phase ---
+  // \u2500\u2500 Left panel: upgrade list \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  c.fillStyle = 'rgba(70, 20, 40, 0.55)';
+  c.fillRect(0, PORT_H, SPLIT_X, H - PORT_H);
+  c.fillStyle = 'rgba(255,255,255,0.06)';
+  c.fillRect(SPLIT_X, PORT_H, 1, H - PORT_H);
 
-  // Title
-  c.fillStyle = '#f5a623';
-  c.font = 'bold 24px monospace';
-  c.textAlign = 'center';
-  c.fillText('UPGRADE CREW', CANVAS_WIDTH / 2, 100);
+  c.fillStyle = ROSE_LT; c.font = 'bold 10px monospace'; c.textAlign = 'left';
+  c.fillText('WEAPON CLASS', 28, PORT_H + 26);
 
-  // Crew name
-  c.fillStyle = upgradePickCrew.color;
-  c.font = 'bold 18px monospace';
-  c.fillText(upgradePickCrew.name, CANVAS_WIDTH / 2, 135);
+  const lX = 28, lW = SPLIT_X - 52;
+  const itemH = 94, itemGap = 10, listY0 = PORT_H + 46;
+  const nodeX = lX + 14;
 
-  if (upgradePickCrew.upgrade) {
-    c.fillStyle = '#888';
-    c.font = '12px monospace';
-    c.fillText(`Current: ${upgradePickCrew.upgrade.name}`, CANVAS_WIDTH / 2, 158);
-  }
-
-  // Cards
-  const cardW = 200, cardH = 140, gap = 20;
-  const totalW = upgradePickChoices.length * cardW + (upgradePickChoices.length - 1) * gap;
-  const startX = CANVAS_WIDTH / 2 - totalW / 2;
-  const cardY = 190;
+  // Tree line
+  const treeTop = listY0 + itemH / 2;
+  const treeBot = listY0 + (upgradePickChoices.length - 1) * (itemH + itemGap) + itemH / 2;
+  c.strokeStyle = 'rgba(150,50,80,0.4)'; c.lineWidth = 2; c.setLineDash([3, 5]);
+  c.beginPath(); c.moveTo(nodeX, treeTop); c.lineTo(nodeX, treeBot); c.stroke();
+  c.setLineDash([]);
 
   for (let i = 0; i < upgradePickChoices.length; i++) {
     const upg = upgradePickChoices[i];
-    const cx = startX + i * (cardW + gap);
-    upg._x = cx; upg._y = cardY; upg._w = cardW; upg._h = cardH;
+    const iy = listY0 + i * (itemH + itemGap);
+    const hov = upgradePickHovered === i;
 
-    const hovered = upgradePickHovered === i;
+    upg._x = lX; upg._y = iy; upg._w = lW; upg._h = itemH;
 
-    // Card background
-    c.fillStyle = hovered ? 'rgba(40,50,80,0.95)' : 'rgba(20,25,45,0.9)';
-    c.beginPath();
-    renderer.roundRect(cx, cardY, cardW, cardH, 8);
-    c.fill();
+    // Card
+    c.fillStyle = hov ? 'rgba(125, 38, 68, 0.93)' : 'rgba(42, 16, 28, 0.88)';
+    c.beginPath(); renderer.roundRect(lX, iy, lW, itemH, 7); c.fill();
+    if (hov) {
+      c.strokeStyle = ROSE_LT; c.lineWidth = 1.5;
+      c.beginPath(); renderer.roundRect(lX, iy, lW, itemH, 7); c.stroke();
+    }
 
-    c.strokeStyle = hovered ? upg.color : '#555';
-    c.lineWidth = hovered ? 2 : 1;
-    c.beginPath();
-    renderer.roundRect(cx, cardY, cardW, cardH, 8);
-    c.stroke();
+    // Color stripe
+    c.fillStyle = upg.color;
+    c.beginPath(); renderer.roundRect(lX, iy + 8, 3, itemH - 16, 2); c.fill();
+
+    // Node dot + connector
+    c.fillStyle = hov ? upg.color : 'rgba(150,50,80,0.7)';
+    c.beginPath(); c.arc(nodeX, iy + itemH / 2, 6, 0, Math.PI * 2); c.fill();
+    c.strokeStyle = hov ? upg.color : 'rgba(150,50,80,0.35)'; c.lineWidth = 1.5;
+    c.beginPath(); c.moveTo(nodeX + 7, iy + itemH / 2); c.lineTo(lX + 14, iy + itemH / 2); c.stroke();
+
+    // Diamond icon (top-right of card)
+    const dX = lX + lW - 34, dY = iy + itemH / 2;
+    c.save(); c.translate(dX, dY); c.rotate(Math.PI / 4);
+    c.fillStyle = hov ? upg.color : 'rgba(160,80,110,0.28)';
+    c.fillRect(-11, -11, 22, 22);
+    c.restore();
 
     // Name
-    c.fillStyle = upg.color;
-    c.font = 'bold 16px monospace';
-    c.textAlign = 'center';
-    c.fillText(upg.name, cx + cardW / 2, cardY + 35);
+    c.fillStyle = hov ? '#fff' : '#c8a090';
+    c.font = 'bold 13px monospace'; c.textAlign = 'left';
+    c.fillText(upg.name, lX + 18, iy + 23);
 
-    // Description
-    c.fillStyle = '#ccc';
-    c.font = '12px monospace';
-    c.fillText(upg.desc, cx + cardW / 2, cardY + 60);
+    // Type badge
+    const typeLabel = upg.melee ? 'MELEE' : 'RANGED';
+    const typeFill = upg.melee ? 'rgba(80,28,16,0.9)' : 'rgba(16,38,72,0.9)';
+    const typeColor = upg.melee ? '#ff8a65' : '#64b5f6';
+    c.fillStyle = typeFill;
+    c.beginPath(); renderer.roundRect(lX + 18, iy + 31, 56, 15, 3); c.fill();
+    c.fillStyle = typeColor; c.font = 'bold 8px monospace'; c.textAlign = 'center';
+    c.fillText(typeLabel, lX + 18 + 28, iy + 42);
+
+    // Short desc
+    const desc = upg.desc.length > 36 ? upg.desc.slice(0, 34) + '\u2026' : upg.desc;
+    c.fillStyle = hov ? 'rgba(255,225,205,0.75)' : '#684848';
+    c.font = '10px monospace'; c.textAlign = 'left';
+    c.fillText(desc, lX + 18, iy + 63);
 
     // Stats
-    c.fillStyle = '#999';
-    c.font = '11px monospace';
+    c.fillStyle = hov ? 'rgba(255,195,165,0.55)' : '#4c3030';
+    c.font = '9px monospace';
     if (upg.melee) {
-      c.fillText(`AOE: ${upg.garlicRadius}px  DMG: ${upg.damage}`, cx + cardW / 2, cardY + 85);
-      c.fillText('Instant bandit kick', cx + cardW / 2, cardY + 100);
+      c.fillText(`AOE ${upg.garlicRadius}px  DMG ${upg.damage}`, lX + 18, iy + 80);
     } else {
-      c.fillText(`DMG: ${upg.damage}  Rate: ${upg.fireRate}/s`, cx + cardW / 2, cardY + 85);
-      c.fillText(`Range: ${upg.range}${upg.spread ? `  Spread: ${upg.spread}` : ''}`, cx + cardW / 2, cardY + 100);
+      c.fillText(`DMG ${upg.damage}  RNG ${upg.range}  ${upg.fireRate}/s`, lX + 18, iy + 80);
     }
   }
 
-  // Skip hint
-  c.fillStyle = '#666';
-  c.font = '11px monospace';
-  c.textAlign = 'center';
-  c.fillText('Pick one upgrade  \u2022  ESC to skip', CANVAS_WIDTH / 2, cardY + cardH + 30);
+  // \u2500\u2500 Right panel: detail \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+  const rX = SPLIT_X + 1, rW = W - SPLIT_X - 1;
+
+  if (upgradePickHovered < 0 || upgradePickHovered >= upgradePickChoices.length) {
+    c.fillStyle = 'rgba(100,60,50,0.22)';
+    c.font = '12px monospace'; c.textAlign = 'center';
+    c.fillText('hover an upgrade to preview', rX + rW / 2, PORT_H + 210);
+    renderer.flush();
+    return;
+  }
+
+  const upg = upgradePickChoices[upgradePickHovered];
+  const iCX = rX + rW / 2, iCY = PORT_H + 128;
+
+  // Large diamond icon
+  const DS = 54;
+  c.save(); c.translate(iCX, iCY); c.rotate(Math.PI / 4);
+  c.fillStyle = upg.color; c.globalAlpha = 0.11;
+  c.fillRect(-DS, -DS, DS * 2, DS * 2);
+  c.globalAlpha = 1;
+  c.strokeStyle = upg.color; c.lineWidth = 2.5;
+  c.strokeRect(-DS * 0.72, -DS * 0.72, DS * 1.44, DS * 1.44);
+  c.restore();
+
+  // Color fill circle inside
+  c.fillStyle = upg.color; c.globalAlpha = 0.85;
+  c.beginPath(); c.arc(iCX, iCY, 18, 0, Math.PI * 2); c.fill();
+  c.globalAlpha = 1;
+
+  // Upgrade name
+  c.fillStyle = '#ecdcc8'; c.font = 'bold 21px monospace'; c.textAlign = 'center';
+  c.fillText(upg.name, iCX, PORT_H + 212);
+
+  // Type label
+  c.fillStyle = '#7a5848'; c.font = '10px monospace';
+  c.fillText(upg.melee ? 'MELEE  CLASS' : 'RANGED  CLASS', iCX, PORT_H + 230);
+
+  // Divider
+  c.strokeStyle = 'rgba(255,255,255,0.07)'; c.lineWidth = 1;
+  c.beginPath(); c.moveTo(rX + 36, PORT_H + 244); c.lineTo(rX + rW - 36, PORT_H + 244); c.stroke();
+
+  // Description (word-wrapped)
+  c.fillStyle = '#9a7868'; c.font = '12px monospace'; c.textAlign = 'left';
+  const maxLW = rW - 72;
+  const words = upg.desc.split(' ');
+  let line = '', lY = PORT_H + 268;
+  for (const word of words) {
+    const test = line ? `${line} ${word}` : word;
+    if (c.measureText(test).width > maxLW && line) {
+      c.fillText(line, rX + 36, lY); line = word; lY += 18;
+    } else { line = test; }
+  }
+  if (line) c.fillText(line, rX + 36, lY);
+
+  // Stats block
+  const sY = PORT_H + 372;
+  c.fillStyle = 'rgba(255,255,255,0.05)';
+  c.fillRect(rX + 24, sY - 18, rW - 48, 58);
+
+  const stats = upg.melee
+    ? [['AOE', `${upg.garlicRadius}px`], ['DMG', String(upg.damage)], ['STYLE', 'Instant']]
+    : [['DMG', String(upg.damage)], ['RATE', `${upg.fireRate}/s`], ['RNG', `${upg.range}px`]];
+
+  const sColW = (rW - 48) / stats.length;
+  for (let si = 0; si < stats.length; si++) {
+    const sx = rX + 24 + si * sColW + sColW / 2;
+    c.fillStyle = '#644838'; c.font = '9px monospace'; c.textAlign = 'center';
+    c.fillText(stats[si][0], sx, sY);
+    c.fillStyle = '#d0b090'; c.font = 'bold 15px monospace';
+    c.fillText(stats[si][1], sx, sY + 20);
+  }
+
+  // Pick hint
+  c.fillStyle = '#4a2c20'; c.font = '10px monospace'; c.textAlign = 'center';
+  c.fillText('click upgrade to select', iCX, H - 28);
 
   renderer.flush();
 }
